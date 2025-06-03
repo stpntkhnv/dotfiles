@@ -35,6 +35,10 @@ vim.keymap.set("n", "<leader>f", function()
   vim.lsp.buf.format()
 end, { desc = "Format current buffer" })
 
+vim.keymap.set("n", "<S-h>", ":BufferLineCyclePrev<CR>", { desc = "Prev buffer" })
+vim.keymap.set("n", "<S-l>", ":BufferLineCycleNext<CR>", { desc = "Next buffer" })
+vim.keymap.set("n", "<leader>bd", ":bdelete<CR>", { desc = "Close buffer" })
+
 vim.api.nvim_create_autocmd("FileType", {
   pattern = "lua",
   callback = function()

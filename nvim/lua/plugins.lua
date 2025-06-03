@@ -59,6 +59,16 @@ require("lazy").setup({
     end
   },
   {
+    "akinsho/bufferline.nvim",
+    version = "*",
+    dependencies = "nvim-tree/nvim-web-devicons",
+    config = function()
+      require("bufferline").setup()
+      vim.opt.termguicolors = true
+      vim.opt.showtabline = 2
+    end,
+  },
+  {
     "williamboman/mason.nvim",
     config = true,
   },
@@ -69,4 +79,4 @@ require("lazy").setup({
         ensure_installed = { "lua_ls" }
       })
     end
-  }})
+  } })
