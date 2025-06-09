@@ -13,13 +13,10 @@ vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
   {
-    "nvimdev/lspsaga.nvim",
-    dependencies = {
-      "nvim-treesitter/nvim-treesitter",
-      "nvim-tree/nvim-web-devicons"
-    },
+    "nvim-telescope/telescope.nvim",
+    dependencies = { "nvim-lua/plenary.nvim" },
     config = function()
-      require("lspsaga").setup({})
+      require("telescope").setup()
     end
   },
   {
@@ -32,19 +29,26 @@ require("lazy").setup({
   -- Подсветка и отступы
   {
     "nvim-treesitter/nvim-treesitter",
-    branch = 'main',
+    branch = 'master',
     lazy = false,
     build = ":TSUpdate",
     config = function()
       require("nvim-treesitter.configs").setup({
-        ensure_installed = { "lua", "vim", "bash", "json", "yaml", "c_sharp", "go" },
+        ensure_installed = { "lua", "vim", "bash", "json", "yaml", "c_sharp", "go", "gitignore" },
+        sync_install = false,
+        auto_install = false,
         highlight = { enable = true },
         indent = { enable = true },
-        auto_install = true
       })
     end
   },
-
+  {
+    "aznhe21/actions-preview.nvim",
+    dependencies = { "nvim-telescope/telescope.nvim" },
+    config = function()
+      require("actions-preview").setup()
+    end,
+  },
   -- Цветовая схема
   {
     "catppuccin/nvim",
@@ -67,7 +71,6 @@ require("lazy").setup({
       vim.opt.showtabline = 2
     end,
   },
-  require("plugins.telescope"),
   -- Автодополнение
   {
     "hrsh7th/nvim-cmp",
@@ -110,71 +113,63 @@ require("lazy").setup({
   {
     "neovim/nvim-lspconfig",
     config = function()
-      local lspconfig = require("lspconfig")
       local keymaps = require("modules.keymaps")
 
-      local on_attach = function(_, bufnr)
-        keymaps.set_dotnet_keymaps(bufnr)
+      -- общий on_attach (у тебя только для C#)
+      local function on_attach(client, bufnr)
+        if client.name == "omnisharp" then
+          keymaps.set_dotnet_keymaps(bufnr)
+        end
       end
 
-      -- Lua
-      lspconfig.lua_ls.setup({
-        settings = {
-          Lua = {
-            format = { enable = true }
-          }
-        }
+      -- Просто кладём настройки в кэш Neovim
+      vim.lsp.config("lua_ls", {
+        settings = { Lua = { format = { enable = true } } },
       })
-      -- Go
-      lspconfig.gopls.setup({
+
+      vim.lsp.config("gopls", {
         settings = {
           gopls = {
-            analyses = {
-              unusedparams = true,
-              shadow = true,
-            },
+            analyses = { unusedparams = true, shadow = true },
             staticcheck = true,
           },
         },
       })
 
-      -- C#
-      lspconfig.omnisharp.setup({
+      vim.lsp.config("omnisharp", {
         on_attach = on_attach,
-        cmd = { "omnisharp" }, -- должен быть в $PATH
-        enable_editorconfig_support = true,
-        enable_ms_build_load_projects_on_demand = false,
         enable_roslyn_analyzers = true,
         organize_imports_on_format = true,
-        enable_import_completion = true,
         handlers = {
-          ["textDocument/definition"] = require('omnisharp_extended').handler,
-        }
+          ["textDocument/definition"] =
+              require("omnisharp_extended").handler,
+        },
       })
-    end
+    end,
   },
-
   -- Mason + mason-lspconfig
   {
     "williamboman/mason.nvim",
-    config = function()
-      require("mason").setup()
-    end,
+    opts = {}, -- v2 syntax, одного require достаточно
   },
   {
     "williamboman/mason-lspconfig.nvim",
-    config = function()
-      require("mason-lspconfig").setup({
-        ensure_installed = { "lua_ls", "omnisharp", "gopls" }
-      })
-    end
+    opts = { -- то же самое, opts вместо config
+      ensure_installed = { "lua_ls", "gopls", "omnisharp" },
+      -- automatic_enable = true -- по умолчанию уже так
+    },
   },
   {
     "folke/which-key.nvim",
-    event = "VeryLazy", -- можно заменить на "VimEnter" если хочешь сразу
+    event = "VimEnter", -- можно заменить на "VimEnter" если хочешь сразу
     config = function()
       require("which-key").setup()
     end
   }
 }
 )
+
+require("modules.autocommands").setup()
+require("modules.usercommands").setup()
+require("modules.options").setup()
+require("modules.keymaps").setup()

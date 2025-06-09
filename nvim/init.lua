@@ -1,5 +1,1 @@
 require("plugins")
-require("modules.autocommands").setup()
-require("modules.usercommands").setup()
-require("modules.options").setup()
-require("modules.keymaps").setup()

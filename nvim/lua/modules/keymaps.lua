@@ -44,15 +44,12 @@ function M.setup()
 end
 
 function M.set_dotnet_keymaps(bufnr)
-  map("n", "gh", "<cmd>Lspsaga lsp_finder<CR>")
-  map("n", "gd", "<cmd>Lspsaga peek_definition<CR>")
-  map("n", "gr", "<cmd>Lspsaga rename<CR>")
-  map("n", "K", "<cmd>Lspsaga hover_doc<CR>")
-  map("n", "<leader>ca", "<cmd>Lspsaga code_action<CR>")
-  map("n", "[e", "<cmd>Lspsaga diagnostic_jump_prev<CR>")
-  map("n", "]e", "<cmd>Lspsaga diagnostic_jump_next<CR>")
+  vim.keymap.set(
+    { "n", "v" },
+    "<leader>ca",
+    require("actions-preview").code_actions,
+    { buffer = bufnr, desc = "Code Actions (Telescope)" }
+  )
 end
 
-
 return M
-
