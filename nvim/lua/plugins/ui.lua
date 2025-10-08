@@ -12,7 +12,6 @@ return {
       vim.cmd.colorscheme 'tokyonight-night'
     end,
   },
-
   {
     'echasnovski/mini.nvim',
     config = function()
@@ -60,31 +59,5 @@ return {
         separator_style = 'thin',
       },
     },
-  },
-
-  {
-    'nvim-tree/nvim-tree.lua',
-    dependencies = { 'nvim-tree/nvim-web-devicons' },
-    config = function()
-      require('nvim-tree').setup {
-        view = {
-          width = 30,
-          side = 'left',
-        },
-        renderer = {
-          icons = {
-            show = {
-              file = vim.g.have_nerd_font,
-              folder = vim.g.have_nerd_font,
-              folder_arrow = vim.g.have_nerd_font,
-              git = vim.g.have_nerd_font,
-            },
-          },
-        },
-        filters = {
-          dotfiles = false,
-        },
-      }
-    end,
   },
 }
