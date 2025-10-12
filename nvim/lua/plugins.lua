@@ -12,11 +12,31 @@ local rtp = vim.opt.rtp
 rtp:prepend(lazypath)
 
 require('lazy').setup({
-  { import = 'plugins.general' },
-  { import = 'kickstart.plugins' },
-  { import = 'plugins.ui' },
-  { import = 'plugins.ux' },
+  -- Appearance
+  { import = 'plugins.colorscheme' },
+  { import = 'plugins.statusline' },
+  { import = 'plugins.bufferline' },
+  { import = 'plugins.indent' },
+
+  -- Navigation & Search
+  { import = 'plugins.telescope' },
+  { import = 'plugins.file-explorer' },
+  { import = 'plugins.which-key' },
+
+  -- Editing
+  { import = 'plugins.editing' },
+  { import = 'plugins.treesitter' },
+
+  -- Git
+  { import = 'plugins.git' },
+
+  -- LSP & Language Tools
+  { import = 'plugins.mason' },
   { import = 'plugins.lsp' },
+  { import = 'plugins.completion' },
+  { import = 'plugins.lint' },
+  { import = 'plugins.debug' },
+  { import = 'plugins.csharp' },
 }, {
   ui = {
     icons = vim.g.have_nerd_font and {} or {

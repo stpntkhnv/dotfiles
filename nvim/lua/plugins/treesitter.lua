@@ -1,6 +1,4 @@
 return {
-  'NMAC427/guess-indent.nvim',
-
   {
     'nvim-treesitter/nvim-treesitter',
     build = ':TSUpdate',
@@ -14,5 +12,8 @@ return {
       },
       indent = { enable = true, disable = { 'ruby' } },
     },
+  },
+  {
+    'NMAC427/guess-indent.nvim',
   },
 }

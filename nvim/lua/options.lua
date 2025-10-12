@@ -29,3 +29,14 @@ vim.o.confirm = true
 
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
+
+-- C# indentation settings
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'cs',
+  callback = function()
+    vim.opt_local.tabstop = 2
+    vim.opt_local.shiftwidth = 2
+    vim.opt_local.softtabstop = 2
+    vim.opt_local.expandtab = true
+  end,
+})

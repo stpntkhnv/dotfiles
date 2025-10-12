@@ -1,0 +1,83 @@
+{
+  "Class with namespace": {
+    "prefix": "class",
+    "body": [
+      "public class ${1:ClassName}",
+      "{",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a class"
+  },
+  "Record with namespace": {
+    "prefix": "record",
+    "body": [
+      "public record ${1:RecordName}",
+      "{",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a record"
+  },
+  "Record (positional)": {
+    "prefix": "recordp",
+    "body": [
+      "public record ${1:RecordName}(${2:string Property});"
+    ],
+    "description": "Create a positional record"
+  },
+  "Struct": {
+    "prefix": "struct",
+    "body": [
+      "public struct ${1:StructName}",
+      "{",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a struct"
+  },
+  "Interface": {
+    "prefix": "interface",
+    "body": [
+      "public interface I${1:InterfaceName}",
+      "{",
+      "    $0",
+      "}"
+    ],
+    "description": "Create an interface"
+  },
+  "Enum": {
+    "prefix": "enum",
+    "body": [
+      "public enum ${1:EnumName}",
+      "{",
+      "    $0",
+      "}"
+    ],
+    "description": "Create an enum"
+  },
+  "Method": {
+    "prefix": "method",
+    "body": [
+      "public ${1:void} ${2:MethodName}(${3})",
+      "{",
+      "    $0",
+      "}"
+    ],
+    "description": "Create a method"
+  },
+  "Property": {
+    "prefix": "prop",
+    "body": [
+      "public ${1:string} ${2:PropertyName} { get; set; }$0"
+    ],
+    "description": "Create a property"
+  },
+  "Property (init)": {
+    "prefix": "propi",
+    "body": [
+      "public ${1:string} ${2:PropertyName} { get; init; }$0"
+    ],
+    "description": "Create an init-only property"
+  }
+}
