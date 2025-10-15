@@ -13,10 +13,22 @@ return {
     },
     opts = {
       filesystem = {
+        follow_current_file = {
+          enabled = true,
+        },
+        use_libuv_file_watcher = true,  -- Auto-refresh on external changes
         window = {
           mappings = {
             ['\\'] = 'close_window',
           },
+        },
+      },
+      event_handlers = {
+        {
+          event = "neo_tree_buffer_enter",
+          handler = function()
+            vim.cmd('setlocal relativenumber')
+          end,
         },
       },
     },
