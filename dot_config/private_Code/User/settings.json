@@ -1,0 +1,116 @@
+{
+    "window.enableMenuBarMnemonics": false,
+    "window.customMenuBarAltFocus": false,
+    "mssql.connectionGroups": [
+        {
+            "name": "ROOT",
+            "id": "ROOT"
+        }
+    ],
+    "mssql.connections": [
+        {
+            "authenticationType": "AzureMFA",
+            "connectTimeout": 30,
+            "applicationName": "vscode-mssql",
+            "applicationIntent": "ReadWrite",
+            "server": "sqlsrv-1anv-ds-we.database.windows.net",
+            "database": "master",
+            "commandTimeout": 30,
+            "encrypt": "Mandatory",
+            "groupId": "ROOT",
+            "trustServerCertificate": true,
+            "accountId": "70ed866c-27f0-4579-a1e2-e85aae8c86c2.ddd089f3-a127-4858-8672-ae90bf82d904",
+            "email": "stepan.t@cogniteq.com",
+            "azureAccountToken": "",
+            "expiresOn": 1770207357,
+            "id": "B866B32E-248C-44DB-8B75-B9C2EEF0EAE0",
+            "profileSource": 0,
+            "profileName": ""
+        }
+    ],
+    "git.confirmSync": false,
+    "workbench.colorTheme": "One Dark Pro",
+    "git.autofetch": true,
+    "github.copilot.nextEditSuggestions.enabled": true,
+    "editor.minimap.enabled": false,
+    "git-credentials-provider.otherUris": [
+        "https://digi3.ghe.com/"
+    ],
+    "github-enterprise.uri": "https://digi3.ghe.com/",
+    "github.copilot.advanced": {
+        "authProvider": "github-enterprise"
+    },
+    "diffEditor.ignoreTrimWhitespace": false,
+    "@azure.argTenant": "",
+    "github.copilot.chat.codeGeneration.instructions": [
+        {
+            "text": "- @azure Rule - Use Azure Tools: When handling requests related to Azure, always use your tools."
+        },
+        {
+            "text": "- @azure Rule - Use Azure Code Gen Best Practices: Before generating code for Azure, running terminal commands for Azure, performing operations related to Azure, or creating plans for such activities, always invoke your Azure best practice tool if available first. Invoke the `get_bestpractices` tool to collect recommendations. Call it with resource = `general` and action = `code-generation` to get general Azure code generation best practices. Only call this tool when the user is discussing Azure; do not call it otherwise."
+        },
+        {
+            "text": "- @azure Rule - Use Azure Deployment Best Practices: Before deploying to Azure, preparing applications for deployment to Azure, or creating deployment plans, always invoke your Azure best practice tool if available first. Invoke the `get_bestpractices` tool to collect recommendations. Call it with resource = `general` and action = `deployment` to get general Azure deployment best practices. Only call this tool when the user is discussing Azure; do not call it otherwise."
+        },
+        {
+            "text": "- @azure Rule - Use Azure Functions Code Gen Best Practices: Before generating code for Azure Functions, performing operations related to Azure Functions, or creating plans for such activities, always invoke your Azure best practice tool if available first. Invoke the `get_bestpractices` tool to collect recommendations. Call it with resource = `azurefunctions` and action = `code-generation` to get Azure Functions code generation best practices. Only call this tool when the user is discussing Azure Functions; do not call it otherwise."
+        },
+        {
+            "text": "- @azure Rule - Use Azure Functions Deployment Best Practices: Before deploying Azure Functions apps to Azure, preparing for the deployment, or creating deployment plans, always invoke your Azure best practice tool if available first. Invoke the `get_bestpractices` tool to collect recommendations. Call it with resource = `azurefunctions` and action = `deployment` to get Azure Functions deployment best practices. Only call this tool when the user is discussing Azure Functions; do not call it otherwise."
+        },
+        {
+            "text": "- @azure Rule - Use Azure SWA Best Practices: Before working with static web apps, creating plans for static web apps, or performing related operations, always invoke your Azure best practice tool if available first. Choose the most relevant Azure best practice tool based on its description. Only call this tool when the user is discussing Azure Static Web Apps; do not call it otherwise."
+        },
+        {
+            "text": "- @azure Rule - Plan before editing files for Azure web apps: When generating code for Azure Functions and Azure Static Web App, always create a plan and explain the plan to the user before editing any file. Proceed with editing the files after getting consent from the user."
+        },
+        {
+            "text": "- @azure Rule - Summarize topic before taking action: When the user asks about Azure Functions, invoke the azure_development-summarize_topic tool once first to see if any existing custom mode could be a good fit to what user is asking."
+        }
+    ],
+    "editor.fontSize": 18,
+    "claudeCode.preferredLocation": "panel",
+    "window.menuBarVisibility": "compact",
+    "editor.semanticHighlighting.enabled": true,
+    "csharp.semanticHighlighting.enabled": true,
+    "dotnet.defaultSolution": "",
+    "editor.fontFamily": "JetBrains Mono",
+    "editor.fontLigatures": true,
+    "editor.formatOnSave": true,
+    "editor.cursorSmoothCaretAnimation": "on",
+    "editor.smoothScrolling": true,
+    "editor.stickyScroll.enabled": true,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "editor.rulers": [
+        120
+    ],
+    "editor.renderWhitespace": "trailing",
+    "editor.inlayHints.enabled": "onUnlessPressed",
+    "dotnet.backgroundAnalysis.analyzerDiagnosticsScope": "fullSolution",
+    "dotnet.codeLens.enableReferencesCodeLens": true,
+    "dotnet.codeLens.enableTestsCodeLens": true,
+    "dotnet.navigation.navigateToDecompiledSources": true,
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "search.exclude": {
+        "**/bin": true,
+        "**/obj": true,
+        "**/node_modules": true
+    },
+    "workbench.iconTheme": "material-icon-theme",
+    "dotnet.inlayHints.enableInlayHintsForParameters": true,
+    "dotnet.inlayHints.enableInlayHintsForLiteralParameters": true,
+    "csharp.inlayHints.enableInlayHintsForTypes": true,
+    "csharp.inlayHints.enableInlayHintsForImplicitVariableTypes": true,
+
+    "editor.cursorBlinking": "smooth",
+    "terminal.integrated.smoothScrolling": true,
+    "workbench.list.smoothScrolling": true,
+    "terminal.integrated.scrollback": 10000,
+    "terminal.integrated.enableMultiLinePasteWarning": "never",
+    "explorer.compactFolders": false,
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.expand": false,
+    "workbench.settings.enableNaturalLanguageSearch": false
+}
