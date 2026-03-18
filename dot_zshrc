@@ -159,6 +159,9 @@ if [[ -z "$CONTAINER_ID" ]]; then
   alias digi3='distrobox enter digi3 -- tmux -L digi3 new-session -A -s work'
 else
   alias update="sudo pacman -Syu"
+  export WAYLAND_DISPLAY=wayland-1
+  export DISPLAY=:1
+  alias teams='teams-for-linux --ozone-platform=wayland'
 fi
 
 # Up/Down arrow searches history matching what you've already typed

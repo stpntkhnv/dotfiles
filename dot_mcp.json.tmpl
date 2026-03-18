@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "azure": {
+      "command": "npx",
+      "args": ["-y", "@azure/mcp@latest", "server", "start"]
+    },
+    "azureDevOps": {
+      "command": "npx",
+      "args": ["-y", "@azure-devops/mcp", "{{ .ado_org }}", "--authentication", "env"],
+      "env": {
+        "AZURE_DEVOPS_DEFAULT_PROJECT": "{{ .ado_project }}",
+        "AZURE_DEVOPS_PAT": "{{ .ado_pat }}"
+      }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--browser", "chromium"]
+    }
+  }
+}
