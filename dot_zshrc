@@ -162,6 +162,7 @@ else
   export WAYLAND_DISPLAY=wayland-1
   export DISPLAY=:1
   alias teams='teams-for-linux --ozone-platform=wayland'
+  alias tunnel='code tunnel --name "$CONTAINER_ID"'
 fi
 
 # Up/Down arrow searches history matching what you've already typed

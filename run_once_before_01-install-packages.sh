@@ -78,8 +78,16 @@ if ! command -v azd &>/dev/null; then
     curl -fsSL https://aka.ms/install-azd.sh | bash
 fi
 
+if ! command -v code &>/dev/null; then
+    echo "Installing Visual Studio Code..."
+    yay -S --noconfirm --needed visual-studio-code-bin
+fi
+
 echo "Setting up npm global directory..."
 mkdir -p "$HOME/.npm-global"
 npm config set prefix "$HOME/.npm-global"
+
+echo "Installing Playwright browsers..."
+npx playwright install --with-deps chromium
 
 echo "Package installation complete"
