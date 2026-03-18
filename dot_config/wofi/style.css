@@ -1,0 +1,85 @@
+@define-color base #1e1e2e;
+@define-color mantle #181825;
+@define-color surface0 #313244;
+@define-color surface1 #45475a;
+@define-color surface2 #585b70;
+@define-color text #cdd6f4;
+@define-color subtext0 #a6adc8;
+@define-color lavender #b4befe;
+@define-color blue #89b4fa;
+@define-color mauve #cba6f7;
+@define-color red #f38ba8;
+
+* {
+    font-family: "JetBrainsMono NF";
+    font-size: 14px;
+}
+
+window {
+    background-color: alpha(@base, 0.9);
+    border: 2px solid @surface1;
+    border-radius: 16px;
+    margin: 0;
+}
+
+#outer-box {
+    padding: 16px;
+}
+
+#input {
+    background-color: @surface0;
+    color: @text;
+    border: 1px solid @surface1;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+    font-size: 15px;
+}
+
+#input:focus {
+    border-color: @mauve;
+    box-shadow: 0 0 0 2px alpha(@mauve, 0.2);
+}
+
+#input image {
+    color: @subtext0;
+}
+
+#scroll {
+    margin: 0;
+    padding: 0;
+}
+
+#inner-box {
+    padding: 0;
+}
+
+#entry {
+    padding: 10px 14px;
+    margin: 4px 0;
+    border-radius: 10px;
+    background-color: transparent;
+    color: @text;
+    transition: all 0.2s ease;
+}
+
+#entry:hover {
+    background-color: alpha(@surface0, 0.5);
+}
+
+#entry:selected {
+    background: linear-gradient(135deg, alpha(@mauve, 0.4), alpha(@blue, 0.4));
+    color: @text;
+}
+
+#entry image {
+    margin-right: 10px;
+}
+
+#text {
+    color: @text;
+}
+
+#text:selected {
+    color: @text;
+}

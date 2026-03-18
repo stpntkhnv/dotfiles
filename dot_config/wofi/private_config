@@ -1,0 +1,8 @@
+width=500
+height=400
+show=drun
+prompt=Search...
+allow_images=true
+image_size=24
+matching=fuzzy
+insensitive=true

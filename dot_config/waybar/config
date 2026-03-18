@@ -1,0 +1,203 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 42,
+  "spacing": 0,
+  "margin-top": 6,
+  "margin-left": 10,
+  "margin-right": 10,
+  "reload_style_on_change": true,
+
+  "modules-left": [
+    "group/workspaces",
+    "group/taskbar",
+    "group/player"
+  ],
+  "modules-center": [
+    "group/window"
+  ],
+  "modules-right": [
+    "group/hardware",
+    "group/connectivity",
+    "group/system"
+  ],
+
+  "group/workspaces": {
+    "orientation": "horizontal",
+    "modules": ["custom/launcher", "hyprland/workspaces"]
+  },
+
+  "group/taskbar": {
+    "orientation": "horizontal",
+    "modules": ["wlr/taskbar"]
+  },
+
+  "group/player": {
+    "orientation": "horizontal",
+    "modules": ["mpris"]
+  },
+
+  "group/window": {
+    "orientation": "horizontal",
+    "modules": ["hyprland/window"]
+  },
+
+  "group/hardware": {
+    "orientation": "horizontal",
+    "modules": ["custom/temperature", "memory", "cpu"]
+  },
+
+  "group/connectivity": {
+    "orientation": "horizontal",
+    "modules": ["custom/notifications", "tray", "network", "bluetooth", "pulseaudio"]
+  },
+
+  "group/system": {
+    "orientation": "horizontal",
+    "modules": ["hyprland/language", "clock", "custom/power"]
+  },
+
+  
+  "hyprland/workspaces": {
+    "format": "{name}",
+    "persistent-workspaces": {
+      "DP-2": [1, 2, 3, 4, 5],
+      "HDMI-A-1": [6, 7, 8, 9, 10]
+    }
+  },
+
+  "hyprland/window": {
+    "format": "{title}",
+    "max-length": 50,
+    "separate-outputs": true,
+    "rewrite": {
+      "(.*) — Mozilla Firefox": "󰈹 $1",
+      "(.*) - Chromium": "󰊯 $1",
+      "nvim (.*)": "󰅩 $1",
+      "": "󰄛 Desktop"
+    }
+  },
+
+  "hyprland/language": {
+    "format": "󰌌 {}",
+    "format-en": "EN",
+    "format-ru": "RU"
+  },
+
+  "mpris": {
+    "format": "{player_icon} {artist} — {title}",
+    "format-paused": "{player_icon} {status_icon} {artist} — {title}",
+    "format-stopped": "",
+    "player-icons": {
+      "default": "󰐍",
+      "spotify": "󰓇",
+      "firefox": "󰈹",
+      "chromium": "󰊯"
+    },
+    "status-icons": {
+      "paused": "󰏤"
+    },
+    "max-length": 40,
+    "on-click": "playerctl play-pause",
+    "on-scroll-up": "playerctl next",
+    "on-scroll-down": "playerctl previous"
+  },
+
+  "wlr/taskbar": {
+    "format": "{icon}",
+    "icon-size": 20,
+    "tooltip-format": "{title}",
+    "on-click": "activate",
+    "on-click-right": "close",
+    "all-outputs": true
+  },
+
+  "tray": {
+    "icon-size": 16,
+    "spacing": 8
+  },
+
+  "network": {
+    "format-wifi": "󰤨 {essid}",
+    "format-ethernet": "󰈀",
+    "format-disconnected": "󰤭",
+    "tooltip-format": "{ifname}: {ipaddr}/{cidr}\nUp: {bandwidthUpBytes}  Down: {bandwidthDownBytes}",
+    "on-click": "nm-connection-editor"
+  },
+
+  "bluetooth": {
+    "format": "󰂯",
+    "format-connected": "󰂱 {device_alias}",
+    "format-off": "󰂲",
+    "tooltip-format": "{controller_alias}\n{num_connections} connected",
+    "tooltip-format-connected": "{device_enumerate}",
+    "tooltip-format-enumerate-connected": "{device_alias}\t{device_battery_percentage}%",
+    "on-click": "blueman-manager"
+  },
+
+  "pulseaudio": {
+    "format": "󰕾 {volume}%",
+    "format-muted": "󰖁",
+    "tooltip-format": "Volume: {volume}%",
+    "on-click": "pactl set-sink-mute @DEFAULT_SINK@ toggle",
+    "on-click-right": "pavucontrol",
+    "on-scroll-up": "pactl set-sink-volume @DEFAULT_SINK@ +2%",
+    "on-scroll-down": "pactl set-sink-volume @DEFAULT_SINK@ -2%"
+  },
+
+  "custom/temperature": {
+    "exec": "sensors | awk '/^Package id 0:/ {print int($4)}'",
+    "format": "󰔏 {}°",
+    "interval": 5,
+    "tooltip-format": "CPU Temperature: {}°C"
+  },
+
+  "memory": {
+    "format": "󰍛 {used:.0f}G/{total:.0f}G",
+    "tooltip-format": "RAM: {percentage}% used"
+  },
+
+  "cpu": {
+    "format": "󰻠 {usage}%",
+    "tooltip-format": "CPU: {usage}%"
+  },
+
+  "clock": {
+    "format": "󰥔 {:%H:%M}",
+    "format-alt": "󰃭 {:%a, %d %b}",
+    "tooltip-format": "{:%A, %d %B %Y}",
+    "on-click-right": "gnome-calendar"
+  },
+
+  "custom/power": {
+    "format": "󰐥",
+    "tooltip-format": "Power menu",
+    "on-click": "~/.config/hypr/scripts/power-menu.sh"
+  },
+
+  "custom/launcher": {
+    "format": "󰀻",
+    "tooltip-format": "Apps",
+    "on-click": "nwg-drawer -is 72 -c 5 -ovl -fm dolphin"
+  },
+
+  "custom/notifications": {
+    "format": "{icon}",
+    "format-icons": {
+      "notification": "󰂚",
+      "none": "󰂜",
+      "dnd-notification": "󰂛",
+      "dnd-none": "󰪑",
+      "inhibited-notification": "󰂚",
+      "inhibited-none": "󰂜",
+      "dnd-inhibited-notification": "󰂛",
+      "dnd-inhibited-none": "󰪑"
+    },
+    "return-type": "json",
+    "exec": "~/.config/waybar/scripts/swaync.sh",
+    "on-click": "swaync-client -t -sw",
+    "on-click-right": "swaync-client -d -sw",
+    "escape": true,
+    "tooltip-format": "Notifications"
+  }
+}

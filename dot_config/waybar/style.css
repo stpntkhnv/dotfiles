@@ -1,0 +1,244 @@
+@define-color base #1e1e2e;
+@define-color mantle #181825;
+@define-color surface0 #313244;
+@define-color surface1 #45475a;
+@define-color surface2 #585b70;
+@define-color text #cdd6f4;
+@define-color subtext0 #a6adc8;
+@define-color lavender #b4befe;
+@define-color blue #89b4fa;
+@define-color sapphire #74c7ec;
+@define-color sky #89dceb;
+@define-color teal #94e2d5;
+@define-color green #a6e3a1;
+@define-color yellow #f9e2af;
+@define-color peach #fab387;
+@define-color maroon #eba0ac;
+@define-color red #f38ba8;
+@define-color mauve #cba6f7;
+@define-color pink #f5c2e7;
+
+* {
+    font-family: "JetBrainsMono NF", "Noto Sans Symbols";
+    font-size: 15px;
+    font-weight: 500;
+    min-height: 0;
+}
+
+window#waybar {
+    background: transparent;
+}
+
+window#waybar > box {
+    background: transparent;
+}
+
+tooltip {
+    background: @base;
+    border: 1px solid @surface1;
+    border-radius: 10px;
+}
+
+tooltip label {
+    color: @text;
+}
+
+#workspaces,
+#window,
+#mpris,
+#custom-temperature,
+#memory,
+#cpu,
+#network,
+#bluetooth,
+#pulseaudio,
+#language,
+#clock,
+#custom-power,
+#tray {
+    color: @text;
+    padding: 4px 12px;
+    margin: 0;
+}
+
+.modules-left > widget > * {
+    margin-left: 4px;
+}
+
+.modules-right > widget > * {
+    margin-right: 4px;
+}
+
+#workspaces-box,
+.modules-left > widget:first-child > box,
+.modules-center > widget > box,
+.modules-right > widget > box {
+    background: alpha(@base, 0.85);
+    border-radius: 14px;
+    border: 1px solid alpha(@surface1, 0.6);
+    padding: 0 6px;
+    margin: 4px;
+}
+
+#workspaces {
+    padding: 0;
+}
+
+#workspaces button {
+    color: @surface2;
+    padding: 4px 10px;
+    margin: 4px 2px;
+    border-radius: 10px;
+    background: transparent;
+    transition: all 0.2s ease;
+}
+
+#workspaces button:hover {
+    color: @lavender;
+    background: alpha(@surface0, 0.5);
+}
+
+#workspaces button.empty {
+    color: @surface1;
+}
+
+#workspaces button.active {
+    color: @base;
+    background: linear-gradient(135deg, @mauve, @blue);
+}
+
+#workspaces button.urgent {
+    color: @base;
+    background: @red;
+}
+
+#window {
+    color: @subtext0;
+    font-weight: 400;
+}
+
+#taskbar button {
+    padding: 4px 6px;
+    margin: 4px 2px;
+    border-radius: 8px;
+    background: transparent;
+    transition: all 0.2s ease;
+}
+
+#taskbar button:hover {
+    background: alpha(@surface0, 0.5);
+}
+
+#taskbar button.active {
+    background: alpha(@mauve, 0.3);
+}
+
+#mpris {
+    color: @green;
+}
+
+#mpris.paused {
+    color: @subtext0;
+}
+
+#custom-temperature {
+    color: @peach;
+}
+
+#memory {
+    color: @mauve;
+}
+
+#cpu {
+    color: @yellow;
+}
+
+#network {
+    color: @sapphire;
+}
+
+#network.disconnected {
+    color: @red;
+}
+
+#bluetooth {
+    color: @blue;
+}
+
+#bluetooth.off {
+    color: @surface2;
+}
+
+#pulseaudio {
+    color: @green;
+}
+
+#pulseaudio.muted {
+    color: @red;
+}
+
+#language {
+    color: @pink;
+    font-weight: 600;
+}
+
+#clock {
+    color: @lavender;
+    font-weight: 600;
+}
+
+#tray {
+    padding: 4px 8px;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+}
+
+#custom-power {
+    color: @red;
+    padding: 4px 10px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+#custom-power:hover {
+    background: alpha(@red, 0.3);
+}
+
+#custom-launcher {
+    color: @mauve;
+    font-size: 18px;
+    padding: 4px 12px;
+    margin-right: 4px;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+}
+
+#custom-launcher:hover {
+    background: linear-gradient(135deg, alpha(@mauve, 0.3), alpha(@blue, 0.3));
+}
+
+#custom-notifications {
+    color: @lavender;
+    padding: 4px 10px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+#custom-notifications:hover {
+    background: alpha(@lavender, 0.2);
+}
+
+#custom-notifications.notification {
+    color: @peach;
+}
+
+#custom-notifications.dnd-notification,
+#custom-notifications.dnd-none {
+    color: @surface2;
+}
