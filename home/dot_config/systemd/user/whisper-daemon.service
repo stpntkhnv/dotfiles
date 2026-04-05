@@ -1,0 +1,17 @@
+[Unit]
+Description=Whisper Speech-to-Text Daemon
+After=default.target
+
+[Service]
+Type=simple
+ExecStartPre=/bin/mkdir -p /tmp/whisper
+ExecStart=%h/.config/whisper-daemon/whisper-daemon.py
+Restart=on-failure
+RestartSec=5
+Environment=WHISPER_MODEL=large-v3
+Environment=WHISPER_DEVICE=cuda
+Environment=WHISPER_COMPUTE_TYPE=float16
+Environment=LD_LIBRARY_PATH=%h/.local/lib/python3.14/site-packages/nvidia/cublas/lib:%h/.local/lib/python3.14/site-packages/nvidia/cudnn/lib:%h/.local/lib/python3.14/site-packages/nvidia/cuda_nvrtc/lib
+
+[Install]
+WantedBy=default.target

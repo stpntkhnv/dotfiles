@@ -9,5 +9,7 @@ bin/update-ziti-hosts.sh
 .config/waybar/**
 .config/wofi/**
 .config/wezterm/**
+.config/whisper-daemon/**
+.config/systemd/**
 {{ end }}
 .config/distrobox/**

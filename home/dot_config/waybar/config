@@ -44,7 +44,7 @@
 
   "group/hardware": {
     "orientation": "horizontal",
-    "modules": ["custom/temperature", "memory", "cpu"]
+    "modules": ["custom/temperature", "custom/memory", "cpu"]
   },
 
   "group/connectivity": {
@@ -54,7 +54,7 @@
 
   "group/system": {
     "orientation": "horizontal",
-    "modules": ["hyprland/language", "clock", "custom/power"]
+    "modules": ["custom/voice-lang", "hyprland/language", "clock", "custom/power"]
   },
 
   
@@ -152,9 +152,10 @@
     "tooltip-format": "CPU Temperature: {}°C"
   },
 
-  "memory": {
-    "format": "󰍛 {used:.0f}G/{total:.0f}G",
-    "tooltip-format": "RAM: {percentage}% used"
+  "custom/memory": {
+    "exec": "~/.config/waybar/scripts/memory-top.sh",
+    "return-type": "json",
+    "interval": 5
   },
 
   "cpu": {
@@ -179,6 +180,15 @@
     "format": "󰀻",
     "tooltip-format": "Apps",
     "on-click": "nwg-drawer -is 72 -c 5 -ovl -fm dolphin"
+  },
+
+  "custom/voice-lang": {
+    "exec": "~/bin/whisper-lang-status.sh",
+    "return-type": "json",
+    "signal": 8,
+    "interval": 30,
+    "on-click": "~/bin/whisper-lang-switch.sh",
+    "format": "{}"
   },
 
   "custom/notifications": {
