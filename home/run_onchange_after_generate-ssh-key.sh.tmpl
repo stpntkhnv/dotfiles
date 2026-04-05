@@ -1,21 +1,37 @@
 #!/bin/bash
 set -euo pipefail
 
-if [[ -f "$HOME/.ssh/id_ed25519" ]]; then
-    exit 0
-fi
-
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 
-echo "Generating SSH key..."
-ssh-keygen -t ed25519 -C "{{ .git_email }}" -f "$HOME/.ssh/id_ed25519" -N ""
+generated=false
 
-echo ""
-echo "========================================="
-echo "Your new SSH public key:"
-echo "========================================="
-cat "$HOME/.ssh/id_ed25519.pub"
-echo "========================================="
-echo "Add it to: https://github.com/settings/keys"
-echo "========================================="
+if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
+    echo "Generating ed25519 SSH key (GitHub, GitLab)..."
+    ssh-keygen -t ed25519 -C "{{ .git_email }}" -f "$HOME/.ssh/id_ed25519" -N ""
+    generated=true
+fi
+
+if [[ ! -f "$HOME/.ssh/id_rsa" ]]; then
+    echo "Generating RSA-4096 SSH key (Azure DevOps)..."
+    ssh-keygen -t rsa -b 4096 -C "{{ .git_email }}" -f "$HOME/.ssh/id_rsa" -N ""
+    generated=true
+fi
+
+if $generated; then
+    echo ""
+    echo "========================================="
+    echo "ed25519 key (GitHub/GitLab):"
+    echo "========================================="
+    cat "$HOME/.ssh/id_ed25519.pub"
+    echo ""
+    echo "========================================="
+    echo "RSA key (Azure DevOps):"
+    echo "========================================="
+    cat "$HOME/.ssh/id_rsa.pub"
+    echo ""
+    echo "========================================="
+    echo "Add ed25519 to: https://github.com/settings/keys"
+    echo "Add RSA to:     https://dev.azure.com/<org>/_usersSettings/keys"
+    echo "========================================="
+fi
