@@ -4,3 +4,9 @@ bin/docker-forward.sh
 {{ if not .setup_ziti }}
 bin/update-ziti-hosts.sh
 {{ end }}
+{{ if env "CONTAINER_ID" }}
+.config/hypr/**
+.config/waybar/**
+.config/wofi/**
+.config/wezterm/**
+{{ end }}
