@@ -153,19 +153,19 @@ alias cd="z"
 
 # Host-only vs container-specific aliases
 # CONTAINER_ID is set automatically by Distrobox inside containers
-if [[ -z "$CONTAINER_ID" ]]; then
-  alias update="yay -Syu"
-  alias stellium='distrobox enter stellium -- tmux -L stellium new-session -A -s work'
-  alias digi3='distrobox enter digi3 -- tmux -L digi3 new-session -A -s work'
-else
-  alias update="sudo pacman -Syu"
-  export WAYLAND_DISPLAY=wayland-1
-  export DISPLAY=:1
-{{ if .setup_teams }}
-  alias teams='systemd-run --user --scope -p MemoryHigh={{ .teams_memory_limit }} teams-for-linux --ozone-platform=wayland &>/dev/null & disown'
-{{ end }}
-  alias tunnel='code tunnel --name "$CONTAINER_ID"'
-fi
+{{ if not .is_container -}}
+alias update="yay -Syu"
+alias stellium='distrobox enter stellium -- tmux -L stellium new-session -A -s work'
+alias digi3='distrobox enter digi3 -- tmux -L digi3 new-session -A -s work'
+{{ else -}}
+alias update="sudo pacman -Syu"
+export WAYLAND_DISPLAY=wayland-1
+export DISPLAY=:1
+{{ if .setup_teams -}}
+alias teams='systemd-run --user --scope -p MemoryHigh={{ .teams_memory_limit }} teams-for-linux --ozone-platform=wayland &>/dev/null & disown'
+{{ end -}}
+alias tunnel='code tunnel --name "$CONTAINER_ID"'
+{{ end -}}
 
 # Up/Down arrow searches history matching what you've already typed
 bindkey "^[[A" history-beginning-search-backward

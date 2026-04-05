@@ -1,3 +1,8 @@
+{{- $isContainer := false -}}
+{{- if stat "/run/.containerenv" -}}
+{{-   $isContainer = true -}}
+{{- end -}}
+
 {{- $gitName := promptStringOnce . "git_name" "Git user name" -}}
 {{- $gitEmail := promptStringOnce . "git_email" "Git user email" -}}
 
@@ -32,6 +37,7 @@
     ado_org = {{ $adoOrg | quote }}
     ado_project = {{ $adoProject | quote }}
     ado_pat = {{ $adoPat | quote }}
+    is_container = {{ $isContainer }}
     setup_docker_forward = {{ $setupDockerForward }}
     setup_ziti = {{ $setupZiti }}
     setup_teams = {{ $setupTeams }}

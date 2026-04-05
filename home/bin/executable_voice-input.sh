@@ -97,7 +97,8 @@ stop_recording() {
         exit 0
     fi
 
-    wtype -- "$text"
+    printf '%s' "$text" | wl-copy
+    wtype -M ctrl -M shift -k v -m shift -m ctrl
     echo "$(date '+%H:%M:%S.%N') stop: wtype done"
 }
 

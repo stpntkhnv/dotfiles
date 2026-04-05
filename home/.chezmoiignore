@@ -1,15 +1,38 @@
-{{ if not .setup_docker_forward }}
-bin/docker-forward.sh
-{{ end }}
-{{ if not .setup_ziti }}
-bin/update-ziti-hosts.sh
-{{ end }}
-{{ if env "CONTAINER_ID" }}
+{{ if .is_container }}
 .config/hypr/**
 .config/waybar/**
 .config/wofi/**
 .config/wezterm/**
 .config/whisper-daemon/**
 .config/systemd/**
-{{ end }}
 .config/distrobox/**
+.asoundrc
+bin/voice-input.sh
+bin/whisper-lang-status.sh
+bin/whisper-lang-switch.sh
+{{ end }}
+
+{{ if not .is_container }}
+.config/nvim/**
+.config/Code/**
+.config/lazygit/**
+.tmux.conf
+.npmrc
+bin/docker-forward.sh
+bin/update-ziti-hosts.sh
+run_onchange_before_01-install-packages.sh
+run_onchange_before_03-install-azure.sh
+run_onchange_before_04-install-teams.sh
+run_onchange_before_05-install-docker-forward.sh
+run_onchange_before_06-install-ziti.sh
+run_onchange_install-vscode-extensions.sh
+run_onchange_after_generate-ssh-key.sh
+run_onchange_after_set-origin-ssh.sh
+{{ end }}
+
+{{ if and .is_container (not .setup_docker_forward) }}
+bin/docker-forward.sh
+{{ end }}
+{{ if and .is_container (not .setup_ziti) }}
+bin/update-ziti-hosts.sh
+{{ end }}
