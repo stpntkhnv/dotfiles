@@ -1,0 +1,21 @@
+#!/bin/bash
+set -euo pipefail
+
+if [[ -f "$HOME/.ssh/id_ed25519" ]]; then
+    exit 0
+fi
+
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+
+echo "Generating SSH key..."
+ssh-keygen -t ed25519 -C "{{ .git_email }}" -f "$HOME/.ssh/id_ed25519" -N ""
+
+echo ""
+echo "========================================="
+echo "Your new SSH public key:"
+echo "========================================="
+cat "$HOME/.ssh/id_ed25519.pub"
+echo "========================================="
+echo "Add it to: https://github.com/settings/keys"
+echo "========================================="
