@@ -20,6 +20,7 @@ sudo pacman -Syu --noconfirm --needed \
     aspnet-targeting-pack \
     eza \
     fd \
+    firefox \
     freetds \
     git \
     glibc-locales \
@@ -55,7 +56,6 @@ sudo pacman -Syu --noconfirm --needed \
     wget \
     words \
     xorg-xauth \
-    firefox \
     zip \
     zoxide \
     zsh
@@ -70,21 +70,6 @@ if ! command -v yay &>/dev/null; then
     rm -rf "$tmpdir"
 fi
 
-{{ if .setup_azure }}
-echo "Installing Azure CLI..."
-sudo pacman -S --noconfirm --needed azure-cli
-
-if ! command -v azd &>/dev/null; then
-    echo "Installing Azure Developer CLI (azd)..."
-    curl -fsSL https://aka.ms/install-azd.sh | bash
-fi
-{{ end }}
-
-{{ if .setup_teams }}
-echo "Installing Microsoft Teams..."
-yay -S --noconfirm --needed teams-for-linux
-{{ end }}
-
 if ! command -v code &>/dev/null; then
     echo "Installing Visual Studio Code..."
     yay -S --noconfirm --needed visual-studio-code-bin
@@ -96,40 +81,6 @@ npm config set prefix "$HOME/.npm-global"
 
 echo "Installing Playwright browsers..."
 npx playwright install --with-deps chromium
-
-{{ if .setup_docker_forward }}
-echo "Installing socat for Docker port forwarding..."
-sudo pacman -S --noconfirm --needed socat
-{{ end }}
-
-{{ if .setup_ziti }}
-echo "Installing Ziti Edge Tunnel..."
-yay -S --noconfirm --needed ziti-edge-tunnel
-
-echo "Setting up Ziti systemd service..."
-sudo mkdir -p /opt/openziti/etc/identities
-sudo tee /etc/systemd/system/ziti-edge-tunnel.service > /dev/null <<'ZITI_UNIT'
-[Unit]
-Description=Ziti Edge Tunnel
-After=network-online.target
-
-[Service]
-Type=simple
-Environment="ZITI_IDENTITY_DIR=/opt/openziti/etc/identities"
-Environment="ZITI_VERBOSE=2"
-AmbientCapabilities=CAP_NET_ADMIN
-ExecStart=/usr/bin/ziti-edge-tunnel run --verbose=${ZITI_VERBOSE} --identity-dir=${ZITI_IDENTITY_DIR}
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-ZITI_UNIT
-
-sudo systemctl daemon-reload
-sudo systemctl enable ziti-edge-tunnel
-echo "Ziti service installed. Copy your identity JSON to /opt/openziti/etc/identities/ and run: sudo systemctl start ziti-edge-tunnel"
-{{ end }}
 
 echo "Configuring Firefox extensions via policies..."
 sudo mkdir -p /usr/lib/firefox/distribution
@@ -146,4 +97,4 @@ sudo tee /usr/lib/firefox/distribution/policies.json > /dev/null <<'POLICIES'
 }
 POLICIES
 
-echo "Package installation complete"
+echo "Base package installation complete"

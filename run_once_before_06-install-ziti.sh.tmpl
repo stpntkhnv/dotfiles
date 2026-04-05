@@ -1,0 +1,36 @@
+{{ if .setup_ziti }}
+#!/bin/bash
+set -euo pipefail
+
+if [[ -z "${CONTAINER_ID:-}" ]]; then
+    exit 0
+fi
+
+echo "Installing Ziti Edge Tunnel..."
+yay -S --noconfirm --needed ziti-edge-tunnel
+
+sudo mkdir -p /opt/openziti/etc/identities
+
+echo "Installing Ziti systemd service..."
+sudo tee /etc/systemd/system/ziti-edge-tunnel.service > /dev/null <<'ZITI_UNIT'
+[Unit]
+Description=Ziti Edge Tunnel
+After=network-online.target
+
+[Service]
+Type=simple
+Environment="ZITI_IDENTITY_DIR=/opt/openziti/etc/identities"
+Environment="ZITI_VERBOSE=2"
+AmbientCapabilities=CAP_NET_ADMIN
+ExecStart=/usr/bin/ziti-edge-tunnel run --verbose=${ZITI_VERBOSE} --identity-dir=${ZITI_IDENTITY_DIR}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+ZITI_UNIT
+
+sudo systemctl daemon-reload
+sudo systemctl enable ziti-edge-tunnel
+echo "Ziti service installed. Copy your identity JSON to /opt/openziti/etc/identities/ and run: sudo systemctl start ziti-edge-tunnel"
+{{ end }}

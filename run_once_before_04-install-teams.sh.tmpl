@@ -1,0 +1,13 @@
+{{ if .setup_teams }}
+#!/bin/bash
+set -euo pipefail
+
+if [[ -z "${CONTAINER_ID:-}" ]]; then
+    exit 0
+fi
+
+echo "Installing Microsoft Teams..."
+yay -S --noconfirm --needed teams-for-linux
+
+echo "Teams installation complete"
+{{ end }}

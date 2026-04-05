@@ -1,0 +1,18 @@
+{{ if .setup_azure }}
+#!/bin/bash
+set -euo pipefail
+
+if [[ -z "${CONTAINER_ID:-}" ]]; then
+    exit 0
+fi
+
+echo "Installing Azure CLI..."
+sudo pacman -S --noconfirm --needed azure-cli
+
+if ! command -v azd &>/dev/null; then
+    echo "Installing Azure Developer CLI (azd)..."
+    curl -fsSL https://aka.ms/install-azd.sh | bash
+fi
+
+echo "Azure tools installation complete"
+{{ end }}
