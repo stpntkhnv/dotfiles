@@ -1,9 +1,12 @@
 {
   "mcpServers": {
+{{ if .setup_azure }}
     "azure": {
       "command": "npx",
-      "args": ["-y", "@azure/mcp@latest", "server", "start"]
+      "args": ["-y", "@azure/mcp@latest", "server", "start", "--auth-method", "azure-cli"]
     },
+{{ end }}
+{{ if .setup_ado }}
     "azureDevOps": {
       "command": "npx",
       "args": ["-y", "@azure-devops/mcp", "{{ .ado_org }}", "--authentication", "env"],
@@ -12,6 +15,7 @@
         "AZURE_DEVOPS_PAT": "{{ .ado_pat }}"
       }
     },
+{{ end }}
     "playwright": {
       "command": "npx",
       "args": ["@playwright/mcp@latest", "--browser", "chromium"]

@@ -1,12 +1,38 @@
 {{- $gitName := promptStringOnce . "git_name" "Git user name" -}}
 {{- $gitEmail := promptStringOnce . "git_email" "Git user email" -}}
-{{- $adoOrg := promptStringOnce . "ado_org" "Azure DevOps organization name" -}}
-{{- $adoProject := promptStringOnce . "ado_project" "Azure DevOps default project" -}}
-{{- $adoPat := promptStringOnce . "ado_pat" "Azure DevOps PAT token" -}}
+
+{{- $setupAzure := promptBoolOnce . "setup_azure" "Setup Azure CLI and tools" -}}
+{{- $setupAdo := promptBoolOnce . "setup_ado" "Setup Azure DevOps integration" -}}
+{{- $adoOrg := "" -}}
+{{- $adoProject := "" -}}
+{{- $adoPat := "" -}}
+{{- if $setupAdo -}}
+{{-   $adoOrg = promptStringOnce . "ado_org" "Azure DevOps organization name" -}}
+{{-   $adoProject = promptStringOnce . "ado_project" "Azure DevOps default project" -}}
+{{-   $adoPat = promptStringOnce . "ado_pat" "Azure DevOps PAT token" -}}
+{{- end -}}
+
+{{- $setupDockerForward := promptBoolOnce . "setup_docker_forward" "Setup Docker port forwarding (for isolated distrobox)" -}}
+{{- $setupZiti := promptBoolOnce . "setup_ziti" "Setup OpenZiti edge tunnel" -}}
+{{- $setupTeams := promptBoolOnce . "setup_teams" "Install Microsoft Teams" -}}
+{{- $teamsMemoryLimit := "1536M" -}}
+{{- if $setupTeams -}}
+{{-   $teamsMemoryLimit = promptStringOnce . "teams_memory_limit" "Teams memory limit (default 1536M)" -}}
+{{- end -}}
+
+[git]
+    autoCommit = true
+    autoPush = true
 
 [data]
     git_name = {{ $gitName | quote }}
     git_email = {{ $gitEmail | quote }}
+    setup_azure = {{ $setupAzure }}
+    setup_ado = {{ $setupAdo }}
     ado_org = {{ $adoOrg | quote }}
     ado_project = {{ $adoProject | quote }}
     ado_pat = {{ $adoPat | quote }}
+    setup_docker_forward = {{ $setupDockerForward }}
+    setup_ziti = {{ $setupZiti }}
+    setup_teams = {{ $setupTeams }}
+    teams_memory_limit = {{ $teamsMemoryLimit | quote }}

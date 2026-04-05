@@ -1,0 +1,6 @@
+{{ if not .setup_docker_forward }}
+bin/docker-forward.sh
+{{ end }}
+{{ if not .setup_ziti }}
+bin/update-ziti-hosts.sh
+{{ end }}

@@ -1,0 +1,77 @@
+{{ if .setup_ziti }}
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOSTS_FILE="/etc/hosts"
+BEGIN_MARKER="# BEGIN ziti-dns-entries"
+END_MARKER="# END ziti-dns-entries"
+
+entries=$(journalctl -u ziti-edge-tunnel --since "7 days ago" --no-pager 2>/dev/null \
+    | grep -oP 'registered DNS entry \K\S+ -> \S+' \
+    | sort -u \
+    | awk -F' -> ' '{print $2, $1}')
+
+if [[ -z "$entries" ]]; then
+    echo "No Ziti DNS entries found in journal. Is ziti-edge-tunnel running?"
+    exit 1
+fi
+
+ziti_hosts=$(echo "$entries" | awk '{print $2}')
+
+echo "Ziti DNS entries found:"
+echo "$entries" | while read -r ip host; do
+    printf "  %-15s %s\n" "$ip" "$host"
+done
+echo ""
+
+new_block="${BEGIN_MARKER}"$'\n'"${entries}"$'\n'"${END_MARKER}"
+
+if [[ $EUID -ne 0 ]]; then
+    echo "Dry run (not root). Would write to ${HOSTS_FILE}:"
+    echo ""
+    if grep -q "$BEGIN_MARKER" "$HOSTS_FILE" 2>/dev/null; then
+        sed "/${BEGIN_MARKER}/,/${END_MARKER}/c\\${new_block}" "$HOSTS_FILE"
+    else
+        cat "$HOSTS_FILE"
+        echo ""
+        echo "$new_block"
+    fi
+    echo ""
+    echo "Run with sudo to apply."
+    exit 0
+fi
+
+tmp=$(mktemp)
+
+if grep -q "$BEGIN_MARKER" "$HOSTS_FILE"; then
+    sed "/${BEGIN_MARKER}/,/${END_MARKER}/d" "$HOSTS_FILE" > "$tmp"
+else
+    cp "$HOSTS_FILE" "$tmp"
+fi
+
+cleaned=$(mktemp)
+while IFS= read -r line; do
+    skip=false
+    for h in $ziti_hosts; do
+        if echo "$line" | grep -qF "$h"; then
+            skip=true
+            break
+        fi
+    done
+    if ! $skip; then
+        echo "$line"
+    fi
+done < "$tmp" > "$cleaned"
+
+sed -i '/^$/N;/^\n$/d' "$cleaned"
+
+echo "" >> "$cleaned"
+echo "$new_block" >> "$cleaned"
+
+mv "$cleaned" "$HOSTS_FILE"
+chmod 644 "$HOSTS_FILE"
+rm -f "$tmp"
+echo "Updated ${HOSTS_FILE} with ziti-dns-entries block."
+
+echo "Done."
+{{ end }}

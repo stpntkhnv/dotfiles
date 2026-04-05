@@ -1,0 +1,33 @@
+{{ if .setup_docker_forward }}
+#!/bin/bash
+set -euo pipefail
+
+HOST_IP=$(distrobox-host-exec bash -c "ip -4 addr show eno1 | grep -oP '(?<=inet\s)\d+(\.\d+){3}'" 2>/dev/null)
+
+if [[ -z "$HOST_IP" ]]; then
+    echo "Could not determine host IP from eno1"
+    exit 1
+fi
+
+echo "Host IP: $HOST_IP"
+echo "Gateway: 169.254.1.2 (host.containers.internal)"
+
+if [[ $# -eq 0 ]]; then
+    echo ""
+    echo "Usage: docker-forward <port> [port] [port] ..."
+    echo "Example: docker-forward 8000 8004 1433"
+    echo ""
+    echo "Forwards ports from host Docker containers to this distrobox container."
+    echo "Inside distrobox, access them via 169.254.1.2:<port>"
+    exit 0
+fi
+
+for port in "$@"; do
+    pkill -f "socat TCP-LISTEN:${port},bind=${HOST_IP}" 2>/dev/null || true
+    distrobox-host-exec socat "TCP-LISTEN:${port},bind=${HOST_IP},reuseaddr,fork" "TCP:127.0.0.1:${port}" &
+    echo "Forwarding ${HOST_IP}:${port} -> 127.0.0.1:${port}"
+done
+
+echo ""
+echo "Port forwards running. Stop with: pkill -f 'socat TCP-LISTEN'"
+{{ end }}
