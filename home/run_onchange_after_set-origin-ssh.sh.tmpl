@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+
+source_dir="{{ .chezmoi.sourceDir }}"
+cd "$source_dir"
+
+current_url=$(git remote get-url origin 2>/dev/null || true)
+ssh_url="git@github.com:stpntkhnv/dotfiles.git"
+
+if [[ "$current_url" != "$ssh_url" ]]; then
+    echo "Switching chezmoi remote from HTTPS to SSH..."
+    git remote set-url origin "$ssh_url"
+    echo "Remote origin set to $ssh_url"
+fi
