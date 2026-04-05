@@ -10,3 +10,4 @@ bin/update-ziti-hosts.sh
 .config/wofi/**
 .config/wezterm/**
 {{ end }}
+.config/distrobox/**
