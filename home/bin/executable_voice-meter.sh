@@ -11,6 +11,10 @@ BARS=14
 CHUNK=1600
 SCALE=500
 
+DIM="\033[90m"
+RST="\033[0m"
+SEP="${DIM}──────────────${RST}"
+
 history=()
 for ((i=0; i<BARS; i++)); do
     history+=(0)
@@ -56,10 +60,13 @@ render_waveform() {
             }
             print line
         }
+        sep = ""
+        for (i=0; i<B; i++) sep = sep "─"
+        print d sep R
         tl = length(tag)
         pad = ""
-        for (i=0; i < B - 4 - tl; i++) pad = pad " "
-        printf r "●" R "REC" pad d tag R
+        for (i=0; i < B - 5 - tl; i++) pad = pad " "
+        printf " " r "●" R "REC" pad d tag R
     }'
 }
 
@@ -92,11 +99,12 @@ render_processing() {
             printf "%${BARS}s\n"
         fi
     done
+    echo -e "$SEP"
     local tl=${#tag}
-    local pad_len=$((BARS - 4 - tl))
+    local pad_len=$((BARS - 5 - tl))
     local pad=""
     for ((i=0; i<pad_len; i++)); do pad+=" "; done
-    printf "${c}◎${R}···${pad}${dd}${tag}${R}"
+    printf " ${c}◎${R}···${pad}${dd}${tag}${R}"
 }
 
 render_done() {
@@ -114,7 +122,8 @@ render_done() {
             *) printf "%${BARS}s\n" ;;
         esac
     done
-    printf "    ${g}✓${R} OK   "
+    echo -e "$SEP"
+    printf "     ${g}✓${R} OK   "
 }
 
 get_state() {

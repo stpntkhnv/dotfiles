@@ -58,7 +58,7 @@ start_recording() {
         kill "$(cat "$METER_PID_FILE")" 2>/dev/null
         rm -f "$METER_PID_FILE"
     fi
-    foot --app-id voice-meter --title "Voice Meter" -W 14x7 -o pad=2x2 -e ~/bin/voice-meter.sh &
+    foot --app-id voice-meter --title "Voice Meter" -W 14x8 -o pad=6x4 -e ~/bin/voice-meter.sh &
     echo $! > "$METER_PID_FILE"
 }
 
