@@ -1,0 +1,28 @@
+# Whisper vocabulary hints
+# One word/phrase per line. These bias the model toward specific spellings.
+# Lines starting with # are ignored.
+
+# dotfile management
+chezmoi
+
+# wayland / desktop
+Hyprland
+Waybar
+PipeWire
+Wayland
+sway
+
+# tools
+Whisper
+FastAPI
+systemd
+Neovim
+tmux
+Distrobox
+Podman
+
+# networking
+Tailscale
+WireGuard
+OpenZiti
+Ziti

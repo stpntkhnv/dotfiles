@@ -12,9 +12,11 @@ from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
 WHISPER_DIR = Path("/tmp/whisper")
+CONFIG_DIR = Path.home() / ".config" / "whisper-daemon"
 SOCKET_PATH = WHISPER_DIR / "whisper.sock"
 LANG_FILE = WHISPER_DIR / "lang"
 MODEL_FILE = WHISPER_DIR / "model"
+VOCAB_FILE = CONFIG_DIR / "vocab.txt"
 DEVICE = os.environ.get("WHISPER_DEVICE", "cuda")
 COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE_TYPE", "float16")
 
@@ -50,6 +52,15 @@ def get_default_language() -> str | None:
         return None
 
 
+def get_vocab_prompt() -> str | None:
+    try:
+        lines = VOCAB_FILE.read_text().strip().splitlines()
+        words = [w.strip() for w in lines if w.strip() and not w.startswith("#")]
+        return ", ".join(words) if words else None
+    except FileNotFoundError:
+        return None
+
+
 @app.post("/transcribe")
 async def transcribe(
     audio: UploadFile = File(...),
@@ -70,7 +81,8 @@ async def transcribe(
             language=lang,
             beam_size=5,
             vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=500),
+            vad_parameters=dict(min_silence_duration_ms=500, speech_pad_ms=400),
+            initial_prompt=get_vocab_prompt(),
         )
 
         text = " ".join(seg.text.strip() for seg in segments)

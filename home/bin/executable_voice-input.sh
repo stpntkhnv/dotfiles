@@ -8,11 +8,32 @@ SOCKET="$WHISPER_DIR/whisper.sock"
 LANG_FILE="$WHISPER_DIR/lang"
 PID_FILE="$WHISPER_DIR/recording.pid"
 METER_PID_FILE="$WHISPER_DIR/meter.pid"
+STATE_FILE="$WHISPER_DIR/meter.state"
 RAW_FILE="$WHISPER_DIR/recording.raw"
 WAV_FILE="$WHISPER_DIR/recording.wav"
 SAMPLE_RATE=16000
 MIN_SAMPLES=8000
-TAIL_SILENCE_SEC=0.5
+TAIL_SILENCE_SEC=0.8
+
+sfx_start() {
+    (play -qn synth 0.07 sin 587 sin 880 fade t 0.01 0.07 0.02 vol 0.2 2>/dev/null
+     play -qn synth 0.13 sin 784 sin 1175 fade t 0.01 0.13 0.04 vol 0.22 2>/dev/null) &
+}
+sfx_stop() {
+    play -qn synth 0.1 sin 784 sin 587 fade t 0.01 0.1 0.03 vol 0.18 2>/dev/null &
+}
+sfx_done() {
+    (play -qn synth 0.07 sin 523 sin 784 fade t 0.01 0.07 0.02 vol 0.18 2>/dev/null
+     play -qn synth 0.07 sin 659 sin 988 fade t 0.01 0.07 0.02 vol 0.2 2>/dev/null
+     play -qn synth 0.18 sin 784 sin 1175 fade t 0.01 0.18 0.06 vol 0.22 2>/dev/null) &
+}
+sfx_error() {
+    (play -qn synth 0.1 sin 440 sin 554 fade t 0.02 0.1 0.03 vol 0.2 2>/dev/null
+     play -qn synth 0.22 sin 330 sin 415 fade t 0.01 0.22 0.06 vol 0.2 2>/dev/null) &
+}
+sfx_cancel() {
+    play -qn synth 0.12 sin 660:440 fade t 0.01 0.12 0.04 vol 0.18 2>/dev/null &
+}
 
 start_recording() {
     if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
@@ -21,12 +42,14 @@ start_recording() {
     fi
 
     if [[ ! -S "$SOCKET" ]]; then
-        notify-send -u critical "Voice Input" "Whisper daemon is not running"
+        sfx_error
+        echo "$(date '+%H:%M:%S.%N') start: daemon not running"
         exit 1
     fi
 
     rm -f "$RAW_FILE" "$WAV_FILE"
-    notify-send -t 1000 "Voice Input" "Recording..."
+    echo "recording" > "$STATE_FILE"
+    sfx_start
 
     setsid rec -q -t raw -r $SAMPLE_RATE -c 1 -b 16 -e signed-integer "$RAW_FILE" &
     echo $! > "$PID_FILE"
@@ -44,18 +67,21 @@ kill_meter() {
         kill "$(cat "$METER_PID_FILE")" 2>/dev/null
         rm -f "$METER_PID_FILE"
     fi
+    rm -f "$STATE_FILE"
 }
 
 stop_recording() {
-    kill_meter
-
     echo "$(date '+%H:%M:%S.%N') stop: checking PID file"
     if [[ ! -f "$PID_FILE" ]]; then
         echo "$(date '+%H:%M:%S.%N') stop: no PID file, exiting"
+        kill_meter
         exit 0
     fi
 
     pid=$(cat "$PID_FILE")
+    sfx_stop
+    echo "processing" > "$STATE_FILE"
+
     echo "$(date '+%H:%M:%S.%N') stop: waiting ${TAIL_SILENCE_SEC}s for buffer flush"
     sleep $TAIL_SILENCE_SEC
 
@@ -69,6 +95,7 @@ stop_recording() {
 
     if [[ ! -f "$RAW_FILE" ]]; then
         echo "$(date '+%H:%M:%S.%N') stop: no RAW file, exiting"
+        kill_meter
         exit 0
     fi
 
@@ -79,6 +106,7 @@ stop_recording() {
     if [[ "$samples" -lt "$MIN_SAMPLES" ]]; then
         echo "$(date '+%H:%M:%S.%N') stop: too short, exiting"
         rm -f "$RAW_FILE"
+        kill_meter
         exit 0
     fi
 
@@ -92,8 +120,6 @@ stop_recording() {
         lang=$(cat "$LANG_FILE")
     fi
     echo "$(date '+%H:%M:%S.%N') stop: lang=$lang, sending to whisper"
-
-    notify-send -t 1000 "Voice Input" "Transcribing..."
 
     response=$(curl --silent --max-time 30 \
         --unix-socket "$SOCKET" \
@@ -112,15 +138,36 @@ stop_recording() {
     if [[ -z "$text" ]]; then
         if echo "$response" | jq -e '.error' >/dev/null 2>&1; then
             error=$(echo "$response" | jq -r '.error')
-            notify-send -u critical "Voice Input" "Transcription failed: $error"
+            sfx_error
+            echo "$(date '+%H:%M:%S.%N') stop: transcription failed: $error"
+            kill_meter
             exit 1
         fi
+        kill_meter
         exit 0
     fi
 
     printf '%s' "$text" | wl-copy
+
+    echo "done" > "$STATE_FILE"
+    sfx_done
+
     wtype -M ctrl -M shift -k v -m shift -m ctrl
     echo "$(date '+%H:%M:%S.%N') stop: wtype done"
+
+    sleep 2
+    kill_meter
+}
+
+cancel_recording() {
+    echo "$(date '+%H:%M:%S.%N') cancel: discarding recording"
+    if [[ -f "$PID_FILE" ]]; then
+        kill -INT "$(cat "$PID_FILE")" 2>/dev/null
+        rm -f "$PID_FILE"
+    fi
+    rm -f "$RAW_FILE" "$WAV_FILE"
+    sfx_cancel
+    kill_meter
 }
 
 toggle_recording() {
@@ -135,9 +182,10 @@ toggle_recording() {
 case "${1:-}" in
     start)  start_recording ;;
     stop)   stop_recording ;;
+    cancel) cancel_recording ;;
     toggle) toggle_recording ;;
     *)
-        echo "Usage: voice-input.sh {start|stop|toggle}"
+        echo "Usage: voice-input.sh {start|stop|cancel|toggle}"
         exit 1
         ;;
 esac
