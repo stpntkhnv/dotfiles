@@ -12,4 +12,4 @@ top_procs=$(ps axo rss,comm --no-headers --sort=-rss | head -8 | awk '{printf "%
 
 tooltip="RAM: ${pct}% used\\n─────────────────\\n${top_procs}"
 
-echo "{\"text\":\"󰍛 ${used_gb}G/${total_gb}G\",\"tooltip\":\"${tooltip}\",\"percentage\":${pct}}"
+echo "{\"text\":\"󰍛 ${used_gb}G\",\"tooltip\":\"${tooltip}\",\"percentage\":${pct}}"

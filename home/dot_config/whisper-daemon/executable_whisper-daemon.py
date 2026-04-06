@@ -14,20 +14,31 @@ from fastapi.responses import JSONResponse
 WHISPER_DIR = Path("/tmp/whisper")
 SOCKET_PATH = WHISPER_DIR / "whisper.sock"
 LANG_FILE = WHISPER_DIR / "lang"
-MODEL_SIZE = os.environ.get("WHISPER_MODEL", "medium")
+MODEL_FILE = WHISPER_DIR / "model"
 DEVICE = os.environ.get("WHISPER_DEVICE", "cuda")
 COMPUTE_TYPE = os.environ.get("WHISPER_COMPUTE_TYPE", "float16")
+
+
+def get_model_size() -> str:
+    try:
+        model_name = MODEL_FILE.read_text().strip()
+        if model_name:
+            return model_name
+    except FileNotFoundError:
+        pass
+    return os.environ.get("WHISPER_MODEL", "large-v3")
 
 app = FastAPI()
 model = None
 
 
 def load_model():
-    global model
+    global model, active_model_size
     from faster_whisper import WhisperModel
 
-    print(f"Loading model '{MODEL_SIZE}' on {DEVICE} with {COMPUTE_TYPE}...")
-    model = WhisperModel(MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE)
+    active_model_size = get_model_size()
+    print(f"Loading model '{active_model_size}' on {DEVICE} with {COMPUTE_TYPE}...")
+    model = WhisperModel(active_model_size, device=DEVICE, compute_type=COMPUTE_TYPE)
     print("Model loaded.")
 
 
@@ -73,7 +84,7 @@ async def transcribe(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model": MODEL_SIZE, "device": DEVICE}
+    return {"status": "ok", "model": active_model_size, "device": DEVICE}
 
 
 def setup_socket():

@@ -7,13 +7,15 @@ WHISPER_DIR="/tmp/whisper"
 SOCKET="$WHISPER_DIR/whisper.sock"
 LANG_FILE="$WHISPER_DIR/lang"
 PID_FILE="$WHISPER_DIR/recording.pid"
+METER_PID_FILE="$WHISPER_DIR/meter.pid"
 RAW_FILE="$WHISPER_DIR/recording.raw"
 WAV_FILE="$WHISPER_DIR/recording.wav"
 SAMPLE_RATE=16000
 MIN_SAMPLES=8000
+TAIL_SILENCE_SEC=0.5
 
 start_recording() {
-    if [[ -f "$PID_FILE" ]]; then
+    if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
         kill "$(cat "$PID_FILE")" 2>/dev/null
         rm -f "$PID_FILE"
     fi
@@ -28,9 +30,25 @@ start_recording() {
 
     setsid rec -q -t raw -r $SAMPLE_RATE -c 1 -b 16 -e signed-integer "$RAW_FILE" &
     echo $! > "$PID_FILE"
+
+    if [[ -f "$METER_PID_FILE" ]]; then
+        kill "$(cat "$METER_PID_FILE")" 2>/dev/null
+        rm -f "$METER_PID_FILE"
+    fi
+    foot --app-id voice-meter --title "Voice Meter" -W 14x7 -o pad=2x2 -e ~/bin/voice-meter.sh &
+    echo $! > "$METER_PID_FILE"
+}
+
+kill_meter() {
+    if [[ -f "$METER_PID_FILE" ]]; then
+        kill "$(cat "$METER_PID_FILE")" 2>/dev/null
+        rm -f "$METER_PID_FILE"
+    fi
 }
 
 stop_recording() {
+    kill_meter
+
     echo "$(date '+%H:%M:%S.%N') stop: checking PID file"
     if [[ ! -f "$PID_FILE" ]]; then
         echo "$(date '+%H:%M:%S.%N') stop: no PID file, exiting"
@@ -38,6 +56,9 @@ stop_recording() {
     fi
 
     pid=$(cat "$PID_FILE")
+    echo "$(date '+%H:%M:%S.%N') stop: waiting ${TAIL_SILENCE_SEC}s for buffer flush"
+    sleep $TAIL_SILENCE_SEC
+
     echo "$(date '+%H:%M:%S.%N') stop: killing rec pid=$pid"
     kill -INT "$pid" 2>/dev/null
     for i in $(seq 1 20); do
@@ -61,7 +82,7 @@ stop_recording() {
         exit 0
     fi
 
-    sox -t raw -r $SAMPLE_RATE -c 1 -b 16 -e signed-integer "$RAW_FILE" "$WAV_FILE"
+    sox -t raw -r $SAMPLE_RATE -c 1 -b 16 -e signed-integer "$RAW_FILE" "$WAV_FILE" pad 0 $TAIL_SILENCE_SEC
     rm -f "$RAW_FILE"
 
     echo "$(date '+%H:%M:%S.%N') stop: converted to WAV, $(soxi -D "$WAV_FILE" 2>/dev/null)s"
@@ -102,11 +123,21 @@ stop_recording() {
     echo "$(date '+%H:%M:%S.%N') stop: wtype done"
 }
 
+toggle_recording() {
+    if [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+        stop_recording
+    else
+        rm -f "$PID_FILE"
+        start_recording
+    fi
+}
+
 case "${1:-}" in
-    start) start_recording ;;
-    stop)  stop_recording ;;
+    start)  start_recording ;;
+    stop)   stop_recording ;;
+    toggle) toggle_recording ;;
     *)
-        echo "Usage: voice-input.sh {start|stop}"
+        echo "Usage: voice-input.sh {start|stop|toggle}"
         exit 1
         ;;
 esac

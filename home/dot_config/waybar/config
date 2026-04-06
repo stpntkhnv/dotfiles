@@ -44,7 +44,7 @@
 
   "group/hardware": {
     "orientation": "horizontal",
-    "modules": ["custom/temperature", "custom/memory", "cpu"]
+    "modules": ["custom/temperature", "custom/memory", "cpu", "custom/gpu"]
   },
 
   "group/connectivity": {
@@ -54,7 +54,7 @@
 
   "group/system": {
     "orientation": "horizontal",
-    "modules": ["custom/voice-lang", "hyprland/language", "clock", "custom/power"]
+    "modules": ["custom/whisper-model", "custom/voice-lang", "hyprland/language", "clock", "custom/power"]
   },
 
   
@@ -163,6 +163,12 @@
     "tooltip-format": "CPU: {usage}%"
   },
 
+  "custom/gpu": {
+    "exec": "~/.config/waybar/scripts/gpu-vram.sh",
+    "return-type": "json",
+    "interval": 5
+  },
+
   "clock": {
     "format": "󰥔 {:%H:%M}",
     "format-alt": "󰃭 {:%a, %d %b}",
@@ -180,6 +186,15 @@
     "format": "󰀻",
     "tooltip-format": "Apps",
     "on-click": "nwg-drawer -is 72 -c 5 -ovl -fm dolphin"
+  },
+
+  "custom/whisper-model": {
+    "exec": "~/bin/whisper-model-status.sh",
+    "return-type": "json",
+    "signal": 9,
+    "interval": 30,
+    "on-click": "~/bin/whisper-model-switch.sh",
+    "format": "󰗊 {}"
   },
 
   "custom/voice-lang": {
