@@ -18,4 +18,8 @@ else
 fi
 
 script_dir="$(cd -P -- "$(dirname -- "$(command -v -- "$0")")" && pwd -P)"
-exec "$chezmoi" init --apply "--source=$script_dir"
+if [ -f "$script_dir/.chezmoiroot" ]; then
+  exec "$chezmoi" init --apply "--source=$script_dir"
+else
+  exec "$chezmoi" init --apply stpntkhnv
+fi
