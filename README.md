@@ -10,6 +10,20 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/in
 
 Installs chezmoi (if missing), clones this repo, asks a few setup questions, then installs packages and applies all configs.
 
+## Distrobox containers
+
+Create all containers from the manifest without cloning the repo:
+
+```sh
+distrobox assemble create --file https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/home/dot_config/distrobox/distrobox.ini
+```
+
+Or a single container by name:
+
+```sh
+distrobox assemble create --name digi3 --file https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/home/dot_config/distrobox/distrobox.ini
+```
+
 ## What gets configured
 
 - zsh + Oh My Zsh + Powerlevel10k
