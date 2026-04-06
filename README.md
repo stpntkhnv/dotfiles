@@ -8,6 +8,12 @@ Personal workstation configuration managed with [chezmoi](https://www.chezmoi.io
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/install.sh)"
 ```
 
+If the script was recently updated and you're getting stale content from CDN cache, use the GitHub API instead:
+
+```sh
+sh -c "$(curl -fsSL https://api.github.com/repos/stpntkhnv/dotfiles/contents/install.sh -H 'Accept: application/vnd.github.raw')"
+```
+
 Installs chezmoi (if missing), clones this repo, asks a few setup questions, then installs packages and applies all configs.
 
 ## Distrobox containers

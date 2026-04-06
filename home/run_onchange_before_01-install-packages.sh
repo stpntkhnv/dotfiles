@@ -80,7 +80,7 @@ mkdir -p "$HOME/.npm-global"
 npm config set prefix "$HOME/.npm-global"
 
 echo "Installing Playwright browsers..."
-npx playwright install --with-deps chromium
+npx playwright install chromium
 
 echo "Configuring Firefox extensions via policies..."
 sudo mkdir -p /usr/lib/firefox/distribution
