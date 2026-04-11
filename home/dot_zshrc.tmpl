@@ -162,6 +162,18 @@ alias personal='distrobox enter personal -- tmux -L personal new-session -A -s w
 alias update="sudo pacman -Syu"
 export WAYLAND_DISPLAY=wayland-1
 export DISPLAY=:1
+
+# Use the host's password store and GPG keyring directly via /run/host bind mount.
+# Single source of truth across all containers; gpg-agent on the host serves us
+# over its filesystem socket (works even with unshare_netns=true).
+export PASSWORD_STORE_DIR=/run/host/home/stsiapan/.password-store
+export GNUPGHOME=/run/host/home/stsiapan/.gnupg
+
+# Workaround for distrobox issue #1992: distrobox-enter sets $PWD to /run/host/...
+# which makes distrobox-host-exec / host-spawn fail silently (chdir on host fails).
+if [[ $PWD == /run/host/* ]]; then
+  cd "${PWD#/run/host}" 2>/dev/null || cd "$HOME"
+fi
 {{ if .setup_teams -}}
 alias teams='systemd-run --user --scope -p MemoryHigh={{ .teams_memory_limit }} teams-for-linux --ozone-platform=wayland &>/dev/null & disown'
 {{ end -}}
