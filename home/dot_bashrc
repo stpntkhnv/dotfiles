@@ -5,3 +5,10 @@ alias grep='grep --color=auto'
 PS1='[\u@\h \W]\$ '
 
 export PATH="$HOME/.npm-global/bin:$PATH"
+
+# distrobox container shortcuts — each gets its own tmux socket so
+# sessions never collide across containers.
+alias digi3='distrobox enter digi3 -- tmux -L digi3 new-session -A -s work'
+alias stellium='distrobox enter stellium -- tmux -L stellium new-session -A -s work'
+alias voice-test='distrobox enter voice-test -- tmux -L voice-test new-session -A -s work'
+alias personal='distrobox enter personal -- tmux -L personal new-session -A -s work'
