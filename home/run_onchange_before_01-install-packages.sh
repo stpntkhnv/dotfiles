@@ -93,6 +93,10 @@ echo "Setting up npm global directory..."
 mkdir -p "$HOME/.npm-global"
 npm config set prefix "$HOME/.npm-global"
 
+echo "Installing Claude Code CLI..."
+"$HOME/.npm-global/bin/npm" install -g @anthropic-ai/claude-code 2>/dev/null \
+    || npm install -g @anthropic-ai/claude-code
+
 echo "Installing Playwright browsers..."
 npx playwright install chromium
 
