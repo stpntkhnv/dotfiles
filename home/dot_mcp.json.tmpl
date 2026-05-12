@@ -3,7 +3,7 @@
 {{ if .setup_azure }}
     "azure": {
       "command": "npx",
-      "args": ["-y", "@azure/mcp@latest", "server", "start", "--auth-method", "azure-cli"]
+      "args": ["-y", "@azure/mcp@latest", "server", "start"]
     },
 {{ end }}
 {{ if .setup_ado }}
