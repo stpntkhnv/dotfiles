@@ -89,6 +89,11 @@ if ! command -v code &>/dev/null; then
     yay -S --noconfirm --needed visual-studio-code-bin
 fi
 
+if ! command -v devtunnel &>/dev/null; then
+    echo "Installing Microsoft Dev Tunnels CLI..."
+    yay -S --noconfirm --needed devtunnel
+fi
+
 echo "Setting up npm global directory..."
 mkdir -p "$HOME/.npm-global"
 npm config set prefix "$HOME/.npm-global"
