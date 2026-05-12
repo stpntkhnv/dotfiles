@@ -18,17 +18,13 @@ Installs chezmoi (if missing), clones this repo, asks a few setup questions, the
 
 ## Distrobox containers
 
-Create all containers from the manifest without cloning the repo:
-
-```sh
-distrobox assemble create --file https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/home/dot_config/distrobox/distrobox.ini
-```
-
-Or a single container by name:
+Always pass `--name <containername>` — distrobox-assemble treats every `[section]` in the INI as a container, including `[base]`, so omitting `--name` will also create a redundant `base` container.
 
 ```sh
 distrobox assemble create --name digi3 --file https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/home/dot_config/distrobox/distrobox.ini
 ```
+
+The `archlinux:latest` base image is bare — it ships with an empty `mirrorlist` and no `Include` for `[extra]`. The chezmoi-driven setup script populates both before the first `pacman -Syu`, so no manual bootstrap is needed.
 
 ### Setting up a new container
 
@@ -41,29 +37,13 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/in
 
 After that, exit and use the tmux alias (e.g. `personal`, `digi3`, `stellium`).
 
-### Known issue: util-linux 2.42 breaks init containers
+### util-linux 2.42 workaround (auto-applied)
 
-`su --pty` in util-linux 2.42 (shipped in Arch on 2026-04-03) passes `--pty` to the shell instead of handling it, which breaks `distrobox enter` for containers created with `--init`.
+util-linux 2.42 has a regression in `su --pty` that breaks `distrobox enter` for containers with `init=true` (see [distrobox#2052](https://github.com/89luca89/distrobox/issues/2052) and [util-linux PR#4185](https://github.com/util-linux/util-linux/pull/4185), merged but not yet released).
 
-**Upstream links:**
-- [distrobox#2052](https://github.com/89luca89/distrobox/issues/2052)
-- [util-linux PR#4185](https://github.com/util-linux/util-linux/pull/4185) (fix, not yet merged)
+The manifest's `init_hooks` automatically downgrades util-linux to `2.41.3-2` and pins it via `IgnorePkg` on first container init by fetching `home/bin/util-linux-fix.sh` from this repo. No manual steps required.
 
-**Root cause:** commit `ac0147fd` added `+` prefix to `getopt` optstring in `su-common.c`, which makes `su` stop parsing options at the first non-option argument (the username). Options like `--pty` after the username get forwarded to the shell. The fix separates behavior for `su` and `runuser`.
-
-**Workaround:** downgrade util-linux inside the container and pin it:
-
-```sh
-podman exec -u root <name> bash -c "curl -LO https://archive.archlinux.org/packages/u/util-linux/util-linux-2.41.3-2-x86_64.pkg.tar.zst && curl -LO https://archive.archlinux.org/packages/u/util-linux-libs/util-linux-libs-2.41.3-2-x86_64.pkg.tar.zst && pacman -Udd --noconfirm util-linux-2.41.3-2-x86_64.pkg.tar.zst util-linux-libs-2.41.3-2-x86_64.pkg.tar.zst"
-```
-
-Then pin to prevent re-upgrade — add inside `[options]` in the container's `/etc/pacman.conf`:
-
-```
-IgnorePkg = util-linux util-linux-libs
-```
-
-Remove the pin once util-linux ships a fixed version (2.42.1+).
+Once util-linux 2.42.1+ lands in the Arch repos, remove the `init_hooks` line in the manifest and the `IgnorePkg` lines from `/etc/pacman.conf` in each existing container.
 
 ## What gets configured
 

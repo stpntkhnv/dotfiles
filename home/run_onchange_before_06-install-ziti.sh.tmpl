@@ -1,5 +1,5 @@
-{{ if .setup_ziti }}
 #!/bin/bash
+{{ if .setup_ziti -}}
 set -euo pipefail
 
 if [[ -z "${CONTAINER_ID:-}" ]]; then
@@ -33,4 +33,6 @@ ZITI_UNIT
 sudo systemctl daemon-reload
 sudo systemctl enable ziti-edge-tunnel
 echo "Ziti service installed. Copy your identity JSON to /opt/openziti/etc/identities/ and run: sudo systemctl start ziti-edge-tunnel"
-{{ end }}
+{{- else -}}
+exit 0
+{{- end }}

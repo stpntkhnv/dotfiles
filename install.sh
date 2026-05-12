@@ -18,8 +18,22 @@ else
 fi
 
 script_dir="$(cd -P -- "$(dirname -- "$(command -v -- "$0")")" && pwd -P)"
+# Drop `set -e` so we can give the user a useful retry hint instead of just
+# vanishing on script failure.
+set +e
 if [ -f "$script_dir/.chezmoiroot" ]; then
-  exec "$chezmoi" init --apply "--source=$script_dir"
+  "$chezmoi" init --apply "--source=$script_dir"
 else
-  exec "$chezmoi" init --apply stpntkhnv
+  "$chezmoi" init --apply stpntkhnv
+fi
+status=$?
+
+if [ $status -ne 0 ]; then
+  echo
+  echo "Setup did not complete. To retry without losing answered prompts:"
+  echo
+  echo "  $chezmoi apply"
+  echo
+  echo "(Use the full path above if ~/.local/bin is not yet in PATH.)"
+  exit $status
 fi

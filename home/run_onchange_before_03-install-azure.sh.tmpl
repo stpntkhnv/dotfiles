@@ -1,5 +1,5 @@
-{{ if .setup_azure }}
 #!/bin/bash
+{{ if .setup_azure -}}
 set -euo pipefail
 
 if [[ -z "${CONTAINER_ID:-}" ]]; then
@@ -15,4 +15,6 @@ if ! command -v azd &>/dev/null; then
 fi
 
 echo "Azure tools installation complete"
-{{ end }}
+{{- else -}}
+exit 0
+{{- end }}

@@ -6,6 +6,20 @@ if [[ -z "${CONTAINER_ID:-}" ]]; then
     exit 0
 fi
 
+# The official archlinux:latest Docker image ships with an empty mirrorlist
+# and no Include directive for [extra]. Bootstrap both before any pacman op.
+if ! grep -q '^Server' /etc/pacman.d/mirrorlist 2>/dev/null; then
+    echo "Bootstrapping pacman mirrorlist..."
+    curl -fsSL "https://archlinux.org/mirrorlist/?country=all&protocol=https&use_mirror_status=on" \
+        | sed -e 's/^#Server/Server/' -e '/^#/d' \
+        | sudo tee /etc/pacman.d/mirrorlist >/dev/null
+fi
+if grep -q '^\[extra\]' /etc/pacman.conf && \
+   ! awk '/^\[extra\]/{f=1;next} f&&/^Include/{print;exit} /^\[/{f=0}' /etc/pacman.conf | grep -q .; then
+    echo "Adding [extra] Include directive to /etc/pacman.conf..."
+    sudo sed -i '/^\[extra\]/a Include = /etc/pacman.d/mirrorlist' /etc/pacman.conf
+fi
+
 echo "Installing base packages via pacman..."
 sudo pacman -Syu --noconfirm --needed \
     base-devel \
