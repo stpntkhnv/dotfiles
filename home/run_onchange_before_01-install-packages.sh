@@ -97,7 +97,11 @@ fi
 
 echo "Setting up npm global directory..."
 mkdir -p "$HOME/.npm-global"
-npm config set prefix "$HOME/.npm-global"
+# Only set when needed: `npm config set` rewrites ~/.npmrc with an absolute
+# prefix path, creating a permanent chezmoi conflict with the managed file.
+if [[ "$(npm config get prefix)" != "$HOME/.npm-global" ]]; then
+    npm config set prefix "$HOME/.npm-global"
+fi
 
 echo "Installing Claude Code CLI..."
 "$HOME/.npm-global/bin/npm" install -g @anthropic-ai/claude-code 2>/dev/null \

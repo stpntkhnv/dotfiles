@@ -9,16 +9,18 @@
 {{ if .setup_ado }}
     "azureDevOps": {
       "command": "npx",
-      "args": ["-y", "@azure-devops/mcp", "{{ .ado_org }}", "--authentication", "env"],
+      "args": ["-y", "@azure-devops/mcp", "{{ .ado_org }}"],
       "env": {
-        "AZURE_DEVOPS_DEFAULT_PROJECT": "{{ .ado_project }}",
-        "AZURE_DEVOPS_PAT": "{{ .ado_pat }}"
+        "AZURE_DEVOPS_DEFAULT_PROJECT": "{{ .ado_project }}"
       }
     },
 {{ end }}
-    "playwright": {
+    "chromeDevtools": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest", "--browser", "chromium"]
+      "args": [
+        "-y", "chrome-devtools-mcp@latest",
+        "--executable-path={{ .chezmoi.homeDir }}/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome"
+      ]
     }
   }
 }
