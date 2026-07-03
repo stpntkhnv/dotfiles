@@ -11,14 +11,16 @@
         "command" "npx"
         "args" (list "-y" "@azure/mcp@latest" "server" "start")) -}}
 {{- end -}}
-{{- /* One server instance per ADO organization. PAT auth per the official
-       docs: --authentication pat + PERSONAL_ACCESS_TOKEN env holding
+{{- /* One server instance per ADO organization, each with its own PAT
+       (config key ado_pat_<org>). PAT auth per the official docs:
+       --authentication pat + PERSONAL_ACCESS_TOKEN env holding
        base64("<email>:<pat>"). */ -}}
 {{- if .setup_ado -}}
-{{-   $token := printf "%s:%s" .ado_email .ado_pat | b64enc -}}
+{{-   $data := . -}}
 {{-   range $org := splitList "," .ado_orgs -}}
 {{-     $org = trim $org -}}
 {{-     if $org -}}
+{{-       $token := printf "%s:%s" $data.ado_email (index $data (printf "ado_pat_%s" $org)) | b64enc -}}
 {{-       $_ := set $servers (printf "azureDevOps-%s" $org) (dict
             "type" "stdio"
             "command" "npx"

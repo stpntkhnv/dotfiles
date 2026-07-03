@@ -31,11 +31,9 @@
 {{- $setupAdo := promptBoolOnce . "setup_ado" "Setup Azure DevOps MCP" -}}
 {{- $adoOrgs := "" -}}
 {{- $adoEmail := "" -}}
-{{- $adoPat := "" -}}
 {{- if $setupAdo -}}
 {{-   $adoOrgs = promptStringOnce . "ado_orgs" "Azure DevOps organization names (comma-separated for several)" -}}
 {{-   $adoEmail = promptStringOnce . "ado_email" "Azure DevOps account email (for PAT auth)" -}}
-{{-   $adoPat = promptStringOnce . "ado_pat" "Azure DevOps PAT (scope: all accessible organizations)" -}}
 {{- end -}}
 
 {{/* ---- container-only ---- */}}
@@ -69,7 +67,12 @@
     setup_ado = {{ $setupAdo }}
     ado_orgs = {{ $adoOrgs | quote }}
     ado_email = {{ $adoEmail | quote }}
-    ado_pat = {{ $adoPat | quote }}
+{{- range $org := splitList "," $adoOrgs }}
+{{-   $org = trim $org }}
+{{-   if $org }}
+    ado_pat_{{ $org }} = {{ promptStringOnce $ (printf "ado_pat_%s" $org) (printf "Azure DevOps PAT for organization '%s'" $org) | quote }}
+{{-   end }}
+{{- end }}
     setup_docker_forward = {{ $setupDockerForward }}
     setup_ziti = {{ $setupZiti }}
     setup_teams = {{ $setupTeams }}
