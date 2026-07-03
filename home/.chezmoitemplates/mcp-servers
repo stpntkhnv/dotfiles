@@ -11,12 +11,21 @@
         "command" "npx"
         "args" (list "-y" "@azure/mcp@latest" "server" "start")) -}}
 {{- end -}}
+{{- /* One server instance per ADO organization. PAT auth per the official
+       docs: --authentication pat + PERSONAL_ACCESS_TOKEN env holding
+       base64("<email>:<pat>"). */ -}}
 {{- if .setup_ado -}}
-{{-   $_ := set $servers "azureDevOps" (dict
-        "type" "stdio"
-        "command" "npx"
-        "args" (list "-y" "@azure-devops/mcp" .ado_org)
-        "env" (dict "AZURE_DEVOPS_DEFAULT_PROJECT" .ado_project)) -}}
+{{-   $token := printf "%s:%s" .ado_email .ado_pat | b64enc -}}
+{{-   range $org := splitList "," .ado_orgs -}}
+{{-     $org = trim $org -}}
+{{-     if $org -}}
+{{-       $_ := set $servers (printf "azureDevOps-%s" $org) (dict
+            "type" "stdio"
+            "command" "npx"
+            "args" (list "-y" "@azure-devops/mcp" $org "--authentication" "pat")
+            "env" (dict "PERSONAL_ACCESS_TOKEN" $token)) -}}
+{{-     end -}}
+{{-   end -}}
 {{- end -}}
 {{- $_ := set $servers "playwright" (dict
       "type" "stdio"

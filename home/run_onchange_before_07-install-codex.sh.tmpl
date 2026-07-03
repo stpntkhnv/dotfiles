@@ -14,14 +14,7 @@ if ! command -v codex &>/dev/null && [[ ! -x "$HOME/.npm-global/bin/codex" ]]; t
     npm install -g @openai/codex
 fi
 
-if [[ ! -f "$HOME/.codex/auth.json" ]]; then
-    echo ""
-    echo "========================================="
-    echo "Codex installed but not authenticated."
-    echo "Run: codex login   (browser OAuth)"
-    echo "or:  codex login --api-key <key>"
-    echo "========================================="
-fi
+# Login reminder lives in run_after_zz-print-next-steps.sh.
 {{- else -}}
 exit 0
 {{- end }}

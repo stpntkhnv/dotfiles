@@ -10,8 +10,9 @@ set -euo pipefail
 
 claude_bin="$(command -v claude || echo "$HOME/.npm-global/bin/claude")"
 
-# Previously-managed server names that must not linger in user scope.
-for stale in chrome-devtools chromeDevtools; do
+# Previously-managed server names that must not linger in user scope
+# (azureDevOps was replaced by per-organization azureDevOps-<org> entries).
+for stale in chrome-devtools chromeDevtools azureDevOps; do
     "$claude_bin" mcp remove --scope user "$stale" >/dev/null 2>&1 || true
 done
 

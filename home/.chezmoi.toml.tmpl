@@ -22,14 +22,14 @@
 {{- $setupClaude := promptBoolOnce . "setup_claude" "Install Claude Code CLI" -}}
 {{- $setupCodex := promptBoolOnce . "setup_codex" "Install OpenAI Codex CLI" -}}
 {{- $setupAzure := promptBoolOnce . "setup_azure" "Setup Azure CLI and tools" -}}
-{{- $setupAdo := promptBoolOnce . "setup_ado" "Setup Azure DevOps integration" -}}
-{{- $adoOrg := "" -}}
-{{- $adoProject := "" -}}
+{{- $setupAdo := promptBoolOnce . "setup_ado" "Setup Azure DevOps MCP" -}}
+{{- $adoOrgs := "" -}}
+{{- $adoEmail := "" -}}
 {{- $adoPat := "" -}}
 {{- if $setupAdo -}}
-{{-   $adoOrg = promptStringOnce . "ado_org" "Azure DevOps organization name" -}}
-{{-   $adoProject = promptStringOnce . "ado_project" "Azure DevOps default project" -}}
-{{-   $adoPat = promptStringOnce . "ado_pat" "Azure DevOps PAT token" -}}
+{{-   $adoOrgs = promptStringOnce . "ado_orgs" "Azure DevOps organization names (comma-separated for several)" -}}
+{{-   $adoEmail = promptStringOnce . "ado_email" "Azure DevOps account email (for PAT auth)" -}}
+{{-   $adoPat = promptStringOnce . "ado_pat" "Azure DevOps PAT (scope: all accessible organizations)" -}}
 {{- end -}}
 
 {{/* ---- container-only ---- */}}
@@ -58,8 +58,8 @@
     setup_codex = {{ $setupCodex }}
     setup_azure = {{ $setupAzure }}
     setup_ado = {{ $setupAdo }}
-    ado_org = {{ $adoOrg | quote }}
-    ado_project = {{ $adoProject | quote }}
+    ado_orgs = {{ $adoOrgs | quote }}
+    ado_email = {{ $adoEmail | quote }}
     ado_pat = {{ $adoPat | quote }}
     setup_docker_forward = {{ $setupDockerForward }}
     setup_ziti = {{ $setupZiti }}

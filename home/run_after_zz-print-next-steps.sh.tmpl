@@ -1,0 +1,38 @@
+#!/bin/bash
+set -euo pipefail
+
+# Final checklist, runs on every apply (no onchange_): interactive logins
+# cannot happen inside a chezmoi run, so list whichever are still missing.
+# Prints nothing when everything is already authenticated.
+
+steps=()
+
+{{ if .setup_claude -}}
+if [[ ! -f "$HOME/.claude/.credentials.json" ]]; then
+    steps+=("Claude Code: not logged in — run 'claude' and complete /login")
+fi
+{{- end }}
+{{ if .setup_codex -}}
+if [[ ! -f "$HOME/.codex/auth.json" ]]; then
+    steps+=("Codex: not logged in — run 'codex login' (browser OAuth) or 'codex login --api-key <key>'")
+fi
+{{- end }}
+{{ if .setup_azure -}}
+if command -v az &>/dev/null && ! az account show &>/dev/null; then
+    steps+=("Azure CLI: no active session — run 'az login'")
+fi
+{{- end }}
+{{ if .setup_ziti -}}
+if [[ -z "$(ls -A /opt/openziti/etc/identities 2>/dev/null)" ]]; then
+    steps+=("OpenZiti: no identity — copy the identity JSON to /opt/openziti/etc/identities/ and run 'sudo systemctl start ziti-edge-tunnel'")
+fi
+{{- end }}
+
+if ((${#steps[@]} > 0)); then
+    echo ""
+    echo "================ NEXT STEPS ================"
+    for s in "${steps[@]}"; do
+        echo "  * $s"
+    done
+    echo "============================================"
+fi
