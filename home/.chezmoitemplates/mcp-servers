@@ -27,8 +27,10 @@
 {{-     end -}}
 {{-   end -}}
 {{- end -}}
-{{- $_ := set $servers "playwright" (dict
-      "type" "stdio"
-      "command" "npx"
-      "args" (list "-y" "@playwright/mcp@latest" "--executable-path" "/usr/bin/chromium")) -}}
+{{- if .setup_playwright -}}
+{{-   $_ := set $servers "playwright" (dict
+        "type" "stdio"
+        "command" "npx"
+        "args" (list "-y" "@playwright/mcp@latest" "--executable-path" "/usr/bin/chromium")) -}}
+{{- end -}}
 {{- toJson $servers -}}

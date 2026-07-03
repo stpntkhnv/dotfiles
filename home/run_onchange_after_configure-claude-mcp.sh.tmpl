@@ -10,9 +10,11 @@ set -euo pipefail
 
 claude_bin="$(command -v claude || echo "$HOME/.npm-global/bin/claude")"
 
-# Previously-managed server names that must not linger in user scope
-# (azureDevOps was replaced by per-organization azureDevOps-<org> entries).
-for stale in chrome-devtools chromeDevtools azureDevOps; do
+# Sweep every name this setup manages or used to manage, so a server
+# disappears when its flag is turned off; enabled ones are re-added just
+# below. (Renamed ADO orgs still leave their azureDevOps-<oldorg> entry
+# behind — remove those manually with `claude mcp remove`.)
+for stale in chrome-devtools chromeDevtools azureDevOps azure playwright; do
     "$claude_bin" mcp remove --scope user "$stale" >/dev/null 2>&1 || true
 done
 

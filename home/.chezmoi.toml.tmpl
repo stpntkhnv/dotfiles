@@ -21,6 +21,7 @@
 {{/* ---- available everywhere ---- */}}
 {{- $setupClaude := promptBoolOnce . "setup_claude" "Install Claude Code CLI" -}}
 {{- $setupCodex := promptBoolOnce . "setup_codex" "Install OpenAI Codex CLI" -}}
+{{- $setupPlaywright := promptBoolOnce . "setup_playwright" "Setup Playwright MCP (browser automation)" -}}
 {{- $setupAzure := promptBoolOnce . "setup_azure" "Setup Azure CLI and tools" -}}
 {{- $setupAdo := promptBoolOnce . "setup_ado" "Setup Azure DevOps MCP" -}}
 {{- $adoOrgs := "" -}}
@@ -56,6 +57,7 @@
     is_container = {{ $isContainer }}
     setup_claude = {{ $setupClaude }}
     setup_codex = {{ $setupCodex }}
+    setup_playwright = {{ $setupPlaywright }}
     setup_azure = {{ $setupAzure }}
     setup_ado = {{ $setupAdo }}
     ado_orgs = {{ $adoOrgs | quote }}
