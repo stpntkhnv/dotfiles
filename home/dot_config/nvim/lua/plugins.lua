@@ -23,6 +23,7 @@ require('lazy').setup({
 
   -- Navigation & Search
   { import = 'plugins.telescope' },
+  { import = 'plugins.sessions' },
   { import = 'plugins.file-explorer' },
   { import = 'plugins.which-key' },
 

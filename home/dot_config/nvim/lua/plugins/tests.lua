@@ -1,3 +1,6 @@
+-- Tests live under <leader>T (capital): the lowercase <leader>t prefix belongs
+-- to toggles (gitsigns blame, inlay hints, ...) and the two used to clash —
+-- e.g. gitsigns' buffer-local <leader>tD shadowed "debug tests in file".
 return {
   {
     'nvim-neotest/neotest',
@@ -17,33 +20,33 @@ return {
         },
       }
 
-      vim.keymap.set('n', '<leader>tn', function()
+      vim.keymap.set('n', '<leader>Tn', function()
         neotest.run.run()
-      end, { desc = 'Run nearest test' })
-      vim.keymap.set('n', '<leader>tf', function()
+      end, { desc = '[T]est: run [N]earest' })
+      vim.keymap.set('n', '<leader>Tf', function()
         neotest.run.run(vim.fn.expand '%')
-      end, { desc = 'Run tests in file' })
-      vim.keymap.set('n', '<leader>ts', function()
+      end, { desc = '[T]est: run [F]ile' })
+      vim.keymap.set('n', '<leader>Ta', function()
         neotest.run.run(vim.loop.cwd())
-      end, { desc = 'Run all tests in project' })
-      vim.keymap.set('n', '<leader>tl', function()
+      end, { desc = '[T]est: run [A]ll in project' })
+      vim.keymap.set('n', '<leader>Tl', function()
         neotest.run.run_last()
-      end, { desc = 'Run last test' })
-      vim.keymap.set('n', '<leader>td', function()
+      end, { desc = '[T]est: run [L]ast' })
+      vim.keymap.set('n', '<leader>Td', function()
         neotest.run.run { strategy = 'dap' }
-      end, { desc = 'Debug nearest test' })
-      vim.keymap.set('n', '<leader>tD', function()
+      end, { desc = '[T]est: [D]ebug nearest' })
+      vim.keymap.set('n', '<leader>TD', function()
         neotest.run.run { vim.fn.expand '%', strategy = 'dap' }
-      end, { desc = 'Debug tests in file' })
-      vim.keymap.set('n', '<leader>to', function()
+      end, { desc = '[T]est: [D]ebug file' })
+      vim.keymap.set('n', '<leader>To', function()
         neotest.output.open { enter = true, auto_close = true }
-      end, { desc = 'Show test output' })
-      vim.keymap.set('n', '<leader>tp', function()
+      end, { desc = '[T]est: show [O]utput' })
+      vim.keymap.set('n', '<leader>Tp', function()
         neotest.output_panel.toggle()
-      end, { desc = 'Toggle output panel' })
-      vim.keymap.set('n', '<leader>tsu', function()
+      end, { desc = '[T]est: toggle output [P]anel' })
+      vim.keymap.set('n', '<leader>Ts', function()
         neotest.summary.toggle()
-      end, { desc = 'Toggle test summary' })
+      end, { desc = '[T]est: toggle [S]ummary' })
     end,
   },
 }

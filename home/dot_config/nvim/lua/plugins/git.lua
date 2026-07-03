@@ -1,5 +1,17 @@
 return {
   {
+    -- Full git TUI in a floating window. LazyGitCurrentFile opens it in the
+    -- repo of the current buffer — essential with an umbrella folder holding
+    -- many repos, where cwd is not the repo you're editing.
+    'kdheepak/lazygit.nvim',
+    cmd = { 'LazyGit', 'LazyGitCurrentFile', 'LazyGitConfig', 'LazyGitFilter', 'LazyGitFilterCurrentFile' },
+    dependencies = { 'nvim-lua/plenary.nvim' },
+    keys = {
+      { '<leader>gg', '<cmd>LazyGitCurrentFile<cr>', desc = 'Lazy[G]it (repo of current file)' },
+      { '<leader>gl', '<cmd>LazyGitFilterCurrentFile<cr>', desc = '[G]it [L]og of current file' },
+    },
+  },
+  {
     'lewis6991/gitsigns.nvim',
     opts = {
       signs = {

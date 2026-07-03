@@ -1,6 +1,6 @@
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true -- WezTerm runs JetBrainsMono Nerd Font
 
 vim.o.number = true
 vim.o.relativenumber = true
@@ -43,7 +43,7 @@ vim.api.nvim_create_autocmd('FileType', {
 
 -- YAML indentation settings
 vim.api.nvim_create_autocmd('FileType', {
-  pattern = { 'yaml', 'yml' },
+  pattern = 'yaml',
   callback = function()
     vim.opt_local.tabstop = 2
     vim.opt_local.shiftwidth = 2

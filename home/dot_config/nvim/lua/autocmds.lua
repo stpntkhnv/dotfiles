@@ -74,12 +74,12 @@ vim.api.nvim_create_autocmd('BufNewFile', {
           '',
           'public class ' .. filename,
           '{',
-          '  ',
+          '    ',
           '}',
         }
 
         vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, template)
-        vim.api.nvim_win_set_cursor(0, { 5, 2 }) -- Position cursor inside class
+        vim.api.nvim_win_set_cursor(0, { 5, 4 }) -- Position cursor inside class
       end
     end, 50)
   end,

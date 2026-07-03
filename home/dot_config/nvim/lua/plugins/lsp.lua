@@ -59,17 +59,32 @@ return {
             vim.keymap.set('n', keys, func, { buffer = event.buf, desc = 'LSP: ' .. desc })
           end
 
-          map('gd', vim.lsp.buf.definition, '[G]oto [D]efinition')
+          -- Telescope pickers instead of the quickfix-based vim.lsp.buf
+          -- equivalents: live filtering + preview, and workspace symbols
+          -- search the whole solution.
+          local builtin = require 'telescope.builtin'
+          map('gd', builtin.lsp_definitions, '[G]oto [D]efinition')
           map('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
-          map('gr', vim.lsp.buf.references, '[G]oto [R]eferences')
-          map('gi', vim.lsp.buf.implementation, '[G]oto [I]mplementation')
-          map('gt', vim.lsp.buf.type_definition, '[G]oto [T]ype Definition')
+          map('gr', builtin.lsp_references, '[G]oto [R]eferences')
+          map('gi', builtin.lsp_implementations, '[G]oto [I]mplementation')
+          map('gt', builtin.lsp_type_definitions, '[G]oto [T]ype Definition')
           map('<leader>rn', vim.lsp.buf.rename, '[R]e[n]ame')
           map('<leader>ca', vim.lsp.buf.code_action, '[C]ode [A]ction')
           map('K', vim.lsp.buf.hover, 'Hover Documentation')
           map('<leader>k', vim.lsp.buf.hover, 'Hover Documentation (alt)')
-          map('<leader>ds', vim.lsp.buf.document_symbol, '[D]ocument [S]ymbols')
-          map('<leader>ws', vim.lsp.buf.workspace_symbol, '[W]orkspace [S]ymbols')
+          map('<leader>ds', builtin.lsp_document_symbols, '[D]ocument [S]ymbols')
+          map('<leader>ws', builtin.lsp_dynamic_workspace_symbols, '[W]orkspace [S]ymbols')
+
+          -- Inlay hints: roslyn is configured to serve them (see csharp.lua),
+          -- but nothing ever enabled the client side until now.
+          local client = vim.lsp.get_client_by_id(event.data.client_id)
+          if client and client:supports_method('textDocument/inlayHint') then
+            vim.lsp.inlay_hint.enable(true, { bufnr = event.buf })
+            map('<leader>th', function()
+              local enabled = vim.lsp.inlay_hint.is_enabled { bufnr = event.buf }
+              vim.lsp.inlay_hint.enable(not enabled, { bufnr = event.buf })
+            end, '[T]oggle inlay [H]ints')
+          end
         end,
       })
 
@@ -119,7 +134,6 @@ return {
       formatters_by_ft = {
         lua = { 'stylua' },
         yaml = { 'prettier' },
-        yml = { 'prettier' },
       },
     },
   },
