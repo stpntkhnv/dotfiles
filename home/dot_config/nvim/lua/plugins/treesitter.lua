@@ -13,7 +13,7 @@ return {
         -- kickstart defaults
         'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc',
         -- the actual working stack: .NET, containers, configs
-        'c_sharp', 'json', 'jsonc', 'xml', 'yaml', 'toml', 'go', 'gomod', 'dockerfile', 'gitcommit', 'git_rebase', 'http', 'sql',
+        'c_sharp', 'json', 'xml', 'yaml', 'toml', 'go', 'gomod', 'dockerfile', 'gitcommit', 'git_rebase', 'http', 'sql',
       }
 
       -- The main branch no longer starts highlighting itself: enable it per
