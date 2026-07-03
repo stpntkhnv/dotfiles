@@ -13,13 +13,6 @@ if ! command -v claude &>/dev/null && [[ ! -x "$HOME/.npm-global/bin/claude" ]];
     echo "Installing Claude Code CLI..."
     npm install -g @anthropic-ai/claude-code
 fi
-
-{{ if .is_container -}}
-# Chromium for the chromeDevtools MCP server. Only needed in containers:
-# the host uses the system chromium (see dot_mcp.json.tmpl).
-echo "Installing Playwright chromium for chromeDevtools MCP..."
-npx playwright install chromium
-{{- end }}
 {{- else -}}
 exit 0
 {{- end }}

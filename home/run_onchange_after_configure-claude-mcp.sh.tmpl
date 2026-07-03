@@ -1,0 +1,25 @@
+#!/bin/bash
+{{ if .setup_claude -}}
+set -euo pipefail
+
+# Sync user-scope MCP servers in ~/.claude.json from the chezmoi-managed
+# definitions in .chezmoitemplates/mcp-servers. `claude mcp add-json` is
+# not idempotent, so each server is removed before being re-added. The
+# server JSON is expanded into this script at template time, so the
+# onchange hash changes (and the sync reruns) exactly when the set changes.
+
+claude_bin="$(command -v claude || echo "$HOME/.npm-global/bin/claude")"
+
+# Previously-managed server names that must not linger in user scope.
+for stale in chrome-devtools chromeDevtools; do
+    "$claude_bin" mcp remove --scope user "$stale" >/dev/null 2>&1 || true
+done
+
+{{ range $name, $cfg := fromJson (includeTemplate "mcp-servers" .) -}}
+"$claude_bin" mcp remove --scope user {{ $name | quote }} >/dev/null 2>&1 || true
+"$claude_bin" mcp add-json --scope user {{ $name | quote }} {{ toJson $cfg | squote }}
+echo "Configured user-scope MCP server: {{ $name }}"
+{{ end -}}
+{{- else -}}
+exit 0
+{{- end }}

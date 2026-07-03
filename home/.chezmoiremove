@@ -1,0 +1,4 @@
+# Retired: MCP servers are now synced into user scope (~/.claude.json) by
+# run_onchange_after_configure-claude-mcp.sh; ~/.mcp.json only ever applied
+# to the home directory as a project root anyway.
+.mcp.json

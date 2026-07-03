@@ -27,6 +27,7 @@ sudo pacman -Syu --noconfirm --needed \
     bat \
     bc \
     btop \
+    chromium \
     diffutils \
     docker \
     dotnet-sdk \

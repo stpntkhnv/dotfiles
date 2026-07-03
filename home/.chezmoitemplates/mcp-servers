@@ -1,0 +1,25 @@
+{{- /* Single source of truth for MCP server definitions, rendered as a
+       JSON object keyed by server name. Consumed today by the Claude Code
+       user-scope sync script; reuse it for ~/.codex/config.toml when Codex
+       gets MCP servers too. Browser automation uses the system chromium:
+       /usr/bin/chromium exists on the host and is installed in containers
+       by 01-install-packages. */ -}}
+{{- $servers := dict -}}
+{{- if .setup_azure -}}
+{{-   $_ := set $servers "azure" (dict
+        "type" "stdio"
+        "command" "npx"
+        "args" (list "-y" "@azure/mcp@latest" "server" "start")) -}}
+{{- end -}}
+{{- if .setup_ado -}}
+{{-   $_ := set $servers "azureDevOps" (dict
+        "type" "stdio"
+        "command" "npx"
+        "args" (list "-y" "@azure-devops/mcp" .ado_org)
+        "env" (dict "AZURE_DEVOPS_DEFAULT_PROJECT" .ado_project)) -}}
+{{- end -}}
+{{- $_ := set $servers "playwright" (dict
+      "type" "stdio"
+      "command" "npx"
+      "args" (list "-y" "@playwright/mcp@latest" "--executable-path" "/usr/bin/chromium")) -}}
+{{- toJson $servers -}}
