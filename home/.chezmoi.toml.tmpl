@@ -23,6 +23,7 @@
 {{- $setupCodex := promptBoolOnce . "setup_codex" "Install OpenAI Codex CLI" -}}
 {{- $setupPlaywright := promptBoolOnce . "setup_playwright" "Setup Playwright MCP (browser automation)" -}}
 {{- $setupContext7 := promptBoolOnce . "setup_context7" "Setup Context7 MCP (library docs)" -}}
+{{- $setupDotnetSkills := promptBoolOnce . "setup_dotnet_skills" "Install .NET agent skills plugin (C# LSP, needs dotnet SDK)" -}}
 {{- $context7ApiKey := "" -}}
 {{- if $setupContext7 -}}
 {{-   $context7ApiKey = promptStringOnce . "context7_api_key" "Context7 API key (optional, empty for rate-limited free tier)" -}}
@@ -63,6 +64,7 @@
     setup_playwright = {{ $setupPlaywright }}
     setup_context7 = {{ $setupContext7 }}
     context7_api_key = {{ $context7ApiKey | quote }}
+    setup_dotnet_skills = {{ $setupDotnetSkills }}
     setup_azure = {{ $setupAzure }}
     setup_ado = {{ $setupAdo }}
     ado_orgs = {{ $adoOrgs | quote }}
