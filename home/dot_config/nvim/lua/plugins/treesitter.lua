@@ -1,17 +1,39 @@
 return {
   {
     'nvim-treesitter/nvim-treesitter',
+    branch = 'main', -- rewrite that replaced the old 'master'; module nvim-treesitter.configs is gone
+    lazy = false,
     build = ':TSUpdate',
-    main = 'nvim-treesitter.configs',
-    opts = {
-      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
-      auto_install = true,
-      highlight = {
-        enable = true,
-        additional_vim_regex_highlighting = { 'ruby' },
-      },
-      indent = { enable = true, disable = { 'ruby' } },
-    },
+    config = function()
+      local ts = require 'nvim-treesitter'
+      ts.setup {}
+
+      ts.install { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
+
+      -- The main branch no longer starts highlighting itself: enable it per
+      -- buffer, auto-installing missing parsers (replaces auto_install=true).
+      vim.api.nvim_create_autocmd('FileType', {
+        group = vim.api.nvim_create_augroup('treesitter-start', { clear = true }),
+        callback = function(args)
+          local lang = vim.treesitter.language.get_lang(vim.bo[args.buf].filetype)
+          if not lang then
+            return
+          end
+          local function start()
+            if not vim.api.nvim_buf_is_valid(args.buf) then
+              return
+            end
+            vim.treesitter.start(args.buf, lang)
+            vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+          end
+          if vim.treesitter.language.add(lang) then
+            start()
+          elseif vim.tbl_contains(ts.get_available(), lang) then
+            ts.install(lang):await(start)
+          end
+        end,
+      })
+    end,
   },
   {
     'NMAC427/guess-indent.nvim',
