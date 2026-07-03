@@ -17,7 +17,7 @@ require('lazy').setup({
 
   -- Appearance
   { import = 'plugins.colorscheme' },
-  { import = 'plugins.statusline' },
+  { import = 'plugins.mini' }, -- statusline + text objects + surround
   { import = 'plugins.bufferline' },
   { import = 'plugins.indent' },
 
@@ -32,9 +32,6 @@ require('lazy').setup({
 
   -- Git
   { import = 'plugins.git' },
-
-  -- AI
-  { import = 'plugins.ai' },
 
   -- LSP & Language Tools
   { import = 'plugins.mason' },
