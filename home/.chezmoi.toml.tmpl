@@ -3,9 +3,24 @@
 {{-   $isContainer = true -}}
 {{- end -}}
 
+{{/* Every option is prompted the same way on host and in containers.
+     Environment-specific availability is decided here, in one place:
+     an option unavailable in the current environment is not prompted,
+     forced to false, and announced — instead of being silently baked
+     into the install scripts via CONTAINER_ID checks. */}}
+
+{{- if $isContainer -}}
+{{-   writeToStdout "==> Container environment detected: all options below apply inside this container.\n" -}}
+{{- else -}}
+{{-   writeToStdout "==> Host environment detected: container-only options (Teams, Docker port forwarding, OpenZiti) are unavailable and will be skipped.\n" -}}
+{{- end -}}
+
 {{- $gitName := promptStringOnce . "git_name" "Git user name" -}}
 {{- $gitEmail := promptStringOnce . "git_email" "Git user email" -}}
 
+{{/* ---- available everywhere ---- */}}
+{{- $setupClaude := promptBoolOnce . "setup_claude" "Install Claude Code CLI" -}}
+{{- $setupCodex := promptBoolOnce . "setup_codex" "Install OpenAI Codex CLI" -}}
 {{- $setupAzure := promptBoolOnce . "setup_azure" "Setup Azure CLI and tools" -}}
 {{- $setupAdo := promptBoolOnce . "setup_ado" "Setup Azure DevOps integration" -}}
 {{- $adoOrg := "" -}}
@@ -17,14 +32,18 @@
 {{-   $adoPat = promptStringOnce . "ado_pat" "Azure DevOps PAT token" -}}
 {{- end -}}
 
-{{- $setupCodex := promptBoolOnce . "setup_codex" "Install OpenAI Codex CLI" -}}
-
-{{- $setupDockerForward := promptBoolOnce . "setup_docker_forward" "Setup Docker port forwarding (for isolated distrobox)" -}}
-{{- $setupZiti := promptBoolOnce . "setup_ziti" "Setup OpenZiti edge tunnel" -}}
-{{- $setupTeams := promptBoolOnce . "setup_teams" "Install Microsoft Teams" -}}
+{{/* ---- container-only ---- */}}
+{{- $setupDockerForward := false -}}
+{{- $setupZiti := false -}}
+{{- $setupTeams := false -}}
 {{- $teamsMemoryLimit := "1536M" -}}
-{{- if $setupTeams -}}
-{{-   $teamsMemoryLimit = promptStringOnce . "teams_memory_limit" "Teams memory limit (default 1536M)" -}}
+{{- if $isContainer -}}
+{{-   $setupDockerForward = promptBoolOnce . "setup_docker_forward" "Setup Docker port forwarding (for isolated distrobox)" -}}
+{{-   $setupZiti = promptBoolOnce . "setup_ziti" "Setup OpenZiti edge tunnel" -}}
+{{-   $setupTeams = promptBoolOnce . "setup_teams" "Install Microsoft Teams" -}}
+{{-   if $setupTeams -}}
+{{-     $teamsMemoryLimit = promptStringOnce . "teams_memory_limit" "Teams memory limit (default 1536M)" -}}
+{{-   end -}}
 {{- end -}}
 
 [git]
@@ -34,13 +53,14 @@
 [data]
     git_name = {{ $gitName | quote }}
     git_email = {{ $gitEmail | quote }}
+    is_container = {{ $isContainer }}
+    setup_claude = {{ $setupClaude }}
+    setup_codex = {{ $setupCodex }}
     setup_azure = {{ $setupAzure }}
     setup_ado = {{ $setupAdo }}
     ado_org = {{ $adoOrg | quote }}
     ado_project = {{ $adoProject | quote }}
     ado_pat = {{ $adoPat | quote }}
-    is_container = {{ $isContainer }}
-    setup_codex = {{ $setupCodex }}
     setup_docker_forward = {{ $setupDockerForward }}
     setup_ziti = {{ $setupZiti }}
     setup_teams = {{ $setupTeams }}

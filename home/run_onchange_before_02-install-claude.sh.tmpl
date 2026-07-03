@@ -1,0 +1,25 @@
+#!/bin/bash
+{{ if .setup_claude -}}
+set -euo pipefail
+
+# Claude Code is wanted on host and containers alike; installs into
+# ~/.npm-global (same pattern as the codex script).
+mkdir -p "$HOME/.npm-global"
+if [[ "$(npm config get prefix)" != "$HOME/.npm-global" ]]; then
+    npm config set prefix "$HOME/.npm-global"
+fi
+
+if ! command -v claude &>/dev/null && [[ ! -x "$HOME/.npm-global/bin/claude" ]]; then
+    echo "Installing Claude Code CLI..."
+    npm install -g @anthropic-ai/claude-code
+fi
+
+{{ if .is_container -}}
+# Chromium for the chromeDevtools MCP server. Only needed in containers:
+# the host uses the system chromium (see dot_mcp.json.tmpl).
+echo "Installing Playwright chromium for chromeDevtools MCP..."
+npx playwright install chromium
+{{- end }}
+{{- else -}}
+exit 0
+{{- end }}

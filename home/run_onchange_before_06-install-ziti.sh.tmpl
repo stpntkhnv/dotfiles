@@ -2,10 +2,6 @@
 {{ if .setup_ziti -}}
 set -euo pipefail
 
-if [[ -z "${CONTAINER_ID:-}" ]]; then
-    exit 0
-fi
-
 echo "Installing Ziti Edge Tunnel..."
 yay -S --noconfirm --needed ziti-edge-tunnel
 

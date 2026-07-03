@@ -19,7 +19,7 @@
       "command": "npx",
       "args": [
         "-y", "chrome-devtools-mcp@latest",
-        "--executable-path={{ .chezmoi.homeDir }}/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome"
+        "--executable-path={{ if .is_container }}{{ .chezmoi.homeDir }}/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome{{ else }}/usr/bin/chromium{{ end }}"
       ]
     }
   }

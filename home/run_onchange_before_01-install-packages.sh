@@ -103,13 +103,6 @@ if [[ "$(npm config get prefix)" != "$HOME/.npm-global" ]]; then
     npm config set prefix "$HOME/.npm-global"
 fi
 
-echo "Installing Claude Code CLI..."
-"$HOME/.npm-global/bin/npm" install -g @anthropic-ai/claude-code 2>/dev/null \
-    || npm install -g @anthropic-ai/claude-code
-
-echo "Installing Playwright browsers..."
-npx playwright install chromium
-
 echo "Configuring Firefox extensions via policies..."
 sudo mkdir -p /usr/lib/firefox/distribution
 sudo tee /usr/lib/firefox/distribution/policies.json > /dev/null <<'POLICIES'

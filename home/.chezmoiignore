@@ -18,31 +18,24 @@ bin/whisper-lang-switch.sh
 .config/lazygit/**
 .tmux.conf
 .npmrc
-bin/docker-forward.sh
-bin/update-ziti-hosts.sh
-run_onchange_before_01-install-packages.sh
-run_onchange_before_03-install-azure.sh
-run_onchange_before_04-install-teams.sh
-run_onchange_before_05-install-docker-forward.sh
-run_onchange_before_06-install-ziti.sh
-run_onchange_install-vscode-extensions.sh
-run_onchange_after_generate-ssh-key.sh
-run_onchange_after_set-origin-ssh.sh
+# NOTE: .chezmoiignore matches scripts by their TARGET name, i.e. with the
+# run_/onchange_/before_/after_ attribute prefixes stripped.
+01-install-packages.sh
+install-vscode-extensions.sh
+generate-ssh-key.sh
+set-origin-ssh.sh
 {{ end }}
 
-{{ if and .is_container (not .setup_azure) }}
-run_onchange_before_03-install-azure.sh
-{{ end }}
-{{ if and .is_container (not .setup_teams) }}
-run_onchange_before_04-install-teams.sh
-{{ end }}
-{{ if and .is_container (not .setup_docker_forward) }}
+# Optional-feature install scripts gate themselves on their setup_* flag
+# (rendering to `exit 0` when disabled), so they are not listed here.
+# Plain helper files still need flag-based ignores. Container-only flags
+# are forced to false on the host by .chezmoi.toml.tmpl, so these lines
+# cover the host automatically.
+{{ if not .setup_docker_forward }}
 bin/docker-forward.sh
-run_onchange_before_05-install-docker-forward.sh
 {{ end }}
-{{ if and .is_container (not .setup_ziti) }}
+{{ if not .setup_ziti }}
 bin/update-ziti-hosts.sh
-run_onchange_before_06-install-ziti.sh
 {{ end }}
 
 # bin/util-linux-fix.sh is fetched by distrobox init_hooks from raw URL, no

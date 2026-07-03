@@ -2,10 +2,6 @@
 {{ if .setup_docker_forward -}}
 set -euo pipefail
 
-if [[ -z "${CONTAINER_ID:-}" ]]; then
-    exit 0
-fi
-
 echo "Installing socat for Docker port forwarding..."
 sudo pacman -S --noconfirm --needed socat
 
