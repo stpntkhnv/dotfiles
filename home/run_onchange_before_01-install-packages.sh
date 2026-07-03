@@ -62,6 +62,7 @@ sudo pacman -Syu --noconfirm --needed \
     time \
     tmux \
     traceroute \
+    tree-sitter-cli \
     tree \
     unzip \
     vte-common \
