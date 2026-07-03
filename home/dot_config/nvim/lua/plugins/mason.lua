@@ -20,4 +20,22 @@ return {
       }
     end,
   },
+  {
+    'WhoIsSethDaniel/mason-tool-installer.nvim',
+    dependencies = { 'mason-org/mason.nvim' },
+    config = function()
+      require('mason-tool-installer').setup {
+        ensure_installed = {
+          'lua-language-server',
+          'yaml-language-server',
+          'roslyn', -- C# LSP, from the Crashdummyy registry
+          'stylua',
+          'prettier',
+          'markdownlint',
+          'netcoredbg',
+          'delve',
+        },
+      }
+    end,
+  },
 }

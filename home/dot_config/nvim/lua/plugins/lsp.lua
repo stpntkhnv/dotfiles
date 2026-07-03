@@ -32,6 +32,16 @@ return {
 
       vim.lsp.enable('yamlls')
 
+      -- Lua LSP for editing this config; lazydev provides the vim/nvim library
+      vim.lsp.config('lua_ls', {
+        settings = {
+          Lua = {
+            completion = { callSnippet = 'Replace' },
+          },
+        },
+      })
+      vim.lsp.enable('lua_ls')
+
       -- Configure diagnostics display
       vim.diagnostic.config({
         virtual_text = true,  -- Show inline diagnostic messages (set to false to disable)
