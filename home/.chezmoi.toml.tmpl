@@ -17,6 +17,8 @@
 {{-   $adoPat = promptStringOnce . "ado_pat" "Azure DevOps PAT token" -}}
 {{- end -}}
 
+{{- $setupCodex := promptBoolOnce . "setup_codex" "Install OpenAI Codex CLI" -}}
+
 {{- $setupDockerForward := promptBoolOnce . "setup_docker_forward" "Setup Docker port forwarding (for isolated distrobox)" -}}
 {{- $setupZiti := promptBoolOnce . "setup_ziti" "Setup OpenZiti edge tunnel" -}}
 {{- $setupTeams := promptBoolOnce . "setup_teams" "Install Microsoft Teams" -}}
@@ -38,6 +40,7 @@
     ado_project = {{ $adoProject | quote }}
     ado_pat = {{ $adoPat | quote }}
     is_container = {{ $isContainer }}
+    setup_codex = {{ $setupCodex }}
     setup_docker_forward = {{ $setupDockerForward }}
     setup_ziti = {{ $setupZiti }}
     setup_teams = {{ $setupTeams }}

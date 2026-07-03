@@ -1,0 +1,27 @@
+#!/bin/bash
+{{ if .setup_codex -}}
+set -euo pipefail
+
+# Unlike the container-only package script, Codex is useful on the host too,
+# so this runs everywhere. Installs into ~/.npm-global (already on PATH).
+mkdir -p "$HOME/.npm-global"
+if [[ "$(npm config get prefix)" != "$HOME/.npm-global" ]]; then
+    npm config set prefix "$HOME/.npm-global"
+fi
+
+if ! command -v codex &>/dev/null && [[ ! -x "$HOME/.npm-global/bin/codex" ]]; then
+    echo "Installing OpenAI Codex CLI..."
+    npm install -g @openai/codex
+fi
+
+if [[ ! -f "$HOME/.codex/auth.json" ]]; then
+    echo ""
+    echo "========================================="
+    echo "Codex installed but not authenticated."
+    echo "Run: codex login   (browser OAuth)"
+    echo "or:  codex login --api-key <key>"
+    echo "========================================="
+fi
+{{- else -}}
+exit 0
+{{- end }}
