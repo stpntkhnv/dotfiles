@@ -4,7 +4,9 @@ alias ls='ls --color=auto'
 alias grep='grep --color=auto'
 PS1='[\u@\h \W]\$ '
 
-export PATH="$HOME/.npm-global/bin:$PATH"
+# ~/.local/bin holds claude (native install) and distrobox-exported bins;
+# bash never reads ~/.profile (bash_profile shadows it), so add it here.
+export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$PATH"
 
 # distrobox container shortcuts — each gets its own tmux socket so
 # sessions never collide across containers.
