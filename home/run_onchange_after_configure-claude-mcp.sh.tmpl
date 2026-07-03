@@ -14,7 +14,7 @@ claude_bin="$(command -v claude || echo "$HOME/.npm-global/bin/claude")"
 # disappears when its flag is turned off; enabled ones are re-added just
 # below. (Renamed ADO orgs still leave their azureDevOps-<oldorg> entry
 # behind — remove those manually with `claude mcp remove`.)
-for stale in chrome-devtools chromeDevtools azureDevOps azure playwright; do
+for stale in chrome-devtools chromeDevtools azureDevOps azure playwright context7; do
     "$claude_bin" mcp remove --scope user "$stale" >/dev/null 2>&1 || true
 done
 

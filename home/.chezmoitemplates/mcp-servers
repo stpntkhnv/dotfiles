@@ -27,6 +27,16 @@
 {{-     end -}}
 {{-   end -}}
 {{- end -}}
+{{- if .setup_context7 -}}
+{{-   $c7args := list "-y" "@upstash/context7-mcp" -}}
+{{-   if .context7_api_key -}}
+{{-     $c7args = concat $c7args (list "--api-key" .context7_api_key) -}}
+{{-   end -}}
+{{-   $_ := set $servers "context7" (dict
+        "type" "stdio"
+        "command" "npx"
+        "args" $c7args) -}}
+{{- end -}}
 {{- if .setup_playwright -}}
 {{-   $_ := set $servers "playwright" (dict
         "type" "stdio"

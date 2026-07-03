@@ -22,6 +22,11 @@
 {{- $setupClaude := promptBoolOnce . "setup_claude" "Install Claude Code CLI" -}}
 {{- $setupCodex := promptBoolOnce . "setup_codex" "Install OpenAI Codex CLI" -}}
 {{- $setupPlaywright := promptBoolOnce . "setup_playwright" "Setup Playwright MCP (browser automation)" -}}
+{{- $setupContext7 := promptBoolOnce . "setup_context7" "Setup Context7 MCP (library docs)" -}}
+{{- $context7ApiKey := "" -}}
+{{- if $setupContext7 -}}
+{{-   $context7ApiKey = promptStringOnce . "context7_api_key" "Context7 API key (optional, empty for rate-limited free tier)" -}}
+{{- end -}}
 {{- $setupAzure := promptBoolOnce . "setup_azure" "Setup Azure CLI and tools" -}}
 {{- $setupAdo := promptBoolOnce . "setup_ado" "Setup Azure DevOps MCP" -}}
 {{- $adoOrgs := "" -}}
@@ -58,6 +63,8 @@
     setup_claude = {{ $setupClaude }}
     setup_codex = {{ $setupCodex }}
     setup_playwright = {{ $setupPlaywright }}
+    setup_context7 = {{ $setupContext7 }}
+    context7_api_key = {{ $context7ApiKey | quote }}
     setup_azure = {{ $setupAzure }}
     setup_ado = {{ $setupAdo }}
     ado_orgs = {{ $adoOrgs | quote }}
