@@ -1,0 +1,12 @@
+#!/bin/bash
+{{ if .setup_claude -}}
+set -euo pipefail
+CF="{{ .chezmoi.homeDir }}/.local/share/claudefiles"
+[ -d "$CF/.git" ] || { echo "claudefiles external not present yet; skipping"; exit 0; }
+head="$(git -C "$CF" rev-parse HEAD)"
+source "$CF/lib/apply-if-changed.sh"
+run() { "$CF/setup.sh"{{ if not (stdinIsATTY) }} --non-interactive{{ end }}; }
+apply_if_changed "$head" run
+{{- else -}}
+exit 0
+{{- end }}
