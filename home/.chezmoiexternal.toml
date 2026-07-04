@@ -25,3 +25,10 @@
     exact = true
     stripComponents = 1
     refreshPeriod = "168h"
+
+[".local/share/claudefiles"]
+    type = "git-repo"
+    url = "https://github.com/stpntkhnv/claudefiles.git"
+    refreshPeriod = "168h"
+    [".local/share/claudefiles.pull"]
+        args = ["--ff-only"]
