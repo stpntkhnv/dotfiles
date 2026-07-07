@@ -31,9 +31,6 @@ set-origin-ssh.sh
 # Plain helper files still need flag-based ignores. Container-only flags
 # are forced to false on the host by .chezmoi.toml.tmpl, so these lines
 # cover the host automatically.
-{{ if not .setup_docker_forward }}
-bin/docker-forward.sh
-{{ end }}
 {{ if not .setup_ziti }}
 bin/update-ziti-hosts.sh
 {{ end }}

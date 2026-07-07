@@ -12,7 +12,7 @@
 {{- if $isContainer -}}
 {{-   writeToStdout "==> Container environment detected: all options below apply inside this container.\n" -}}
 {{- else -}}
-{{-   writeToStdout "==> Host environment detected: container-only options (Teams, Docker port forwarding, OpenZiti) are unavailable and will be skipped.\n" -}}
+{{-   writeToStdout "==> Host environment detected: container-only options (Teams, OpenZiti) are unavailable and will be skipped.\n" -}}
 {{- end -}}
 
 {{- $gitName := promptStringOnce . "git_name" "Git user name" -}}
@@ -24,12 +24,10 @@
 {{- $setupAzure := promptBoolOnce . "setup_azure" "Setup Azure CLI and tools" -}}
 
 {{/* ---- container-only ---- */}}
-{{- $setupDockerForward := false -}}
 {{- $setupZiti := false -}}
 {{- $setupTeams := false -}}
 {{- $teamsMemoryLimit := "1536M" -}}
 {{- if $isContainer -}}
-{{-   $setupDockerForward = promptBoolOnce . "setup_docker_forward" "Setup Docker port forwarding (for isolated distrobox)" -}}
 {{-   $setupZiti = promptBoolOnce . "setup_ziti" "Setup OpenZiti edge tunnel" -}}
 {{-   $setupTeams = promptBoolOnce . "setup_teams" "Install Microsoft Teams" -}}
 {{-   if $setupTeams -}}
@@ -48,7 +46,6 @@
     setup_claude = {{ $setupClaude }}
     setup_codex = {{ $setupCodex }}
     setup_azure = {{ $setupAzure }}
-    setup_docker_forward = {{ $setupDockerForward }}
     setup_ziti = {{ $setupZiti }}
     setup_teams = {{ $setupTeams }}
     teams_memory_limit = {{ $teamsMemoryLimit | quote }}

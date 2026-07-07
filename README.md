@@ -63,4 +63,3 @@ Once util-linux 2.42.1+ lands in the Arch repos, remove the `init_hooks` line in
 | `setup_ado` | Azure DevOps MCP server (PAT auth) |
 | `setup_teams` | Teams for Linux with memory limit |
 | `setup_ziti` | OpenZiti edge tunnel + systemd service |
-| `setup_docker_forward` | socat port forwarding for isolated distrobox |
