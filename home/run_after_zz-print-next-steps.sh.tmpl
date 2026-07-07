@@ -17,6 +17,11 @@ if [[ ! -f "$HOME/.codex/auth.json" ]]; then
     steps+=("Codex: not logged in — run 'codex login' (browser OAuth) or 'codex login --api-key <key>'")
 fi
 {{- end }}
+{{ if .setup_github_cli -}}
+if command -v gh &>/dev/null && ! gh auth status &>/dev/null; then
+    steps+=("GitHub CLI: not logged in — run 'gh auth login'")
+fi
+{{- end }}
 {{ if .setup_azure -}}
 if command -v az &>/dev/null && ! az account show &>/dev/null; then
     steps+=("Azure CLI: no active session — run 'az login'")

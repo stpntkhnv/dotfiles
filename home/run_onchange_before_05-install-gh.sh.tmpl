@@ -1,0 +1,13 @@
+#!/bin/bash
+{{ if .setup_github_cli -}}
+set -euo pipefail
+
+echo "Installing GitHub CLI (gh)..."
+sudo pacman -S --noconfirm --needed github-cli
+
+echo "GitHub CLI installation complete"
+
+# Login reminder lives in run_after_zz-print-next-steps.sh.
+{{- else -}}
+exit 0
+{{- end }}

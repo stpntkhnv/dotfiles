@@ -21,6 +21,7 @@
 {{/* ---- available everywhere ---- */}}
 {{- $setupClaude := promptBoolOnce . "setup_claude" "Install Claude Code CLI" -}}
 {{- $setupCodex := promptBoolOnce . "setup_codex" "Install OpenAI Codex CLI" -}}
+{{- $setupGithubCli := promptBoolOnce . "setup_github_cli" "Install GitHub CLI (gh)" -}}
 {{- $setupAzure := promptBoolOnce . "setup_azure" "Setup Azure CLI and tools" -}}
 
 {{/* ---- container-only ---- */}}
@@ -45,6 +46,7 @@
     is_container = {{ $isContainer }}
     setup_claude = {{ $setupClaude }}
     setup_codex = {{ $setupCodex }}
+    setup_github_cli = {{ $setupGithubCli }}
     setup_azure = {{ $setupAzure }}
     setup_ziti = {{ $setupZiti }}
     setup_teams = {{ $setupTeams }}
