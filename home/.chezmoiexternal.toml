@@ -30,5 +30,5 @@
     type = "git-repo"
     url = "https://github.com/stpntkhnv/claudefiles.git"
     refreshPeriod = "168h"
-    [".local/share/claudefiles.pull"]
+    [".local/share/claudefiles".pull]
         args = ["--ff-only"]
