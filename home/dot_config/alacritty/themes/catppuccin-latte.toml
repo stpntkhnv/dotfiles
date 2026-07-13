@@ -1,0 +1,61 @@
+# Catppuccin Latte — HIGH CONTRAST (light). Tuned for crisp, readable text:
+# darkened foreground + deeper/more saturated ANSI colours vs the pastel stock
+# Latte. Warm light background kept to avoid glare.
+
+[colors.primary]
+background = "#eff1f5"
+foreground = "#292c3c"          # much darker text than stock Latte (#4c4f69) → crisp
+dim_foreground = "#6c6f85"      # dim text still readable
+bright_foreground = "#11111b"   # bold text = near-black
+
+[colors.cursor]
+text = "#eff1f5"
+cursor = "#d20f39"              # punchy red cursor, easy to spot
+
+[colors.vi_mode_cursor]
+text = "#eff1f5"
+cursor = "#7287fd"
+
+[colors.search.matches]
+foreground = "#eff1f5"
+background = "#8839ef"
+
+[colors.search.focused_match]
+foreground = "#eff1f5"
+background = "#d20f39"
+
+[colors.hints.start]
+foreground = "#11111b"
+background = "#df8e1d"
+
+[colors.hints.end]
+foreground = "#eff1f5"
+background = "#1e66f5"
+
+[colors.footer_bar]
+foreground = "#eff1f5"
+background = "#1e66f5"
+
+[colors.selection]
+text = "#11111b"                # dark text on selection stays readable
+background = "#acc7f5"          # light blue highlight
+
+[colors.normal]
+black   = "#4c4f69"
+red     = "#d20f39"
+green   = "#2f8a1e"            # deeper green for contrast on light
+yellow  = "#b5730a"            # darker gold — the pale yellow was the worst offender
+blue    = "#1e66f5"
+magenta = "#8839ef"
+cyan    = "#0c7d8f"            # deeper teal
+white   = "#6c6f85"            # medium grey, still readable on light bg
+
+[colors.bright]
+black   = "#5c5f77"
+red     = "#c01030"
+green   = "#268016"
+yellow  = "#a06600"
+blue    = "#1552d8"
+magenta = "#7a28e0"
+cyan    = "#0a6c7c"
+white   = "#4c4f69"

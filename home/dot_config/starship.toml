@@ -1,76 +1,84 @@
 "$schema" = 'https://starship.rs/config-schema.json'
-# Starship prompt - Nord palette. Requires a Nerd Font (JetBrainsMono Nerd Font).
+# Starship prompt - Catppuccin Latte (light). Requires a Nerd Font.
 # Docs: https://starship.rs/config/
 
-palette = "nord"
+palette = "latte"
 add_newline = true
 
-format = "[](fg:polar3)$directory[](fg:polar3 bg:polar2)$git_branch$git_status[](fg:polar2 bg:polar1)$dotnet$nodejs$python$rust$golang$c[](fg:polar1)$fill$cmd_duration$line_break$character "
+format = "[](fg:surface2)$directory[](fg:surface2 bg:surface1)$git_branch$git_status[](fg:surface1 bg:surface0)$dotnet$nodejs$python$rust$golang$c[](fg:surface0)$fill$cmd_duration$line_break$character "
 
-[palettes.nord]
-polar0 = "#2e3440"
-polar1 = "#3b4252"
-polar2 = "#434c5e"
-polar3 = "#4c566a"
-snow0  = "#d8dee9"
-snow1  = "#e5e9f0"
-snow2  = "#eceff4"
-frost0 = "#8fbcbb"
-frost1 = "#88c0d0"
-frost2 = "#81a1c1"
-frost3 = "#5e81ac"
-red    = "#bf616a"
-orange = "#d08770"
-yellow = "#ebcb8b"
-green  = "#a3be8c"
-purple = "#b48ead"
+[palettes.latte]
+rosewater = "#dc8a78"
+flamingo  = "#dd7878"
+pink      = "#ea76cb"
+mauve     = "#8839ef"
+red       = "#d20f39"
+maroon    = "#e64553"
+peach     = "#fe640b"
+yellow    = "#df8e1d"
+green     = "#40a02b"
+teal      = "#179299"
+sky       = "#04a5e5"
+sapphire  = "#209fb5"
+blue      = "#1e66f5"
+lavender  = "#7287fd"
+text      = "#4c4f69"
+subtext1  = "#5c5f77"
+subtext0  = "#6c6f85"
+overlay2  = "#7c7f93"
+surface2  = "#acb0be"
+surface1  = "#bcc0cc"
+surface0  = "#ccd0da"
+base      = "#eff1f5"
+mantle    = "#e6e9ef"
+crust     = "#dce0e8"
 
 [fill]
 symbol = " "
 
 [directory]
-style = "fg:frost1 bg:polar3"
+style = "fg:blue bg:surface2"
 format = "[ $path ]($style)"
 truncation_length = 3
 truncation_symbol = "…/"
 
 [git_branch]
-style = "fg:snow1 bg:polar2"
+style = "fg:text bg:surface1"
 format = "[ $symbol$branch ]($style)"
 
 [git_status]
-style = "fg:yellow bg:polar2"
+style = "fg:maroon bg:surface1"
 format = "[$all_status$ahead_behind ]($style)"
 
 [dotnet]
-style = "fg:frost1 bg:polar1"
+style = "fg:blue bg:surface0"
 format = "[ $symbol($version )]($style)"
 
 [nodejs]
-style = "fg:green bg:polar1"
+style = "fg:green bg:surface0"
 format = "[ $symbol($version )]($style)"
 
 [python]
-style = "fg:yellow bg:polar1"
+style = "fg:yellow bg:surface0"
 format = "[ $symbol($version )]($style)"
 
 [rust]
-style = "fg:orange bg:polar1"
+style = "fg:peach bg:surface0"
 format = "[ $symbol($version )]($style)"
 
 [golang]
-style = "fg:frost1 bg:polar1"
+style = "fg:teal bg:surface0"
 format = "[ $symbol($version )]($style)"
 
 [c]
-style = "fg:frost2 bg:polar1"
+style = "fg:sapphire bg:surface0"
 format = "[ $symbol($version )]($style)"
 
 [cmd_duration]
 min_time = 500
-style = "fg:yellow"
+style = "fg:peach"
 
 [character]
 success_symbol = "[❯](bold green)"
 error_symbol = "[❯](bold red)"
-vimcmd_symbol = "[❮](bold frost2)"
+vimcmd_symbol = "[❮](bold mauve)"

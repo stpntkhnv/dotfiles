@@ -3,7 +3,7 @@
 # Live reload is on: edits apply without restarting the terminal.
 
 [general]
-import = ["~/.config/alacritty/themes/nord.toml"]
+import = ["~/.config/alacritty/themes/catppuccin-latte.toml"]
 live_config_reload = true
 
 [env]
@@ -13,7 +13,7 @@ live_config_reload = true
 TERM = "xterm-256color"
 
 [window]
-opacity = 0.95                      # light transparency (no blur on niri/Wayland)
+opacity = 1.0                       # solid background (transparency showed niri's dark backdrop through it)
 padding = { x = 10, y = 8 }
 dynamic_padding = true              # center content, spread leftover space evenly
 decorations = "None"                # niri tiles windows; no client-side titlebar
@@ -66,7 +66,7 @@ osc52 = "CopyPaste"                 # let nvim/tmux (incl. over SSH) use system 
 [bell]
 animation = "EaseOutExpo"           # gentle visual flash instead of an audible bell
 duration = 120
-color = "#88c0d0"                   # nord frost
+color = "#04a5e5"                   # catppuccin sky
 
 # --- Keyboard bindings ------------------------------------------------------
 # Additive only: Alacritty's defaults for copy/paste (Ctrl+Shift+C/V), font
