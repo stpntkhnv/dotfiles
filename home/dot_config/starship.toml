@@ -1,0 +1,76 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+# Starship prompt - Nord palette. Requires a Nerd Font (JetBrainsMono Nerd Font).
+# Docs: https://starship.rs/config/
+
+palette = "nord"
+add_newline = true
+
+format = "[](fg:polar3)$directory[](fg:polar3 bg:polar2)$git_branch$git_status[](fg:polar2 bg:polar1)$dotnet$nodejs$python$rust$golang$c[](fg:polar1)$fill$cmd_duration$line_break$character "
+
+[palettes.nord]
+polar0 = "#2e3440"
+polar1 = "#3b4252"
+polar2 = "#434c5e"
+polar3 = "#4c566a"
+snow0  = "#d8dee9"
+snow1  = "#e5e9f0"
+snow2  = "#eceff4"
+frost0 = "#8fbcbb"
+frost1 = "#88c0d0"
+frost2 = "#81a1c1"
+frost3 = "#5e81ac"
+red    = "#bf616a"
+orange = "#d08770"
+yellow = "#ebcb8b"
+green  = "#a3be8c"
+purple = "#b48ead"
+
+[fill]
+symbol = " "
+
+[directory]
+style = "fg:frost1 bg:polar3"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[git_branch]
+style = "fg:snow1 bg:polar2"
+format = "[ $symbol$branch ]($style)"
+
+[git_status]
+style = "fg:yellow bg:polar2"
+format = "[$all_status$ahead_behind ]($style)"
+
+[dotnet]
+style = "fg:frost1 bg:polar1"
+format = "[ $symbol($version )]($style)"
+
+[nodejs]
+style = "fg:green bg:polar1"
+format = "[ $symbol($version )]($style)"
+
+[python]
+style = "fg:yellow bg:polar1"
+format = "[ $symbol($version )]($style)"
+
+[rust]
+style = "fg:orange bg:polar1"
+format = "[ $symbol($version )]($style)"
+
+[golang]
+style = "fg:frost1 bg:polar1"
+format = "[ $symbol($version )]($style)"
+
+[c]
+style = "fg:frost2 bg:polar1"
+format = "[ $symbol($version )]($style)"
+
+[cmd_duration]
+min_time = 500
+style = "fg:yellow"
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+vimcmd_symbol = "[❮](bold frost2)"

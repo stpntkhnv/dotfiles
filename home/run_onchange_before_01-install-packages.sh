@@ -37,6 +37,7 @@ sudo pacman -Syu --noconfirm --needed \
     fd \
     firefox \
     freetds \
+    fzf \
     git \
     glibc-locales \
     go \
@@ -58,6 +59,7 @@ sudo pacman -Syu --noconfirm --needed \
     ripgrep \
     rsync \
     sox \
+    starship \
     sudo \
     tcpdump \
     time \

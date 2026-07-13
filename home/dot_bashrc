@@ -14,3 +14,27 @@ alias digi3='distrobox enter digi3 -- tmux -L digi3 new-session -A -s work'
 alias stellium='distrobox enter stellium -- tmux -L stellium new-session -A -s work'
 alias voice-test='distrobox enter voice-test -- tmux -L voice-test new-session -A -s work'
 alias personal='distrobox enter personal -- tmux -L personal new-session -A -s work'
+
+# --- modern shell tooling ---------------------------------------------------
+# $HOME is shared into distrobox containers, so this file runs in several
+# environments. Each line is guarded with `command -v` so a missing binary in
+# one environment never breaks the shell in another.
+command -v starship >/dev/null && eval "$(starship init bash)"
+command -v zoxide   >/dev/null && eval "$(zoxide init bash)"   # adds: z <dir> / zi
+command -v fzf      >/dev/null && eval "$(fzf --bash)"         # Ctrl-R hist / Ctrl-T files / Alt-C cd
+
+if command -v eza >/dev/null; then
+    alias ls='eza --group-directories-first --icons=auto'
+    alias ll='eza -l  --group-directories-first --icons=auto --git'
+    alias la='eza -la --group-directories-first --icons=auto --git'
+    alias lt='eza --tree --level=2 --icons=auto'
+fi
+
+if command -v bat >/dev/null; then
+    export BAT_THEME="Nord"
+    export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+    # To make cat use bat, uncomment: alias cat='bat --plain --paging=never'
+fi
+
+# fzf: Nord colours + sensible defaults
+export FZF_DEFAULT_OPTS="--height 40% --layout=reverse --border=rounded --info=inline --color=bg+:#3b4252,bg:#2e3440,spinner:#81a1c1,hl:#616e88,fg:#d8dee9,header:#616e88,info:#81a1c1,pointer:#81a1c1,marker:#a3be8c,fg+:#d8dee9,prompt:#81a1c1,hl+:#81a1c1"

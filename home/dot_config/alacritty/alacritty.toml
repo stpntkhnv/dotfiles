@@ -1,0 +1,101 @@
+# Alacritty configuration — managed by chezmoi (v0.17, TOML format)
+# Reference: https://alacritty.org/config-alacritty.html
+# Live reload is on: edits apply without restarting the terminal.
+
+[general]
+import = ["~/.config/alacritty/themes/nord.toml"]
+live_config_reload = true
+
+[env]
+# $HOME is shared into distrobox containers (which lack alacritty's terminfo),
+# and this also keeps SSH sessions happy. xterm-256color exists everywhere.
+# Swap to "alacritty" if you want native undercurl/strikethrough locally.
+TERM = "xterm-256color"
+
+[window]
+opacity = 0.95                      # light transparency (no blur on niri/Wayland)
+padding = { x = 10, y = 8 }
+dynamic_padding = true              # center content, spread leftover space evenly
+decorations = "None"                # niri tiles windows; no client-side titlebar
+startup_mode = "Windowed"
+dynamic_title = true
+
+[window.class]                      # lets niri window-rules target Alacritty
+instance = "Alacritty"
+general = "Alacritty"
+
+[scrolling]
+history = 50000                     # generous scrollback for long logs (max 100000)
+multiplier = 3
+
+[font]
+size = 11.0
+builtin_box_drawing = true          # crisp box-drawing glyphs
+
+[font.normal]
+family = "JetBrainsMono Nerd Font"
+style = "Regular"
+
+[font.bold]
+family = "JetBrainsMono Nerd Font"
+style = "Bold"
+
+[font.italic]
+family = "JetBrainsMono Nerd Font"
+style = "Italic"
+
+[font.bold_italic]
+family = "JetBrainsMono Nerd Font"
+style = "Bold Italic"
+
+[cursor]
+style = { shape = "Block", blinking = "On" }
+blink_interval = 600
+blink_timeout = 0                   # blink forever while focused (0 = no timeout)
+unfocused_hollow = true             # hollow cursor when the window loses focus
+
+[selection]
+save_to_clipboard = true            # selecting text copies it straight to clipboard
+
+[mouse]
+hide_when_typing = true
+
+[terminal]
+osc52 = "CopyPaste"                 # let nvim/tmux (incl. over SSH) use system clipboard
+
+[bell]
+animation = "EaseOutExpo"           # gentle visual flash instead of an audible bell
+duration = 120
+color = "#88c0d0"                   # nord frost
+
+# --- Keyboard bindings ------------------------------------------------------
+# Additive only: Alacritty's defaults for copy/paste (Ctrl+Shift+C/V), font
+# size (Ctrl +/-/0), search (Ctrl+Shift+F/B) and vi mode (Ctrl+Shift+Space)
+# are kept as-is.
+
+[[keyboard.bindings]]
+key = "Return"                      # Shift+Enter -> ESC + CR (newline in Claude Code / nvim)
+mods = "Shift"
+chars = "\u001B\r"
+
+[[keyboard.bindings]]
+key = "F11"
+action = "ToggleFullscreen"
+
+[[keyboard.bindings]]
+key = "N"                           # new Alacritty window (niri will tile it)
+mods = "Control|Shift"
+action = "CreateNewWindow"
+
+# --- Hints: click or Ctrl+Shift+O to open URLs and OSC 8 hyperlinks ---------
+[hints]
+alphabet = "jfkdls;ahgurieowpq"
+
+[[hints.enabled]]
+regex = "(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file:|git://|ssh:|ftp://)[^\u0000-\u001F\u007F-\u009F<>\"\\s{-}\\^⟨⟩`]+"
+hyperlinks = true
+post_processing = true
+persist = false
+mouse = { enabled = true, mods = "Control" }
+binding = { key = "O", mods = "Control|Shift" }
+command = "xdg-open"
