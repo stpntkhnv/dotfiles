@@ -61,10 +61,17 @@ fi
 sudo pacman -S --noconfirm --needed openblas
 
 # ---- typing backend ----------------------------------------------------
-# Handy types the transcript into the focused window. On Wayland that needs
-# wtype; there is no portal for synthetic key events.
+# Handy puts the transcript into the focused window. Its default route is a
+# library that only speaks X11, which fails outright under niri with
+#
+#     Failed to paste transcription: Enigo state not initialized
+#
+# Setting typing_tool alone does not dislodge it in 0.9.4. What does work is
+# paste_method = ctrl_v: the text goes to the clipboard via wl-copy and the
+# keystroke via wtype, both of which have explicit Wayland support. So both
+# tools have to be present.
 if [[ -z "${CONTAINER_ID:-}" ]]; then
-    sudo pacman -S --noconfirm --needed wtype
+    sudo pacman -S --noconfirm --needed wtype wl-clipboard
 fi
 
 # ---- AUR helper --------------------------------------------------------
