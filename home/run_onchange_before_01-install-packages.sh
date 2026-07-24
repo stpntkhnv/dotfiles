@@ -75,8 +75,7 @@ sudo pacman -Syu --noconfirm --needed \
     words \
     xorg-xauth \
     zip \
-    zoxide \
-    zsh
+    zoxide
 
 if ! command -v yay &>/dev/null; then
     echo "Installing yay (AUR helper)..."

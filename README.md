@@ -47,7 +47,8 @@ Once util-linux 2.42.1+ lands in the Arch repos, remove the `init_hooks` line in
 
 ## What gets configured
 
-- zsh + Oh My Zsh + Powerlevel10k
+- niri + DankMaterialShell (host only)
+- bash + starship
 - Neovim
 - tmux
 - Git

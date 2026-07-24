@@ -1,15 +1,8 @@
 {{ if .is_container }}
-.config/hypr/**
-.config/waybar/**
-.config/wofi/**
-.config/wezterm/**
-.config/whisper-daemon/**
-.config/systemd/**
+.config/niri/**
+.config/DankMaterialShell/**
 .config/distrobox/**
 .asoundrc
-bin/voice-input.sh
-bin/whisper-lang-status.sh
-bin/whisper-lang-switch.sh
 {{ end }}
 
 {{ if not .is_container }}
