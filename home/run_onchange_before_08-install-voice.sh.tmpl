@@ -70,8 +70,12 @@ sudo pacman -S --noconfirm --needed openblas
 # paste_method = ctrl_v: the text goes to the clipboard via wl-copy and the
 # keystroke via wtype, both of which have explicit Wayland support. So both
 # tools have to be present.
+#
+# xwayland-satellite is what actually makes it work: niri 26.04 has no
+# built-in Xwayland, so DISPLAY is unset and that library cannot initialise
+# at all. niri's config starts the satellite and exports DISPLAY=:12.
 if [[ -z "${CONTAINER_ID:-}" ]]; then
-    sudo pacman -S --noconfirm --needed wtype wl-clipboard
+    sudo pacman -S --noconfirm --needed wtype wl-clipboard xwayland-satellite
 fi
 
 # ---- AUR helper --------------------------------------------------------

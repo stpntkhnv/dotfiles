@@ -159,6 +159,10 @@ overview {
 // This line starts waybar, a commonly used bar for Wayland compositors.
 environment {
   XDG_CURRENT_DESKTOP "niri"
+  // niri has no built-in Xwayland; xwayland-satellite below provides it.
+  // Anything that talks X11 needs DISPLAY to point at it -- including
+  // Handy, whose paste path goes through a library that only speaks X11.
+  DISPLAY ":12"
 }
 hotkey-overlay {
     skip-at-startup
@@ -279,3 +283,6 @@ include "dms/cursor.kdl"
 
 // Voice input (chezmoi-managed; empty when disabled)
 include "voice.kdl"
+
+// Rootless Xwayland for X11-only applications.
+spawn-at-startup "xwayland-satellite" ":12"
