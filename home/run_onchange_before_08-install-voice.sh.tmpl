@@ -50,6 +50,16 @@ else
 fi
 
 {{ end -}}
+# ---- undeclared runtime dependency -------------------------------------
+# handy-bin 0.9.4 links against libopenblas.so.0 but leaves it out of its
+# depends array, so the binary dies at startup with
+#
+#     handy: error while loading shared libraries: libopenblas.so.0
+#
+# Plain `openblas` is enough; `blas-openblas` would also take over the
+# system blas/cblas/lapack providers, which Handy does not need.
+sudo pacman -S --noconfirm --needed openblas
+
 # ---- typing backend ----------------------------------------------------
 # Handy types the transcript into the focused window. On Wayland that needs
 # wtype; there is no portal for synthetic key events.
