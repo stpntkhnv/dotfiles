@@ -60,7 +60,31 @@ Once util-linux 2.42.1+ lands in the Arch repos, remove the `init_hooks` line in
 
 | Flag | What it does |
 |------|-------------|
+| `setup_voice` | Offline speech-to-text (see below) |
 | `setup_azure` | Azure CLI, azd, Azure MCP server |
-| `setup_ado` | Azure DevOps MCP server (PAT auth) |
 | `setup_teams` | Teams for Linux with memory limit |
 | `setup_ziti` | OpenZiti edge tunnel + systemd service |
+
+## Voice input
+
+`setup_voice` installs [Handy](https://handy.computer), an offline
+speech-to-text app, plus a `voice_backend` choice (only `handy` for now).
+
+Handy runs Whisper through whisper.cpp, whose Linux GPU backend is **Vulkan,
+not CUDA** — a GPU only needs its normal driver and Vulkan ICD, and the CUDA
+toolkit does nothing for it. `chezmoi init` probes for an NVIDIA card by
+reading `/sys/bus/pci` (not `lspci`, which a minimal install may lack); if one
+is present without a working Vulkan runtime it offers to install
+`nvidia-open`/`nvidia-utils`. That install needs a reboot, which is why the
+question is asked at init rather than mid-apply. Non-Whisper models (Parakeet,
+GigaAM, …) are CPU-only regardless of the GPU.
+
+Tauri's global-shortcut plugin cannot grab keys on wlroots-style compositors,
+so niri owns the keybind and signals the running process instead —
+`Mod+Shift+D` sends `SIGUSR2`. That binding and `spawn-at-startup` live in
+`home/dot_config/niri/voice.kdl.tmpl`, which `config.kdl` includes
+unconditionally and which renders to a comment-only file when voice input is
+off.
+
+After installing, launch Handy once and download a model (Settings → Model).
+Whisper Large v3 Turbo (~1.6 GB) is the multilingual GPU-accelerated one.

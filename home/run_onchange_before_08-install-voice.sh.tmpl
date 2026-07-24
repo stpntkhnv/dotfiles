@@ -1,0 +1,91 @@
+#!/bin/bash
+{{ if not .setup_voice -}}
+exit 0
+{{- else if ne .voice_backend "handy" -}}
+echo "Unknown voice_backend {{ .voice_backend | quote }} -- nothing to install." >&2
+exit 1
+{{- else -}}
+set -euo pipefail
+
+# Handy (https://handy.computer) is an offline speech-to-text app: hold a
+# hotkey, talk, and the transcript is typed into the focused window.
+#
+# It runs Whisper through whisper.cpp, whose Linux GPU backend is VULKAN, not
+# CUDA. So a card only needs its regular driver and Vulkan ICD -- installing
+# the CUDA toolkit would do nothing for it. Non-Whisper models (Parakeet,
+# GigaAM, ...) are CPU-only regardless of the GPU.
+#
+# Needs sudo: run `chezmoi apply` from a terminal that can prompt for a
+# password.
+
+reboot_needed=0
+
+{{ if .setup_voice_gpu -}}
+# ---- NVIDIA driver + Vulkan runtime -----------------------------------
+# Only reached when init detected an NVIDIA card whose driver was missing and
+# the user agreed to install it. Re-checked here because the answer is stored
+# in the config and this script may run again on an already-fixed machine.
+if [[ ! -e /usr/share/vulkan/icd.d/nvidia_icd.json ]]; then
+    echo "Installing the NVIDIA driver and Vulkan runtime..."
+
+    pkgs=(nvidia-utils vulkan-icd-loader)
+
+    # nvidia-open supports Turing (RTX 20xx) and newer -- i.e. every RTX card.
+    # Its prebuilt module targets the stock `linux` kernel; any other kernel
+    # needs the DKMS build plus that kernel's headers.
+    mapfile -t kernels < <(pacman -Qq 2>/dev/null | grep -xE 'linux|linux-lts|linux-zen|linux-hardened' || true)
+    if [[ ${#kernels[@]} -eq 1 && ${kernels[0]} == linux ]]; then
+        pkgs+=(nvidia-open)
+    else
+        pkgs+=(nvidia-open-dkms)
+        for k in "${kernels[@]}"; do
+            pkgs+=("${k}-headers")
+        done
+    fi
+
+    sudo pacman -S --noconfirm --needed "${pkgs[@]}"
+    reboot_needed=1
+else
+    echo "NVIDIA Vulkan runtime already present, skipping driver install."
+fi
+
+{{ end -}}
+# ---- typing backend ----------------------------------------------------
+# Handy types the transcript into the focused window. On Wayland that needs
+# wtype; there is no portal for synthetic key events.
+if [[ -z "${CONTAINER_ID:-}" ]]; then
+    sudo pacman -S --noconfirm --needed wtype
+fi
+
+# ---- AUR helper --------------------------------------------------------
+# handy-bin lives in the AUR. The container bootstrap installs yay already;
+# on the host nothing does, so build it here if neither helper is present.
+if ! command -v paru &>/dev/null && ! command -v yay &>/dev/null; then
+    echo "Installing yay (AUR helper)..."
+    sudo pacman -S --noconfirm --needed base-devel git
+    tmpdir=$(mktemp -d)
+    git clone --depth 1 https://aur.archlinux.org/yay.git "$tmpdir/yay"
+    (cd "$tmpdir/yay" && makepkg -si --noconfirm)
+    rm -rf "$tmpdir"
+fi
+aur=$(command -v paru || command -v yay)
+
+# ---- Handy -------------------------------------------------------------
+# handy-bin repackages the upstream .deb and ships bundled ggml/onnxruntime
+# libraries, which collide with onnxruntime and llama.cpp-vulkan from the
+# official repos. Installing those alongside it needs manual conflict
+# resolution -- see the AUR comments.
+echo "Installing Handy from the AUR..."
+"$aur" -S --noconfirm --needed handy-bin
+
+echo ""
+echo "Handy installed. Remaining manual step: launch it once and download a"
+echo "model (Settings -> Model). Whisper Large v3 Turbo (~1.6 GB) is the"
+echo "multilingual GPU-accelerated one; it handles Russian mixed with English"
+echo "loanwords well. Models land in ~/.config/com.pais.handy/models/."
+
+if [[ $reboot_needed -eq 1 ]]; then
+    echo ""
+    echo "!! A reboot is required before the new GPU driver is active."
+fi
+{{- end }}

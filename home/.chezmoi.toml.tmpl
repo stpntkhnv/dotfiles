@@ -24,6 +24,31 @@
 {{- $setupGithubCli := promptBoolOnce . "setup_github_cli" "Install GitHub CLI (gh)" -}}
 {{- $setupAzure := promptBoolOnce . "setup_azure" "Setup Azure CLI and tools" -}}
 
+{{/* ---- voice input ----
+     Handy runs Whisper locally and offloads it to the GPU through Vulkan
+     (not CUDA), so the only thing an NVIDIA card needs is the proprietary
+     driver plus its Vulkan ICD. Probe for that here rather than in the
+     install script: a missing driver needs a reboot, so the user has to be
+     told at init time, not halfway through an apply. Detection reads
+     /sys/bus/pci directly -- lspci lives in pciutils, which a minimal Arch
+     install does not necessarily have. */}}
+{{- $setupVoice := promptBoolOnce . "setup_voice" "Setup voice input (speech-to-text)" -}}
+{{- $voiceBackend := "handy" -}}
+{{- $setupVoiceGpu := false -}}
+{{- if and $setupVoice (not $isContainer) -}}
+{{-   $voiceBackend = promptChoiceOnce . "voice_backend" "Voice input backend" (list "handy") -}}
+{{-   $hasNvidia := eq (output "sh" "-c" "for d in /sys/bus/pci/devices/*/; do c=$(cat \"$d/class\" 2>/dev/null); v=$(cat \"$d/vendor\" 2>/dev/null); case \"$c\" in 0x030*) [ \"$v\" = 0x10de ] && { echo yes; exit 0; };; esac; done; echo no" | trim) "yes" -}}
+{{-   $gpuReady := eq (output "sh" "-c" "[ -e /dev/nvidiactl ] && [ -e /usr/share/vulkan/icd.d/nvidia_icd.json ] && echo yes || echo no" | trim) "yes" -}}
+{{-   if and $hasNvidia (not $gpuReady) -}}
+{{-     writeToStdout "==> An NVIDIA GPU is present but its driver or Vulkan runtime is missing.\n    Without it Whisper falls back to the CPU, which is several times slower.\n" -}}
+{{-     $setupVoiceGpu = promptBoolOnce . "setup_voice_gpu" "Install the NVIDIA driver and Vulkan runtime" -}}
+{{-   else if $hasNvidia -}}
+{{-     writeToStdout "==> NVIDIA GPU with a working Vulkan runtime detected: Whisper will use it.\n" -}}
+{{-   else -}}
+{{-     writeToStdout "==> No NVIDIA GPU detected: Whisper will run on whatever Vulkan device is available, or on the CPU.\n" -}}
+{{-   end -}}
+{{- end -}}
+
 {{/* ---- container-only ---- */}}
 {{- $setupZiti := false -}}
 {{- $setupTeams := false -}}
@@ -48,6 +73,9 @@
     setup_codex = {{ $setupCodex }}
     setup_github_cli = {{ $setupGithubCli }}
     setup_azure = {{ $setupAzure }}
+    setup_voice = {{ $setupVoice }}
+    voice_backend = {{ $voiceBackend | quote }}
+    setup_voice_gpu = {{ $setupVoiceGpu }}
     setup_ziti = {{ $setupZiti }}
     setup_teams = {{ $setupTeams }}
     teams_memory_limit = {{ $teamsMemoryLimit | quote }}

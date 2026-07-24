@@ -1,0 +1,24 @@
+// Voice input -- managed by chezmoi, generated from voice.kdl.tmpl.
+// config.kdl includes this unconditionally, so it stays a valid (if empty)
+// KDL document when voice input is switched off.
+{{ if and .setup_voice (eq .voice_backend "handy") }}
+// Handy is a Tauri app, and Tauri's global-shortcut plugin cannot grab keys
+// on wlroots-style compositors -- they do not implement
+// zwp_keyboard_shortcuts_inhibit_manager_v1. Upstream's recommended fix for
+// Wayland is to let the compositor own the keybind and poke the running
+// process with a Unix signal:
+//
+//     SIGUSR2  toggle transcription
+//     SIGUSR1  toggle transcription with post-processing
+//
+// --start-hidden keeps the main window closed; Handy lives in the tray.
+spawn-at-startup "handy" "--start-hidden"
+
+binds {
+    Mod+Shift+D hotkey-overlay-title="Voice Input: Toggle Dictation" {
+        spawn "pkill" "-USR2" "-x" "handy";
+    }
+}
+{{ else }}
+// Voice input is disabled (setup_voice = false).
+{{ end }}
