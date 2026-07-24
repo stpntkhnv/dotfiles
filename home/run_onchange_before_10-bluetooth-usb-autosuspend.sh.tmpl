@@ -1,0 +1,43 @@
+#!/bin/bash
+{{ if .is_container -}}
+exit 0
+{{- else -}}
+set -euo pipefail
+
+# Cheap USB Bluetooth dongles do not survive USB runtime autosuspend. On this
+# host (10d7:b012 "Actions general adapter") btusb suspends the device 2s after
+# hci0 registers -- i.e. in the middle of HCI initialisation -- and it never
+# answers again. The kernel logs
+#
+#     Bluetooth: hci0: Opcode 0x1004 failed: -110
+#
+# BlueZ therefore never registers a controller and every shell reports "no
+# Bluetooth adapters found", even though the device is plugged in and rfkill
+# shows it unblocked.
+#
+# Runs as run_onchange_, so it only re-executes when this script changes.
+# Needs sudo: run `chezmoi apply` from a terminal that can prompt for a password.
+
+MODPROBE_CONF=/etc/modprobe.d/btusb.conf
+UDEV_RULE=/etc/udev/rules.d/50-bt-dongle-nosuspend.rules
+
+echo "Installing Bluetooth USB autosuspend fix..."
+
+sudo tee "$MODPROBE_CONF" >/dev/null <<'EOF'
+# Managed by chezmoi -- see run_onchange_before_10-bluetooth-usb-autosuspend.sh
+# Cheap BT dongles time out during HCI init when USB autosuspend kicks in.
+options btusb enable_autosuspend=0
+EOF
+
+sudo tee "$UDEV_RULE" >/dev/null <<'EOF'
+# Managed by chezmoi -- see run_onchange_before_10-bluetooth-usb-autosuspend.sh
+# Belt-and-braces: pin USB power management to "on" for the dongle itself, in
+# case anything re-enables autosuspend after btusb has bound to it.
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="10d7", ATTR{idProduct}=="b012", TEST=="power/control", ATTR{power/control}="on"
+EOF
+
+sudo udevadm control --reload
+
+echo "Done. Takes effect on the next boot, or right now with:"
+echo "  sudo systemctl stop bluetooth && sudo modprobe -r btusb && sudo modprobe btusb && sudo systemctl start bluetooth"
+{{- end }}
