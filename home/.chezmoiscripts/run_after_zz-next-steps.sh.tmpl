@@ -30,7 +30,10 @@ if [[ -z "$(ls -A /opt/openziti/etc/identities 2>/dev/null)" ]]; then
 fi
 {{- end }}
 {{- if has "voice" .enabled }}
-if [[ -z "$(ls -A "$HOME/.config/com.pais.handy/models" 2>/dev/null)" ]]; then
+# Handy pulls models through the HuggingFace hub cache, not into its own
+# models/ directory -- that one stays empty even with a model installed, so
+# checking it would warn on every apply. Look for the downloaded weights.
+if ! compgen -G "$HOME/.cache/huggingface/hub/models--*/snapshots/*/*.gguf" >/dev/null 2>&1; then
     steps+=("Handy: no model downloaded -- run 'handy' and pick one in Settings -> Model")
 fi
 {{- end }}
