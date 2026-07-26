@@ -1,0 +1,50 @@
+#!/bin/bash
+set -euo pipefail
+
+# Final checklist. Runs on every apply (no onchange_) because it inspects live
+# state: an interactive login cannot happen inside a chezmoi run, so list
+# whichever are still missing. Prints nothing once everything is authenticated.
+
+steps=()
+{{ if has "claude" .enabled }}
+[[ -f "$HOME/.claude/.credentials.json" ]] || \
+    steps+=("Claude Code: not logged in -- run 'claude' and complete /login")
+{{- end }}
+{{- if has "codex" .enabled }}
+[[ -f "$HOME/.codex/auth.json" ]] || \
+    steps+=("Codex: not logged in -- 'codex login' (browser OAuth) or 'codex login --api-key <key>'")
+{{- end }}
+{{- if has "gh" .enabled }}
+if command -v gh &>/dev/null && ! gh auth status &>/dev/null; then
+    steps+=("GitHub CLI: not logged in -- 'gh auth login'")
+fi
+{{- end }}
+{{- if has "azure" .enabled }}
+if command -v az &>/dev/null && ! az account show &>/dev/null; then
+    steps+=("Azure CLI: no active session -- 'az login'")
+fi
+{{- end }}
+{{- if has "ziti" .enabled }}
+if [[ -z "$(ls -A /opt/openziti/etc/identities 2>/dev/null)" ]]; then
+    steps+=("OpenZiti: no identity -- copy the JSON to /opt/openziti/etc/identities/ and 'sudo systemctl start ziti-edge-tunnel'")
+fi
+{{- end }}
+{{- if has "voice" .enabled }}
+if [[ -z "$(ls -A "$HOME/.config/com.pais.handy/models" 2>/dev/null)" ]]; then
+    steps+=("Handy: no model downloaded -- run 'handy' and pick one in Settings -> Model")
+fi
+{{- end }}
+{{- if has "docker" .enabled }}
+if ! id -nG "$USER" | grep -qw docker; then
+    steps+=("Docker: you are not in the docker group yet -- log out and back in to use it without sudo")
+fi
+{{- end }}
+
+if ((${#steps[@]} > 0)); then
+    echo ""
+    echo "================ NEXT STEPS ================"
+    for s in "${steps[@]}"; do
+        echo "  * $s"
+    done
+    echo "============================================"
+fi

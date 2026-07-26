@@ -1,7 +1,7 @@
 // Voice input -- managed by chezmoi, generated from voice.kdl.tmpl.
 // config.kdl includes this unconditionally, so it stays a valid (if empty)
 // KDL document when voice input is switched off.
-{{ if and .setup_voice (eq .voice_backend "handy") }}
+{{ if has "voice" .enabled }}
 // Handy is a Tauri app, and Tauri's global-shortcut plugin cannot grab keys
 // on wlroots-style compositors -- they do not implement
 // zwp_keyboard_shortcuts_inhibit_manager_v1. Upstream's recommended fix for
@@ -20,5 +20,5 @@ binds {
     }
 }
 {{ else }}
-// Voice input is disabled (setup_voice = false).
+// Voice input is disabled (the `voice` feature is not selected).
 {{ end }}

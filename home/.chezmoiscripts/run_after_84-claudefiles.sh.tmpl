@@ -1,0 +1,21 @@
+#!/bin/bash
+{{- if not (has "claude" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Claude's configuration (plugins, MCP, skills) lives in a separate claudefiles
+# repository, pulled in as a chezmoi external. All that happens here is calling
+# its setup.sh, and only when the external's HEAD has actually moved.
+CF="{{ .chezmoi.homeDir }}/.local/share/claudefiles"
+
+if [[ ! -d "$CF/.git" ]]; then
+    echo "claudefiles external not present yet, skipping."
+    exit 0
+fi
+
+head="$(git -C "$CF" rev-parse HEAD)"
+source "$CF/lib/apply-if-changed.sh"
+run() { "$CF/setup.sh"{{ if not stdinIsATTY }} --non-interactive{{ end }}; }
+apply_if_changed "$head" run
+{{- end }}

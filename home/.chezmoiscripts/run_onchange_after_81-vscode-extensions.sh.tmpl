@@ -1,0 +1,31 @@
+#!/bin/bash
+{{- if not (has "vscode" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# run_onchange_ hashes the rendered text, so the extension list is baked in
+# here straight from extensions.txt: edit the list and this script re-runs by
+# itself.
+{{ $extensions := include "dot_config/Code/User/extensions.txt" | trim | splitList "\n" }}
+if ! command -v code &>/dev/null; then
+    echo "VS Code not found, skipping extensions."
+    exit 0
+fi
+
+installed=$(code --list-extensions 2>/dev/null || true)
+
+for ext in \
+{{- range $extensions }}
+    {{ . | trim | quote }} \
+{{- end }}
+    ; do
+    if grep -qix "$ext" <<<"$installed"; then
+        echo "already installed: $ext"
+    else
+        echo "installing: $ext"
+        code --install-extension "$ext" --force >/dev/null 2>&1 || \
+            echo "!! failed to install $ext" >&2
+    fi
+done
+{{- end }}

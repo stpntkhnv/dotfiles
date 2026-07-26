@@ -1,0 +1,301 @@
+# The feature catalogue: the single source of truth for what gets installed.
+#
+# It is read TWICE, which is not duplication but a way around a chezmoi
+# ordering constraint:
+#
+#   * .chezmoi.toml.tmpl reads this file via
+#     `include ".chezmoidata.yaml" | fromYaml`, because the config template is
+#     rendered BEFORE chezmoi loads .chezmoidata.*, so `.features` is not
+#     reachable from there;
+#   * every other template gets it natively as `.features`.
+#
+# Fields:
+#   key      Identifier. This is what is stored in chezmoi.toml (data.enabled)
+#            and what .chezmoiignore and the scripts branch on. Renaming a key
+#            discards the user's saved selection; editing a label does not.
+#   label    Description shown in the install checklist. Free to reword.
+#   scope    both | host | container -- where the feature makes physical sense.
+#            Anything not tied to hardware or to a desktop session belongs in
+#            both: neovim and vscode are equally wanted in either place.
+#   always   true -> never ask, always install (within its scope).
+#   default  true -> pre-selected in the checklist.
+#   needs    Other features, pulled in automatically; no need to ask for them.
+#   pacman   Packages from the official repositories.
+#   aur      Packages from the AUR (installed with yay, which is built on demand).
+#   npm      Global npm packages (they land in ~/.npm-global).
+#
+# The order of features here is the order of lines in the checklist.
+
+features:
+  # ---------------------------------------------------------------- base ---
+  - key: core
+    label: "Base utilities"
+    scope: both
+    always: true
+    pacman:
+      - base-devel
+      - bc
+      - diffutils
+      - git
+      - inetutils
+      - less
+      - lsof
+      - man-db
+      - man-pages
+      - mtr
+      - openssh
+      - pigz
+      - rsync
+      - sudo
+      - tcpdump
+      - time
+      - traceroute
+      - tree
+      - unzip
+      - wget
+      - zip
+
+  - key: shell
+    label: "Shell: starship, eza, bat, fzf, zoxide, ripgrep, fd, tmux"
+    scope: both
+    always: true
+    pacman:
+      - bat
+      - btop
+      - eza
+      - fd
+      - fzf
+      - lazygit
+      - ripgrep
+      - starship
+      - tmux
+      - zoxide
+
+  # Packages that are only useful inside distrobox: locale-gen for container
+  # locales, xauth for X11 forwarding to the host, nss-mdns to resolve .local,
+  # and sox/mesa/vte-common for applications exported back to the host.
+  - key: container-base
+    label: "Container plumbing"
+    scope: container
+    always: true
+    pacman:
+      - alsa-plugins
+      - glibc-locales
+      - mesa
+      - nss-mdns
+      - sox
+      - vte-common
+      - words
+      - xorg-xauth
+
+  # Host essentials that are not the desktop but without which a bare machine
+  # is unusable. Note that 30-system enables NetworkManager.service and
+  # bluetooth.service: without the packages below those `systemctl enable`
+  # calls fail, and `set -e` takes the whole script down with them.
+  - key: host-base
+    label: "Host essentials: network, Bluetooth, firewall, zram"
+    scope: host
+    always: true
+    pacman:
+      - bluez
+      - bluez-utils
+      # chezmoi installs itself so that later updates come from pacman rather
+      # than the copy install.sh drops in ~/.local/bin.
+      - chezmoi
+      - networkmanager
+      # Fallback editor for when the graphical session is broken. neovim is a
+      # separate, optional feature; something has to exist regardless.
+      - nano
+      - smartmontools
+      - ufw
+      - wpa_supplicant
+      # xdg-open, used by anything that opens a link or a file by MIME type.
+      - xdg-utils
+      - zram-generator
+
+  # -------------------------------------------------------------- desktop ---
+  # Host only and unconditional: without this there is nothing to log into on
+  # a bare machine. The Nerd font is not optional -- without it starship and
+  # `eza --icons` render tofu boxes.
+  - key: desktop
+    label: "Desktop: niri + DankMaterialShell"
+    scope: host
+    always: true
+    pacman:
+      - alacritty
+      - brightnessctl
+      # Optional dependencies that DankMaterialShell actually reaches for --
+      # see `pacman -Qi dms-shell`. Without them the shell still starts, but
+      # widgets silently do nothing:
+      #   cava            audio visualiser
+      #   i2c-tools       brightness control on external monitors
+      #   kimageformats   extra image formats for the wallpaper picker
+      #   qt6ct           Qt6 application theming
+      #   qt6-multimedia  sound effects
+      #   tuned-ppd       provides power-profiles-daemon, the power profile switch
+      - cava
+      - dms-shell-niri
+      - gst-plugin-pipewire
+      - i2c-tools
+      - kimageformats
+      - matugen
+      - mesa
+      - niri
+      - noto-fonts
+      - noto-fonts-cjk
+      - noto-fonts-emoji
+      - pipewire
+      - pipewire-alsa
+      - pipewire-jack
+      - pipewire-pulse
+      - polkit
+      - qt6-multimedia
+      - qt6ct
+      - quickshell
+      - sddm
+      - ttf-jetbrains-mono-nerd
+      - tuned-ppd
+      - vulkan-intel
+      - vulkan-radeon
+      - wireplumber
+      - wl-clipboard
+      - wtype
+      - xdg-desktop-portal-gnome
+      - xdg-desktop-portal-gtk
+      - xwayland-satellite
+
+  # distrobox is unconditional: containers are part of the workflow, not an
+  # optional extra.
+  - key: distrobox
+    label: "distrobox + podman"
+    scope: host
+    always: true
+    pacman:
+      - distrobox
+      - podman
+
+  # ---------------------------------------------------------------- asked ---
+  - key: neovim
+    label: "Neovim + LSP, treesitter"
+    scope: both
+    default: true
+    pacman:
+      - neovim
+      - tree-sitter-cli
+
+  - key: node
+    label: "Node.js + npm"
+    scope: both
+    default: true
+    pacman:
+      - nodejs
+      - npm
+
+  - key: vscode
+    label: "VS Code + extensions from extensions.txt"
+    scope: both
+    aur:
+      - visual-studio-code-bin
+
+  - key: browsers
+    label: "Firefox + Chromium"
+    scope: host
+    default: true
+    pacman:
+      - chromium
+      - firefox
+
+  # cups-pk-helper is also what lets DankMaterialShell manage printers from
+  # its own UI, so it belongs with the printing stack rather than the desktop.
+  - key: printing
+    label: "Printing (CUPS)"
+    scope: host
+    default: true
+    pacman:
+      - cups
+      - cups-pk-helper
+      - system-config-printer
+
+  # The one feature with no reason to exist in a container: the daemon lives
+  # on the host anyway.
+  - key: docker
+    label: "Docker + lazydocker"
+    scope: host
+    pacman:
+      - docker
+      - docker-buildx
+      - lazydocker
+
+  - key: go
+    label: "Go"
+    scope: both
+    pacman:
+      - go
+
+  - key: dotnet
+    label: ".NET SDK + ASP.NET, freetds, devtunnel"
+    scope: both
+    pacman:
+      - aspnet-runtime
+      - aspnet-targeting-pack
+      - dotnet-sdk
+      - freetds
+    aur:
+      # Not `devtunnel`: no such package in the AUR any more, which is what the
+      # old install script tripped over.
+      - devtunnel-cli-bin
+
+  - key: claude
+    label: "Claude Code CLI"
+    scope: both
+    default: true
+    needs: [node]
+    npm:
+      - "@anthropic-ai/claude-code"
+
+  - key: codex
+    label: "OpenAI Codex CLI"
+    scope: both
+    needs: [node]
+    npm:
+      - "@openai/codex"
+
+  - key: gh
+    label: "GitHub CLI"
+    scope: both
+    default: true
+    pacman:
+      - github-cli
+
+  - key: azure
+    label: "Azure CLI + azd"
+    scope: both
+    pacman:
+      - azure-cli
+
+  - key: teams
+    label: "Teams for Linux"
+    scope: both
+    aur:
+      - teams-for-linux
+
+  - key: ziti
+    label: "OpenZiti edge tunnel"
+    scope: both
+    aur:
+      - ziti-edge-tunnel
+
+  # Handy is an offline speech-to-text app. The Whisper inside it reaches the
+  # GPU through Vulkan rather than CUDA, so a card only needs its regular
+  # driver and ICD. openblas is an undeclared dependency of handy-bin 0.9.4.
+  - key: voice
+    label: "Voice input (Handy, offline)"
+    scope: host
+    pacman:
+      - openblas
+    aur:
+      - handy-bin
+
+  - key: bluetooth-fix
+    label: "Fix for cheap USB Bluetooth dongle (10d7:b012)"
+    scope: host

@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+
+# install.sh clones over HTTPS because a clean machine has no SSH key yet. By
+# this point 82-ssh-key has created one, so switch origin to SSH -- otherwise
+# every push would ask for a login.
+
+cd "{{ .chezmoi.sourceDir }}"
+
+ssh_url="git@github.com:stpntkhnv/dotfiles.git"
+current_url=$(git remote get-url origin 2>/dev/null || true)
+
+if [[ -n "$current_url" && "$current_url" != "$ssh_url" ]]; then
+    echo "==> Switching origin from HTTPS to SSH..."
+    git remote set-url origin "$ssh_url"
+fi

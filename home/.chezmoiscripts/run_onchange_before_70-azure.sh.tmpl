@@ -1,0 +1,16 @@
+#!/bin/bash
+{{- if not (has "azure" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# azure-cli comes from the shared 20-packages script. azd is not in the Arch
+# repositories at all, only via the aka.ms installer, so it is handled here.
+
+if ! command -v azd &>/dev/null; then
+    echo "==> Installing Azure Developer CLI (azd)..."
+    curl -fsSL https://aka.ms/install-azd.sh | bash
+fi
+
+# The `az login` reminder lives in run_after_zz-next-steps.sh.
+{{- end }}

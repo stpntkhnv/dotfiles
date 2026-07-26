@@ -1,81 +1,109 @@
-{{- $isContainer := false -}}
-{{- if stat "/run/.containerenv" -}}
-{{-   $isContainer = true -}}
-{{- end -}}
+{{/*
+   This template is rendered BEFORE chezmoi loads .chezmoidata.*, so the
+   catalogue has to be read as a file here. Every other template gets it as
+   `.features` -- see the comment at the top of .chezmoidata.yaml itself.
+*/}}
+{{- $catalog := (include ".chezmoidata.yaml" | fromYaml).features -}}
 
-{{/* Every option is prompted the same way on host and in containers.
-     Environment-specific availability is decided here, in one place:
-     an option unavailable in the current environment is not prompted,
-     forced to false, and announced — instead of being silently baked
-     into the install scripts via CONTAINER_ID checks. */}}
+{{/* The environment is still detected, but it no longer splits packages into
+     two camps: it only hides features that make no physical sense here. */}}
+{{- $isContainer := stat "/run/.containerenv" | not | not -}}
+{{- $env := ternary "container" "host" $isContainer -}}
 
 {{- if $isContainer -}}
-{{-   writeToStdout "==> Container environment detected: all options below apply inside this container.\n" -}}
+{{-   writeToStdout "\n==> Container. Host-only features (desktop, distrobox, Docker, voice input) are hidden.\n" -}}
 {{- else -}}
-{{-   writeToStdout "==> Host environment detected: container-only options (Teams, OpenZiti) are unavailable and will be skipped.\n" -}}
+{{-   writeToStdout "\n==> Host. All features available.\n" -}}
 {{- end -}}
 
 {{- $gitName := promptStringOnce . "git_name" "Git user name" -}}
 {{- $gitEmail := promptStringOnce . "git_email" "Git user email" -}}
 
-{{/* ---- available everywhere ---- */}}
-{{- $setupClaude := promptBoolOnce . "setup_claude" "Install Claude Code CLI" -}}
-{{- $setupCodex := promptBoolOnce . "setup_codex" "Install OpenAI Codex CLI" -}}
-{{- $setupGithubCli := promptBoolOnce . "setup_github_cli" "Install GitHub CLI (gh)" -}}
-{{- $setupAzure := promptBoolOnce . "setup_azure" "Setup Azure CLI and tools" -}}
+{{/* Split the catalogue into "always install" and "ask about".
 
-{{/* ---- voice input ----
-     Handy runs Whisper locally and offloads it to the GPU through Vulkan
-     (not CUDA), so the only thing an NVIDIA card needs is the proprietary
-     driver plus its Vulkan ICD. Probe for that here rather than in the
-     install script: a missing driver needs a reboot, so the user has to be
-     told at init time, not halfway through an apply. Detection reads
-     /sys/bus/pci directly -- lspci lives in pciutils, which a minimal Arch
-     install does not necessarily have. */}}
-{{- $setupVoice := promptBoolOnce . "setup_voice" "Setup voice input (speech-to-text)" -}}
-{{- $voiceBackend := "handy" -}}
-{{- $setupVoiceGpu := false -}}
-{{- if and $setupVoice (not $isContainer) -}}
-{{-   $voiceBackend = promptChoiceOnce . "voice_backend" "Voice input backend" (list "handy") -}}
+     The checklist itself offers BARE KEYS, with the descriptions printed as a
+     legend above it. That is not cosmetic; it buys two things:
+       * the answer stored in chezmoi.toml is not coupled to the label text,
+         so descriptions can be reworded without discarding a saved selection;
+       * non-interactive installs stay legible, e.g.
+         `chezmoi init --promptMultichoice enabled=neovim,node,claude`,
+         which is impossible once choices contain spaces and commas. */}}
+{{- $always := list -}}
+{{- $choices := list -}}
+{{- $defaults := list -}}
+{{- $legend := "\n    Available features:\n\n" -}}
+
+{{/* Optional fields are only ever read through hasKey: chezmoi executes
+     templates with missingkey=error, so a bare `.always` on a feature that
+     lacks the field aborts the render instead of yielding empty. */}}
+{{- range $catalog -}}
+{{-   if or (eq .scope "both") (eq .scope $env) -}}
+{{-     if hasKey . "always" -}}
+{{-       $always = append $always .key -}}
+{{-     else -}}
+{{-       $choices = append $choices .key -}}
+{{-       if hasKey . "default" -}}
+{{-         $defaults = append $defaults .key -}}
+{{-         $legend = printf "%s      %-14s %s  (default)\n" $legend .key .label -}}
+{{-       else -}}
+{{-         $legend = printf "%s      %-14s %s\n" $legend .key .label -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+
+{{- writeToStdout $legend -}}
+{{- writeToStdout "\n    Space toggles, arrows move, Enter confirms.\n\n" -}}
+{{- $selected := promptMultichoiceOnce . "enabled" "What to install" $choices $defaults -}}
+
+{{- $enabled := concat $always $selected -}}
+
+{{/* Expand `needs`. Three passes is deliberate overkill: the dependency
+     chains here are one level deep (claude/codex -> node), but nesting costs
+     nothing. */}}
+{{- range $pass := until 3 -}}
+{{-   range $catalog -}}
+{{-     if and (has .key $enabled) (hasKey . "needs") -}}
+{{-       range .needs -}}
+{{-         if not (has . $enabled) -}}{{ $enabled = append $enabled . }}{{- end -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- $enabled = $enabled | uniq | sortAlpha -}}
+
+{{/* ---- hardware-dependent follow-up ----
+
+     The NVIDIA driver is not a checklist feature because whether it is wanted
+     is a property of the machine, not a preference: the probe answers it. It
+     used to hang off the voice feature, which was wrong -- the desktop needs
+     the driver whether or not speech-to-text is installed.
+
+     Asked at init rather than mid-apply because installing a driver requires
+     a reboot, and that has to be said up front. /sys/bus/pci is read directly
+     because lspci lives in pciutils, which a minimal install may not have. */}}
+{{- $nvidiaDriver := false -}}
+{{- if not $isContainer -}}
 {{-   $hasNvidia := eq (output "sh" "-c" "for d in /sys/bus/pci/devices/*/; do c=$(cat \"$d/class\" 2>/dev/null); v=$(cat \"$d/vendor\" 2>/dev/null); case \"$c\" in 0x030*) [ \"$v\" = 0x10de ] && { echo yes; exit 0; };; esac; done; echo no" | trim) "yes" -}}
 {{-   $gpuReady := eq (output "sh" "-c" "[ -e /dev/nvidiactl ] && [ -e /usr/share/vulkan/icd.d/nvidia_icd.json ] && echo yes || echo no" | trim) "yes" -}}
 {{-   if and $hasNvidia (not $gpuReady) -}}
-{{-     writeToStdout "==> An NVIDIA GPU is present but its driver or Vulkan runtime is missing.\n    Without it Whisper falls back to the CPU, which is several times slower.\n" -}}
-{{-     $setupVoiceGpu = promptBoolOnce . "setup_voice_gpu" "Install the NVIDIA driver and Vulkan runtime" -}}
+{{-     writeToStdout "\n==> An NVIDIA GPU is present but its driver or Vulkan runtime is missing.\n" -}}
+{{-     $nvidiaDriver = promptBoolOnce . "nvidia_driver" "Install the NVIDIA driver and Vulkan runtime (needs a reboot)" -}}
 {{-   else if $hasNvidia -}}
-{{-     writeToStdout "==> NVIDIA GPU with a working Vulkan runtime detected: Whisper will use it.\n" -}}
-{{-   else -}}
-{{-     writeToStdout "==> No NVIDIA GPU detected: Whisper will run on whatever Vulkan device is available, or on the CPU.\n" -}}
+{{-     writeToStdout "\n==> NVIDIA GPU with a working Vulkan runtime detected.\n" -}}
 {{-   end -}}
 {{- end -}}
 
-{{/* ---- container-only ---- */}}
-{{- $setupZiti := false -}}
-{{- $setupTeams := false -}}
-{{- $teamsMemoryLimit := "1536M" -}}
-{{- if $isContainer -}}
-{{-   $setupZiti = promptBoolOnce . "setup_ziti" "Setup OpenZiti edge tunnel" -}}
-{{-   $setupTeams = promptBoolOnce . "setup_teams" "Install Microsoft Teams" -}}
-{{-   if $setupTeams -}}
-{{-     $teamsMemoryLimit = promptStringOnce . "teams_memory_limit" "Teams memory limit (default 1536M)" -}}
-{{-   end -}}
-{{- end -}}
-
+{{/* autoPush is off on purpose: an apply should not quietly publish to GitHub
+     something you have not looked at yet. autoCommit stays -- a local commit
+     is reversible, a push is not. */}}
 [git]
     autoCommit = true
-    autoPush = true
+    autoPush = false
 
 [data]
     git_name = {{ $gitName | quote }}
     git_email = {{ $gitEmail | quote }}
-    is_container = {{ $isContainer }}
-    setup_claude = {{ $setupClaude }}
-    setup_codex = {{ $setupCodex }}
-    setup_github_cli = {{ $setupGithubCli }}
-    setup_azure = {{ $setupAzure }}
-    setup_voice = {{ $setupVoice }}
-    voice_backend = {{ $voiceBackend | quote }}
-    setup_voice_gpu = {{ $setupVoiceGpu }}
-    setup_ziti = {{ $setupZiti }}
-    setup_teams = {{ $setupTeams }}
-    teams_memory_limit = {{ $teamsMemoryLimit | quote }}
+    env = {{ $env | quote }}
+    enabled = {{ $enabled | toJson }}
+    nvidia_driver = {{ $nvidiaDriver }}

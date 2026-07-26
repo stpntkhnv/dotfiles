@@ -1,7 +1,7 @@
 #!/bin/bash
-{{ if .is_container -}}
+{{- if not (has "bluetooth-fix" .enabled) }}
 exit 0
-{{- else -}}
+{{- else }}
 set -euo pipefail
 
 # Cheap USB Bluetooth dongles do not survive USB runtime autosuspend. On this
@@ -15,22 +15,22 @@ set -euo pipefail
 # Bluetooth adapters found", even though the device is plugged in and rfkill
 # shows it unblocked.
 #
-# Runs as run_onchange_, so it only re-executes when this script changes.
-# Needs sudo: run `chezmoi apply` from a terminal that can prompt for a password.
+# Needs sudo: run `chezmoi apply` from a terminal that can prompt for a
+# password.
 
 MODPROBE_CONF=/etc/modprobe.d/btusb.conf
 UDEV_RULE=/etc/udev/rules.d/50-bt-dongle-nosuspend.rules
 
-echo "Installing Bluetooth USB autosuspend fix..."
+echo "==> Installing the Bluetooth USB autosuspend fix..."
 
 sudo tee "$MODPROBE_CONF" >/dev/null <<'EOF'
-# Managed by chezmoi -- see run_onchange_before_10-bluetooth-usb-autosuspend.sh
+# Managed by chezmoi -- .chezmoiscripts/run_onchange_before_50-bluetooth.sh
 # Cheap BT dongles time out during HCI init when USB autosuspend kicks in.
 options btusb enable_autosuspend=0
 EOF
 
 sudo tee "$UDEV_RULE" >/dev/null <<'EOF'
-# Managed by chezmoi -- see run_onchange_before_10-bluetooth-usb-autosuspend.sh
+# Managed by chezmoi -- .chezmoiscripts/run_onchange_before_50-bluetooth.sh
 # Belt-and-braces: pin USB power management to "on" for the dongle itself, in
 # case anything re-enables autosuspend after btusb has bound to it.
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="10d7", ATTR{idProduct}=="b012", TEST=="power/control", ATTR{power/control}="on"

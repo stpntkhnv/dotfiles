@@ -1,0 +1,153 @@
+#!/bin/bash
+{{- if ne .env "host" }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Host-level system settings: keyboard and services. Needs sudo -- run
+# `chezmoi apply` from a terminal that can prompt for a password.
+
+# ---- keyboard -----------------------------------------------------------
+# niri sets us,ru and swapcaps in its own xkb block, but that only applies
+# INSIDE a niri session. In a TTY and on the sddm login screen it was still
+# plain us with an ordinary Caps Lock. Both surfaces are fixed here.
+#
+# The values are kept identical to niri/config.kdl:
+#   grp:alt_shift_toggle -- Alt+Shift switches language. Not win_space_toggle:
+#                           Mod+Space is taken by the DMS spotlight.
+#   ctrl:swapcaps        -- Caps Lock and left Control swap places.
+LAYOUT="us,ru"
+OPTIONS="grp:alt_shift_toggle,ctrl:swapcaps"
+CONSOLE_MAP=/usr/local/share/kbd/keymaps/us-swapcaps.map
+
+# 1. Xorg / Xwayland / sddm, via localectl, which writes
+#    /etc/X11/xorg.conf.d/00-keyboard.conf.
+#
+#    --no-convert is required. Without it localectl also tries to derive a
+#    console keymap, but /usr/lib/systemd/kbd-model-map contains no entry
+#    mentioning swapcaps at all: it would silently settle on plain us and
+#    clobber what is set up below. Hence X11 and console are handled apart.
+current_layout=$(localectl status | awk -F': *' '/X11 Layout/{print $2}')
+current_options=$(localectl status | awk -F': *' '/X11 Options/{print $2}')
+
+if [[ "$current_layout" != "$LAYOUT" || "$current_options" != "$OPTIONS" ]]; then
+    echo "==> Keyboard for Xorg/sddm: $LAYOUT ($OPTIONS)"
+    sudo localectl --no-convert set-x11-keymap "$LAYOUT" "" "" "$OPTIONS"
+else
+    echo "==> Keyboard for Xorg/sddm already configured."
+fi
+
+# 2. The console (TTY), with a keymap of its own.
+#
+#    A console layout is defined by a keymap file rather than xkb options, so
+#    ctrl:swapcaps cannot carry over. Build a minimal map on top of the stock
+#    us one: keycode 58 is Caps Lock, 29 is left Control.
+#
+#    The include deliberately uses an ABSOLUTE path: when invoked with a file
+#    path, loadkeys resolves includes relative to that file rather than
+#    through its compiled-in search directories, and a bare "us.map" is not
+#    found.
+#
+#    Russian is deliberately absent in the TTY: switching language in the
+#    console needs a dedicated map such as ruwin_ctrl, whose toggle collides
+#    with this swap. What matters here is having Control under the little
+#    finger when graphics fail to come up.
+echo "==> Console keymap: us + Caps<->Ctrl"
+sudo mkdir -p "$(dirname "$CONSOLE_MAP")"
+sudo tee "$CONSOLE_MAP" >/dev/null <<'KEYMAP'
+# Managed by chezmoi -- .chezmoiscripts/run_onchange_before_30-system.sh
+include "/usr/share/kbd/keymaps/i386/qwerty/us.map.gz"
+keycode  58 = Control
+keycode  29 = Caps_Lock
+KEYMAP
+
+# Confirm the map actually compiles before pointing vconsole.conf at it: a
+# broken KEYMAP would leave the console with no layout whatsoever.
+if ! loadkeys --mktable "$CONSOLE_MAP" >/dev/null 2>&1; then
+    echo "!! $CONSOLE_MAP does not compile, leaving the console alone." >&2
+else
+    if ! grep -qxF "KEYMAP=$CONSOLE_MAP" /etc/vconsole.conf 2>/dev/null; then
+        sudo sed -i '/^KEYMAP=/d' /etc/vconsole.conf 2>/dev/null || true
+        echo "KEYMAP=$CONSOLE_MAP" | sudo tee -a /etc/vconsole.conf >/dev/null
+    fi
+    sudo systemctl restart systemd-vconsole-setup.service || true
+fi
+
+# ---- zram swap ----------------------------------------------------------
+# Compressed swap in RAM instead of a disk partition or swapfile: on a machine
+# with plenty of RAM it is far faster and saves SSD writes. zram-generator
+# creates the device from this config, no unit to enable.
+#
+# Size is left at the default (min(ram/2, 4G)); only the compressor is set,
+# because zstd gives a noticeably better ratio than the lzo-rle default at a
+# cost that is irrelevant next to swapping to disk.
+ZRAM_CONF=/etc/systemd/zram-generator.conf
+
+if [[ ! -f "$ZRAM_CONF" ]] || ! grep -q 'compression-algorithm = zstd' "$ZRAM_CONF"; then
+    echo "==> Configuring zram swap"
+    sudo tee "$ZRAM_CONF" >/dev/null <<'ZRAM'
+# Managed by chezmoi -- .chezmoiscripts/run_onchange_before_30-system.sh
+[zram0]
+compression-algorithm = zstd
+ZRAM
+fi
+
+# ---- services -----------------------------------------------------------
+# enable without --now: there is no reason to bounce sddm in the middle of a
+# running session, everything comes up on the next boot.
+#
+# Every unit below is backed by a package in the catalogue -- `systemctl
+# enable` on a missing unit fails, and `set -e` would take this whole script
+# down with it.
+enable_unit() {
+    local unit="$1"
+    if ! systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+        echo "==> Enabling $unit"
+        sudo systemctl enable "$unit"
+    fi
+}
+
+enable_unit sddm.service                # desktop
+enable_unit NetworkManager.service      # host-base
+enable_unit bluetooth.service           # host-base
+enable_unit ufw.service                 # host-base
+enable_unit systemd-timesyncd.service   # base install
+enable_unit fstrim.timer                # weekly SSD trim, util-linux
+
+# ufw ships with no rules and denies nothing until enabled. Default-deny
+# inbound with outbound allowed is the sane desktop posture; add per-service
+# rules by hand when something needs to listen.
+if ! sudo ufw status | grep -q 'Status: active'; then
+    echo "==> Enabling the ufw firewall (default deny incoming)"
+    sudo ufw default deny incoming
+    sudo ufw default allow outgoing
+    sudo ufw --force enable
+fi
+{{- if has "printing" .enabled }}
+
+# CUPS is socket-activated: cups.socket starts the daemon on first use, so
+# nothing runs while there is no printing to do.
+enable_unit cups.socket
+
+# Network printers announce themselves over mDNS, which is INCOMING udp/5353 --
+# blocked by the default-deny rule above, so a network printer would simply
+# never show up in the printer list. Irrelevant for a USB printer, harmless
+# either way. Setting the printer up itself stays out of chezmoi; this only
+# makes it discoverable.
+if ! sudo ufw status | grep -q '5353.*ALLOW'; then
+    echo "==> Allowing mDNS so network printers can be discovered"
+    sudo ufw allow mdns
+fi
+{{- end }}
+{{- if has "docker" .enabled }}
+
+# Docker: the socket rather than the daemon -- the socket starts the daemon on
+# first use and costs no memory while Docker is idle. The docker group grants
+# access without sudo and takes effect at the next login.
+enable_unit docker.socket
+if ! id -nG "$USER" | grep -qw docker; then
+    echo "==> Adding $USER to the docker group (effective at next login)"
+    sudo usermod -aG docker "$USER"
+fi
+{{- end }}
+{{- end }}

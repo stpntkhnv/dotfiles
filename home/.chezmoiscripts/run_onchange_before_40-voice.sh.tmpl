@@ -1,0 +1,29 @@
+#!/bin/bash
+{{- if not (has "voice" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Handy (https://handy.computer) is an offline speech-to-text app: hold a
+# hotkey, talk, and the transcript is typed into the focused window.
+#
+# The packages themselves (handy-bin, openblas) are installed by the shared
+# 20-packages script from the catalogue, and the GPU driver by 35-nvidia. What
+# is left here is the part neither of those can express.
+#
+# openblas is in the catalogue for a reason: handy-bin 0.9.4 links against
+# libopenblas.so.0 but leaves it out of its depends array, and the binary dies
+# at startup without it. Plain openblas is enough -- blas-openblas would also
+# take over the system blas/cblas/lapack providers, which Handy does not need.
+#
+# On the GPU: Handy runs Whisper through whisper.cpp, whose Linux GPU backend
+# is Vulkan rather than CUDA. If a Vulkan device is available Whisper uses it;
+# otherwise it falls back to the CPU, which is several times slower.
+# Non-Whisper models (Parakeet, GigaAM, ...) are CPU-only regardless.
+
+echo ""
+echo "Handy installed. Remaining manual step: launch it once and download a"
+echo "model (Settings -> Model). Whisper Large v3 Turbo (~1.6 GB) is the"
+echo "multilingual, GPU-accelerated one; it handles Russian mixed with"
+echo "English loanwords well. Models land in ~/.config/com.pais.handy/models/."
+{{- end }}

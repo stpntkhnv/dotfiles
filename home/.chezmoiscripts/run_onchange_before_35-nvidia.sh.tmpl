@@ -1,0 +1,41 @@
+#!/bin/bash
+{{- if not .nvidia_driver }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Only reached when init found an NVIDIA card whose driver was missing and you
+# agreed to install it. Re-checked here because the answer is stored in the
+# config and this script may run again on an already-fixed machine.
+#
+# Note what is NOT here: the cuda package. Nothing in this setup uses CUDA --
+# both the desktop and Whisper inside Handy reach the GPU through Vulkan, so a
+# card needs its regular driver and that driver's ICD, nothing more.
+
+if [[ -e /usr/share/vulkan/icd.d/nvidia_icd.json ]]; then
+    echo "==> NVIDIA Vulkan runtime already present, nothing to do."
+    exit 0
+fi
+
+echo "==> Installing the NVIDIA driver and Vulkan runtime..."
+
+# libva-nvidia-driver gives hardware video decoding through VA-API, which is
+# what browsers use to offload video playback.
+pkgs=(nvidia-utils libva-nvidia-driver vulkan-icd-loader)
+
+# nvidia-open supports Turing (RTX 20xx) and newer. Its prebuilt module targets
+# the stock `linux` kernel; any other kernel needs the DKMS build plus that
+# kernel's headers.
+mapfile -t kernels < <(pacman -Qq 2>/dev/null | grep -xE 'linux|linux-lts|linux-zen|linux-hardened' || true)
+if [[ ${#kernels[@]} -eq 1 && ${kernels[0]} == linux ]]; then
+    pkgs+=(nvidia-open)
+else
+    pkgs+=(nvidia-open-dkms)
+    for k in "${kernels[@]}"; do pkgs+=("${k}-headers"); done
+fi
+
+sudo pacman -S --noconfirm --needed "${pkgs[@]}"
+
+echo ""
+echo "!! A reboot is required before the new GPU driver is active."
+{{- end }}

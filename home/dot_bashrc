@@ -12,7 +12,6 @@ export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$PATH"
 # sessions never collide across containers.
 alias digi3='distrobox enter digi3 -- tmux -L digi3 new-session -A -s work'
 alias stellium='distrobox enter stellium -- tmux -L stellium new-session -A -s work'
-alias voice-test='distrobox enter voice-test -- tmux -L voice-test new-session -A -s work'
 alias personal='distrobox enter personal -- tmux -L personal new-session -A -s work'
 
 # --- modern shell tooling ---------------------------------------------------

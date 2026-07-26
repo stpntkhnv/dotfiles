@@ -1,33 +1,38 @@
-{{ if .is_container }}
+{{/*
+   What NOT to deploy. Every condition is now about a feature rather than an
+   environment: the VS Code config shows up wherever VS Code was picked, not
+   wherever "we are in a container". The old host/container split was exactly
+   what stopped one program from reaching both environments.
+
+   Scripts no longer appear here: they live in .chezmoiscripts/, are not
+   targets, and disable themselves in-template (`exit 0` at the top). The
+   separate rule about stripping run_/onchange_/before_ prefixes is gone with
+   them.
+*/}}
+
+{{ if not (has "neovim" .enabled) }}
+.config/nvim/**
+{{ end }}
+
+{{ if not (has "vscode" .enabled) }}
+.config/Code/**
+.config/code-flags.conf
+{{ end }}
+
+{{ if not (has "node" .enabled) }}
+.npmrc
+{{ end }}
+
+{{ if not (has "desktop" .enabled) }}
 .config/niri/**
 .config/DankMaterialShell/**
-.config/distrobox/**
 .asoundrc
 {{ end }}
 
-{{ if not .is_container }}
-.config/nvim/**
-.config/Code/**
-.config/lazygit/**
-.tmux.conf
-.npmrc
-# NOTE: .chezmoiignore matches scripts by their TARGET name, i.e. with the
-# run_/onchange_/before_/after_ attribute prefixes stripped.
-01-install-packages.sh
-install-vscode-extensions.sh
-generate-ssh-key.sh
-set-origin-ssh.sh
+{{ if not (has "distrobox" .enabled) }}
+.config/distrobox/**
 {{ end }}
 
-# Optional-feature install scripts gate themselves on their setup_* flag
-# (rendering to `exit 0` when disabled), so they are not listed here.
-# Plain helper files still need flag-based ignores. Container-only flags
-# are forced to false on the host by .chezmoi.toml.tmpl, so these lines
-# cover the host automatically.
-{{ if not .setup_ziti }}
+{{ if not (has "ziti" .enabled) }}
 bin/update-ziti-hosts.sh
 {{ end }}
-
-# bin/util-linux-fix.sh is fetched by distrobox init_hooks from raw URL, no
-# need to deploy it into ~/bin on either side.
-bin/util-linux-fix.sh

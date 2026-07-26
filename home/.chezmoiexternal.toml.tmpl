@@ -1,0 +1,11 @@
+{{/* Claude's plugins, MCP servers and skills live in a separate repository;
+     this only pulls it in. It used to be cloned unconditionally, even when
+     Claude was not wanted -- now it follows the feature. */}}
+{{ if has "claude" .enabled -}}
+[".local/share/claudefiles"]
+    type = "git-repo"
+    url = "https://github.com/stpntkhnv/claudefiles.git"
+    refreshPeriod = "168h"
+    [".local/share/claudefiles".pull]
+        args = ["--ff-only"]
+{{- end }}

@@ -1,6 +1,6 @@
 # dotfiles
 
-Personal workstation configuration managed with [chezmoi](https://www.chezmoi.io/).
+Arch Linux workstation configuration managed with [chezmoi](https://www.chezmoi.io/).
 
 ## One-line install
 
@@ -8,83 +8,177 @@ Personal workstation configuration managed with [chezmoi](https://www.chezmoi.io
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/install.sh)"
 ```
 
-If the script was recently updated and you're getting stale content from CDN cache, use the GitHub API instead:
+Installs chezmoi (if missing), clones this repo, shows a feature checklist,
+installs what you picked and deploys the configs.
+
+Works the same on a bare host and inside a distrobox container — the
+environment is detected automatically.
+
+If the CDN is serving a stale `install.sh`, fetch it through the API instead:
 
 ```sh
 sh -c "$(curl -fsSL https://api.github.com/repos/stpntkhnv/dotfiles/contents/install.sh -H 'Accept: application/vnd.github.raw')"
 ```
 
-Installs chezmoi (if missing), clones this repo, asks a few setup questions, then installs packages and applies all configs.
+## How it works
 
-## Distrobox containers
+Everything installable is described in one file, `home/.chezmoidata.yaml`.
+Each feature declares its own packages and where it applies:
 
-Always pass `--name <containername>` — distrobox-assemble treats every `[section]` in the INI as a container, including `[base]`, so omitting `--name` will also create a redundant `base` container.
-
-```sh
-distrobox assemble create --name digi3 --file https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/home/dot_config/distrobox/distrobox.ini
+```yaml
+- key: neovim
+  label: "Neovim + LSP, treesitter"
+  scope: both          # both | host | container
+  default: true        # pre-selected in the checklist
+  pacman: [neovim, tree-sitter-cli]
 ```
 
-The `archlinux:latest` base image is bare — it ships with an empty `mirrorlist` and no `Include` for `[extra]`. The chezmoi-driven setup script populates both before the first `pacman -Syu`, so no manual bootstrap is needed.
+At install time that becomes a checklist (space toggles, Enter confirms), and
+the selection is saved to `~/.config/chezmoi/chezmoi.toml` as `data.enabled`.
 
-### Setting up a new container
+Everything else keys off that list:
 
-After creating a container, enter it and run the chezmoi installer:
+- `.chezmoiscripts/run_onchange_before_20-packages.sh.tmpl` assembles flat
+  `pacman` / AUR / `npm` lists from the selected features and installs them.
+  There is no longer a script per program.
+- `.chezmoiignore` decides which configs to deploy by feature rather than by
+  environment: the VS Code config goes wherever VS Code was picked.
+
+A `run_onchange_` hash is computed over the **rendered** text, so changing the
+set of features triggers the install by itself — nothing to run by hand.
+
+### Adding a program
+
+Add a block to `home/.chezmoidata.yaml`. Nothing else needs editing. Fields:
+`key`, `label`, `scope`, optionally `always` (install without asking),
+`default`, `needs` (other features), `pacman`, `aur`, `npm`.
+
+To preview what would run, without applying:
+
+```sh
+chezmoi execute-template < home/.chezmoiscripts/run_onchange_before_20-packages.sh.tmpl
+```
+
+### Changing the selection later
+
+```sh
+chezmoi init --prompt     # re-asks everything, including the checklist
+chezmoi apply
+```
+
+### Non-interactive install
+
+Without a TTY chezmoi falls back from the TUI to line-based input: one feature
+per line, blank line to finish.
+
+```sh
+printf 'Name\nme@example.com\nneovim\nnode\nclaude\n\n' | chezmoi init --apply --no-tty stpntkhnv
+```
+
+Two traps worth knowing about:
+
+- `--promptString` / `--promptBool` are keyed by the **prompt text**, not by
+  the field name in `[data]`: `--promptString "Git user name=Name"`.
+- `--promptMultichoice` in chezmoi 2.71 **does not split its value into a
+  list** — whatever separator you use, it arrives as one string. Use the
+  line-based input above to select several features.
+
+## Always configured
+
+No questions asked, because without these the machine does not work:
+
+- base utilities and shell tooling (starship, eza, bat, fzf, zoxide, tmux);
+- on the host — the niri + DankMaterialShell desktop with fonts, pipewire,
+  portals and sddm;
+- on the host — distrobox and podman;
+- in a container — locale-gen, xauth and the rest of the container-only
+  plumbing.
+
+## Keyboard layout
+
+`us,ru`, switched with **Alt+Shift**, Caps Lock and left Control swapped. Not
+`Win+Space`, because `Mod+Space` is taken by the DMS spotlight.
+
+Configured on three surfaces at once:
+
+| Where | How |
+|---|---|
+| niri session | the `xkb` block in `home/dot_config/niri/config.kdl` |
+| Xorg / Xwayland / sddm login screen | `localectl --no-convert set-x11-keymap` |
+| Console (TTY) | a keymap of its own at `/usr/local/share/kbd/keymaps/us-swapcaps.map` |
+
+The console is handled separately for a reason: a TTY layout is defined by a
+keymap file rather than by xkb options, and systemd's conversion table
+(`/usr/lib/systemd/kbd-model-map`) contains no entry mentioning `swapcaps` —
+without `--no-convert`, localectl would silently settle on plain `us` and
+clobber the swap.
+
+Russian is deliberately absent in the TTY: switching language in the console
+needs a dedicated map such as `ruwin_ctrl`, whose toggle collides with this
+swap. What matters here is having Control under the little finger when
+graphics fail to come up.
+
+## Distrobox
+
+```sh
+distrobox assemble create --name digi3 --file ~/.config/distrobox/distrobox.ini
+```
+
+Always pass `--name`: `distrobox-assemble` treats every INI section as a
+container, including `[base]`, and without a name it will create a redundant
+`base` container too.
+
+The `archlinux:latest` base image ships with an empty `mirrorlist` and no
+`Include` for `[extra]`; the `10-bootstrap-pacman` script fixes both before
+the first `pacman -Syu`, so no manual bootstrap is needed.
+
+Set a container up with the same installer:
 
 ```sh
 distrobox enter <name>
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/install.sh)"
 ```
 
-After that, exit and use the tmux alias (e.g. `personal`, `digi3`, `stellium`).
-
-### util-linux 2.42 workaround (auto-applied)
-
-util-linux 2.42 has a regression in `su --pty` that breaks `distrobox enter` for containers with `init=true` (see [distrobox#2052](https://github.com/89luca89/distrobox/issues/2052) and [util-linux PR#4185](https://github.com/util-linux/util-linux/pull/4185), merged but not yet released).
-
-The manifest's `init_hooks` automatically downgrades util-linux to `2.41.3-2` and pins it via `IgnorePkg` on first container init by fetching `home/bin/util-linux-fix.sh` from this repo. No manual steps required.
-
-Once util-linux 2.42.1+ lands in the Arch repos, remove the `init_hooks` line in the manifest and the `IgnorePkg` lines from `/etc/pacman.conf` in each existing container.
-
-## What gets configured
-
-- niri + DankMaterialShell (host only)
-- bash + starship
-- Neovim
-- tmux
-- Git
-- VS Code + extensions
-- Firefox + Auto Tab Discard
-- Claude Code MCP servers
-
-### Optional features (prompted during init)
-
-| Flag | What it does |
-|------|-------------|
-| `setup_voice` | Offline speech-to-text (see below) |
-| `setup_azure` | Azure CLI, azd, Azure MCP server |
-| `setup_teams` | Teams for Linux with memory limit |
-| `setup_ziti` | OpenZiti edge tunnel + systemd service |
+After that use the `.bashrc` aliases (`digi3`, `stellium`, `personal`); each
+gets its own tmux socket.
 
 ## Voice input
 
-`setup_voice` installs [Handy](https://handy.computer), an offline
-speech-to-text app, plus a `voice_backend` choice (only `handy` for now).
+The `voice` feature installs [Handy](https://handy.computer), an offline
+speech-to-text app.
 
 Handy runs Whisper through whisper.cpp, whose Linux GPU backend is **Vulkan,
-not CUDA** — a GPU only needs its normal driver and Vulkan ICD, and the CUDA
-toolkit does nothing for it. `chezmoi init` probes for an NVIDIA card by
-reading `/sys/bus/pci` (not `lspci`, which a minimal install may lack); if one
-is present without a working Vulkan runtime it offers to install
-`nvidia-open`/`nvidia-utils`. That install needs a reboot, which is why the
-question is asked at init rather than mid-apply. Non-Whisper models (Parakeet,
-GigaAM, …) are CPU-only regardless of the GPU.
+not CUDA**. A card only needs its normal driver and Vulkan ICD; the `cuda`
+package does nothing for it. `chezmoi init` probes for an NVIDIA card by
+reading `/sys/bus/pci` (not `lspci`, which lives in pciutils and may be absent
+on a minimal install) and offers to install the driver if it is missing. That
+question is asked at init rather than mid-apply because the install needs a
+reboot.
 
-Tauri's global-shortcut plugin cannot grab keys on wlroots-style compositors,
-so niri owns the keybind and signals the running process instead —
-`Mod+Shift+D` sends `SIGUSR2`. That binding and `spawn-at-startup` live in
+Tauri cannot grab global shortcuts on wlroots-style compositors, so niri owns
+the keybind and signals the running process instead: **Mod+Shift+D** sends
+`SIGUSR2`. That binding and `spawn-at-startup` live in
 `home/dot_config/niri/voice.kdl.tmpl`, which `config.kdl` includes
-unconditionally and which renders to a comment-only file when voice input is
+unconditionally and which renders to a comment-only file when the feature is
 off.
 
 After installing, launch Handy once and download a model (Settings → Model).
-Whisper Large v3 Turbo (~1.6 GB) is the multilingual GPU-accelerated one.
+Whisper Large v3 Turbo (~1.6 GB) is the multilingual, GPU-accelerated one.
+
+## niri and DankMaterialShell files
+
+`config.kdl` includes several files from `dms/`. The split is:
+
+- `binds.kdl`, `cursor.kdl` — **ours**, kept in the repository;
+- `colors.kdl`, `layout.kdl`, `alttab.kdl`, `outputs.kdl`, `wpblur.kdl` —
+  generated by DMS (they carry an "AUTO-GENERATED BY DMS" header). They are
+  not in the repository and should not be: DMS rewrites them on every theme
+  change, and chezmoi would fight it forever.
+
+The problem was that on a clean machine the generated files do not exist yet,
+and niri has no conditional `include`: it failed to find them, bailed out
+while parsing and fell back to the default config. The
+`run_after_80-niri-dms-placeholders` script creates the missing ones empty —
+an empty KDL document is valid as far as niri is concerned, and DMS overwrites
+them afterwards. The list is read from `config.kdl` itself, so a new `include`
+never requires editing the script.

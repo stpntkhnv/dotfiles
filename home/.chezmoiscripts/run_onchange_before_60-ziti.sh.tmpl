@@ -1,14 +1,17 @@
 #!/bin/bash
-{{ if .setup_ziti -}}
+{{- if not (has "ziti" .enabled) }}
+exit 0
+{{- else }}
 set -euo pipefail
 
-echo "Installing Ziti Edge Tunnel..."
-yay -S --noconfirm --needed ziti-edge-tunnel
+# The ziti-edge-tunnel package is installed by the shared 20-packages script.
+# Only the systemd unit and the identity directory live here, since neither
+# can be expressed in the feature catalogue.
 
 sudo mkdir -p /opt/openziti/etc/identities
 
-echo "Installing Ziti systemd service..."
-sudo tee /etc/systemd/system/ziti-edge-tunnel.service > /dev/null <<'ZITI_UNIT'
+echo "==> Installing the Ziti systemd unit..."
+sudo tee /etc/systemd/system/ziti-edge-tunnel.service >/dev/null <<'ZITI_UNIT'
 [Unit]
 Description=Ziti Edge Tunnel
 After=network-online.target
@@ -28,7 +31,6 @@ ZITI_UNIT
 
 sudo systemctl daemon-reload
 sudo systemctl enable ziti-edge-tunnel
-echo "Ziti service installed. Copy your identity JSON to /opt/openziti/etc/identities/ and run: sudo systemctl start ziti-edge-tunnel"
-{{- else -}}
-exit 0
+
+# The identity reminder lives in run_after_zz-next-steps.sh.
 {{- end }}

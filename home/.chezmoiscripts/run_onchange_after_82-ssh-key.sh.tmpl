@@ -1,0 +1,40 @@
+#!/bin/bash
+set -euo pipefail
+
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+
+generated=false
+
+if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
+    echo "==> Generating an ed25519 key (GitHub, GitLab)..."
+    ssh-keygen -t ed25519 -C "{{ .git_email }}" -f "$HOME/.ssh/id_ed25519" -N ""
+    generated=true
+fi
+
+# Azure DevOps still refuses ed25519 over SSH, hence a separate RSA key.
+if [[ ! -f "$HOME/.ssh/id_rsa" ]]; then
+    echo "==> Generating an RSA-4096 key (Azure DevOps)..."
+    ssh-keygen -t rsa -b 4096 -C "{{ .git_email }}" -f "$HOME/.ssh/id_rsa" -N ""
+    generated=true
+fi
+
+if $generated; then
+    cat <<EOF
+
+=========================================
+ed25519 (GitHub/GitLab):
+=========================================
+$(cat "$HOME/.ssh/id_ed25519.pub")
+
+=========================================
+RSA (Azure DevOps):
+=========================================
+$(cat "$HOME/.ssh/id_rsa.pub")
+
+=========================================
+Add ed25519 to: https://github.com/settings/keys
+Add RSA to:     https://dev.azure.com/<org>/_usersSettings/keys
+=========================================
+EOF
+fi

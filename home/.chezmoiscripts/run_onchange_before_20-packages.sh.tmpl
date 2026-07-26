@@ -1,0 +1,68 @@
+#!/bin/bash
+set -euo pipefail
+
+# The one and only package installer. The lists below are not hand-written:
+# they are assembled from .chezmoidata.yaml for the selected features, which
+# is why this file renders into a flat list. That is the point -- run_onchange_
+# hashes the RENDERED text, so changing the set of features triggers the
+# install by itself, with no manual step and no per-feature script.
+#
+# To see what would run, without applying:
+#   chezmoi execute-template < .chezmoiscripts/run_onchange_before_20-packages.sh.tmpl
+
+{{- $enabled := .enabled }}
+{{- $pacman := list }}
+{{- $aur := list }}
+{{- $npm := list }}
+{{- range .features }}
+{{-   if has .key $enabled }}
+{{-     if hasKey . "pacman" }}{{ $pacman = concat $pacman .pacman }}{{ end }}
+{{-     if hasKey . "aur"    }}{{ $aur    = concat $aur    .aur    }}{{ end }}
+{{-     if hasKey . "npm"    }}{{ $npm    = concat $npm    .npm    }}{{ end }}
+{{-   end }}
+{{- end }}
+{{- $pacman = $pacman | uniq | sortAlpha }}
+{{- $aur = $aur | uniq | sortAlpha }}
+{{- $npm = $npm | uniq | sortAlpha }}
+
+# Selected features: {{ $enabled | join " " }}
+
+echo "==> Installing repository packages ({{ len $pacman }})..."
+sudo pacman -Syu --noconfirm --needed \
+{{ range $i, $p := $pacman }}    {{ $p }}{{ if lt (add1 $i) (len $pacman) }} \{{ end }}
+{{ end }}
+{{ if $aur }}
+# ---- AUR ----------------------------------------------------------------
+# yay is built from source, so it is only needed when something actually
+# comes from the AUR. If paru is already present, prefer it.
+if ! command -v paru &>/dev/null && ! command -v yay &>/dev/null; then
+    echo "==> Building yay..."
+    sudo pacman -S --noconfirm --needed base-devel git
+    tmpdir=$(mktemp -d)
+    git clone --depth 1 https://aur.archlinux.org/yay.git "$tmpdir/yay"
+    (cd "$tmpdir/yay" && makepkg -si --noconfirm)
+    rm -rf "$tmpdir"
+fi
+aur=$(command -v paru || command -v yay)
+
+echo "==> Installing AUR packages ({{ len $aur }})..."
+"$aur" -S --noconfirm --needed \
+{{ range $i, $p := $aur }}    {{ $p }}{{ if lt (add1 $i) (len $aur) }} \{{ end }}
+{{ end }}
+{{- end }}
+{{ if $npm }}
+# ---- npm ----------------------------------------------------------------
+# Everything global goes to ~/.npm-global, which .bashrc keeps on PATH.
+# `npm config set` rewrites ~/.npmrc with an absolute prefix path and creates
+# a permanent conflict with the managed file, so only touch it when it
+# actually disagrees.
+mkdir -p "$HOME/.npm-global"
+if [[ "$(npm config get prefix)" != "$HOME/.npm-global" ]]; then
+    npm config set prefix "$HOME/.npm-global"
+fi
+
+echo "==> Installing global npm packages..."
+npm install -g{{ range $npm }} {{ . | quote }}{{ end }}
+{{- end }}
+
+echo "==> Packages done."
