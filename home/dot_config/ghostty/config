@@ -1,0 +1,25 @@
+# Managed by chezmoi.
+
+# Every window is its own OS process. This is the reason ghostty was picked
+# over daemon-style terminals: five windows with five busy agents cannot slow
+# each other down, and a crash takes out one window, not all of them.
+# Without this, launching via the .desktop file would reuse one GTK process.
+gtk-single-instance = false
+
+# Colors come from DankMaterialShell: matugen renders themes/dankcolors on
+# every theme change (matugenTemplateGhostty in DMS settings). chezmoi only
+# ships an empty placeholder (create_) so a clean machine starts without a
+# missing-theme error; DMS overwrites it and chezmoi never touches it again.
+theme = dankcolors
+
+font-family = JetBrainsMono Nerd Font
+font-size = 11
+
+# niri draws its own borders; a GTK titlebar in a tiling session is dead weight.
+window-decoration = none
+window-padding-x = 8
+window-padding-y = 8
+
+# tmux runs inside and survives the window: closing costs nothing worth a
+# confirmation dialog.
+confirm-close-surface = false

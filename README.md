@@ -94,6 +94,26 @@ No questions asked, because without these the machine does not work:
 - in a container — locale-gen, xauth and the rest of the container-only
   plumbing.
 
+## Terminal
+
+Ghostty, with one non-negotiable setting: `gtk-single-instance = false`.
+Ghostty is a GTK application, and when launched through its .desktop file it
+would otherwise route every new window into one already-running process —
+the classic daemon-terminal behaviour where one window's heavy output makes
+the other four sluggish. With the flag off every window is a separate OS
+process with its own GPU context; parallel agents in parallel windows do not
+share anything.
+
+Colors are not in the repository: DankMaterialShell renders
+`~/.config/ghostty/themes/dankcolors` through matugen on every theme change
+(`matugenTemplateGhostty` in DMS settings). chezmoi ships that file as a
+`create_` placeholder only — an empty theme is valid and merely means default
+colors until DMS runs once; managing the real file would have chezmoi and DMS
+overwrite each other forever, same story as the niri `dms/` includes.
+
+tmux declares `default-terminal = tmux-256color` plus an `RGB` terminal
+feature for `xterm-ghostty`, so truecolor survives inside tmux sessions.
+
 ## Keyboard layout
 
 `us,ru`, switched with **Alt+Shift**, Caps Lock and left Control swapped. Not

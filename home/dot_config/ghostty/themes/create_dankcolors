@@ -1,0 +1,4 @@
+# chezmoi placeholder: DankMaterialShell (matugen) will overwrite this file.
+# It exists so ghostty's `theme = dankcolors` resolves on a clean machine
+# before DMS has generated the real palette. An empty theme is valid: ghostty
+# just falls back to its default colors.

@@ -122,7 +122,6 @@ features:
     scope: host
     always: true
     pacman:
-      - alacritty
       - brightnessctl
       # Optional dependencies that DankMaterialShell actually reaches for --
       # see `pacman -Qi dms-shell`. Without them the shell still starts, but
@@ -135,6 +134,10 @@ features:
       #   tuned-ppd       provides power-profiles-daemon, the power profile switch
       - cava
       - dms-shell-niri
+      # The terminal. Ghostty over a daemon-style terminal on purpose: with
+      # gtk-single-instance=false (set in its config) every window is its own
+      # process, so five busy agents in five windows cannot starve each other.
+      - ghostty
       - gst-plugin-pipewire
       - i2c-tools
       - kimageformats
