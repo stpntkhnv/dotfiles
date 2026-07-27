@@ -1,0 +1,11 @@
+# Umbrella over every host browser: systemd's dash notation makes
+# browser-firefox.slice and browser-chromium.slice children of this one,
+# so the numbers below are the TOTAL budget no matter how many browsers
+# are open. Children still carry their own caps, but can never push the
+# sum past this.
+[Unit]
+Description=Total budget for all browsers
+
+[Slice]
+MemoryHigh=4G
+MemoryMax=6G
