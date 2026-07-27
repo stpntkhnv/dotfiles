@@ -295,6 +295,21 @@ features:
       - bruno-bin
       - posting
 
+  # Three Bitwarden clients on purpose: the desktop app for humans, rbw for
+  # the terminal (agent daemon + pinentry, no master password in shell
+  # history), bws for LLM agents -- a Secrets Manager machine-account token
+  # scoped to a dev project, so Claude/Codex can read API keys but can never
+  # touch the personal vault.
+  - key: bitwarden
+    label: "Passwords: Bitwarden + rbw (terminal) + bws (agent secrets)"
+    scope: both
+    default: true
+    pacman:
+      - bitwarden
+      - rbw
+    aur:
+      - bws-bin
+
   - key: claude
     label: "Claude Code CLI"
     scope: both

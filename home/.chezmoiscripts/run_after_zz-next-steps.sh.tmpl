@@ -37,6 +37,12 @@ if ! compgen -G "$HOME/.cache/huggingface/hub/models--*/snapshots/*/*.gguf" >/de
     steps+=("Handy: no model downloaded -- run 'handy' and pick one in Settings -> Model")
 fi
 {{- end }}
+{{- if has "bitwarden" .enabled }}
+if command -v rbw &>/dev/null && ! rbw unlocked &>/dev/null 2>&1; then
+    [[ -s "$HOME/.config/rbw/config.json" ]] || \
+        steps+=("Bitwarden: rbw not set up -- 'rbw config set email <email>' then 'rbw login'")
+fi
+{{- end }}
 {{- if has "tailscale" .enabled }}
 if command -v tailscale &>/dev/null && ! tailscale status &>/dev/null; then
     steps+=("Tailscale: not connected -- 'sudo tailscale up' (browser auth)")
