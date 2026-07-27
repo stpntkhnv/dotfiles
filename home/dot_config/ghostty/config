@@ -13,7 +13,7 @@ gtk-single-instance = false
 theme = dankcolors
 
 font-family = JetBrainsMono Nerd Font
-font-size = 13
+font-size = 16
 
 # Starting geometry in cells, for windows the compositor lets float; in a
 # niri column the tile wins anyway, so this only sets the floating default.
@@ -40,6 +40,11 @@ mouse-hide-while-typing = true
 # Matugen palettes are generated, not hand-tuned: guarantee text never lands
 # on a background it blends into.
 minimum-contrast = 1.1
+
+# Subtle on purpose: niri has no background-blur protocol, so anything behind
+# the window shows through un-blurred -- much below ~0.9 text fights the
+# wallpaper.
+background-opacity = 0.94
 
 # Newline instead of submit in agent CLIs (Claude Code and friends).
 keybind = shift+enter=text:\n
