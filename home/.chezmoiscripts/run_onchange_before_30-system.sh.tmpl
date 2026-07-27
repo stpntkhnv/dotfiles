@@ -139,6 +139,15 @@ if ! sudo ufw status | grep -q '5353.*ALLOW'; then
     sudo ufw allow mdns
 fi
 {{- end }}
+{{- if has "tailscale" .enabled }}
+
+# Tailscale: enable AND start -- `tailscale up` in the next-steps checklist
+# needs a running daemon, and a reboot in between would lose the reader.
+enable_unit tailscaled.service
+if ! systemctl is-active --quiet tailscaled.service; then
+    sudo systemctl start tailscaled.service
+fi
+{{- end }}
 {{- if has "docker" .enabled }}
 
 # Docker: the socket rather than the daemon -- the socket starts the daemon on

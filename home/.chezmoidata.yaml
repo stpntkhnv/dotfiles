@@ -168,6 +168,16 @@ features:
       - xdg-desktop-portal-gtk
       - xwayland-satellite
 
+  # Tailscale is unconditional on hosts: it is how the user's machines reach
+  # each other (desktop <-> laptop <-> phone), so a box without it is
+  # unreachable. The daemon lives on the host; containers share its network.
+  - key: tailscale
+    label: "Tailscale VPN"
+    scope: host
+    always: true
+    pacman:
+      - tailscale
+
   # distrobox is unconditional: containers are part of the workflow, not an
   # optional extra.
   - key: distrobox

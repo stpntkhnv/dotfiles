@@ -37,6 +37,11 @@ if ! compgen -G "$HOME/.cache/huggingface/hub/models--*/snapshots/*/*.gguf" >/de
     steps+=("Handy: no model downloaded -- run 'handy' and pick one in Settings -> Model")
 fi
 {{- end }}
+{{- if has "tailscale" .enabled }}
+if command -v tailscale &>/dev/null && ! tailscale status &>/dev/null; then
+    steps+=("Tailscale: not connected -- 'sudo tailscale up' (browser auth)")
+fi
+{{- end }}
 {{- if has "docker" .enabled }}
 if ! id -nG "$USER" | grep -qw docker; then
     steps+=("Docker: you are not in the docker group yet -- log out and back in to use it without sudo")
