@@ -6,17 +6,26 @@ set -euo pipefail
 # whichever are still missing. Prints nothing once everything is authenticated.
 
 steps=()
+
+# The one non-local check in this file: ask GitHub whether our key is
+# actually registered. accept-new also seeds known_hosts on a fresh box, so
+# the first real git push does not stop at a host-key prompt. When offline
+# the step shows up spuriously -- harmless, it disappears on the next apply.
+if ! ssh -T -o BatchMode=yes -o ConnectTimeout=4 -o StrictHostKeyChecking=accept-new \
+        git@github.com 2>&1 | grep -q "successfully authenticated"; then
+    steps+=("GitHub SSH: key not registered -- 'cat ~/.ssh/id_ed25519.pub', paste at https://github.com/settings/keys")
+fi
 {{ if has "claude" .enabled }}
 [[ -f "$HOME/.claude/.credentials.json" ]] || \
-    steps+=("Claude Code: not logged in -- run 'claude' and complete /login")
+    steps+=("Claude Code: not logged in -- run 'claude', pick 'Log in' (browser opens claude.ai; /login if you skipped it)")
 {{- end }}
 {{- if has "codex" .enabled }}
 [[ -f "$HOME/.codex/auth.json" ]] || \
-    steps+=("Codex: not logged in -- 'codex login' (browser OAuth) or 'codex login --api-key <key>'")
+    steps+=("Codex: not logged in -- 'codex login' (browser OAuth via chatgpt.com) or 'codex login --api-key <key>'")
 {{- end }}
 {{- if has "gh" .enabled }}
 if command -v gh &>/dev/null && ! gh auth status &>/dev/null; then
-    steps+=("GitHub CLI: not logged in -- 'gh auth login'")
+    steps+=("GitHub CLI: not logged in -- 'gh auth login' (device code at https://github.com/login/device)")
 fi
 {{- end }}
 {{- if has "azure" .enabled }}
@@ -38,9 +47,12 @@ if ! compgen -G "$HOME/.cache/huggingface/hub/models--*/snapshots/*/*.gguf" >/de
 fi
 {{- end }}
 {{- if has "bitwarden" .enabled }}
-if command -v rbw &>/dev/null && ! rbw unlocked &>/dev/null 2>&1; then
+if command -v rbw &>/dev/null; then
     [[ -s "$HOME/.config/rbw/config.json" ]] || \
-        steps+=("Bitwarden: rbw not set up -- 'rbw config set email <email>' then 'rbw login'")
+        steps+=("Bitwarden: account at https://vault.bitwarden.com (register if new), then 'rbw config set email <email>' and 'rbw login'")
+fi
+if command -v bws &>/dev/null && [[ ! -s "$HOME/.config/bws/access-token" ]]; then
+    steps+=("Bitwarden agents: create a Secrets Manager machine account at https://vault.bitwarden.com -> Secrets Manager -> Machine accounts, put its token in ~/.config/bws/access-token (chmod 600)")
 fi
 {{- end }}
 {{- if has "tailscale" .enabled }}
