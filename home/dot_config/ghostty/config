@@ -13,7 +13,7 @@ gtk-single-instance = false
 theme = dankcolors
 
 font-family = JetBrainsMono Nerd Font
-font-size = 16
+font-size = 20
 
 # Starting geometry in cells, for windows the compositor lets float; in a
 # niri column the tile wins anyway, so this only sets the floating default.
