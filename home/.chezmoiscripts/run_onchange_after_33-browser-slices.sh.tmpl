@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+{{- if has "browsers" .enabled }}
+
+# systemd only notices new/edited unit files after a reload. The hashes
+# below re-trigger this script whenever a slice changes:
+# browser-firefox.slice: {{ include "dot_config/systemd/user/browser-firefox.slice" | sha256sum }}
+# browser-chromium.slice: {{ include "dot_config/systemd/user/browser-chromium.slice" | sha256sum }}
+
+systemctl --user daemon-reload
+{{- end }}

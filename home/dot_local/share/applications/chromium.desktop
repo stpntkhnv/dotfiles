@@ -1,0 +1,21 @@
+# Shadows /usr/share/applications/chromium.desktop; see firefox.desktop
+# alongside for why.
+[Desktop Entry]
+Type=Application
+Name=Chromium
+GenericName=Web Browser
+Icon=chromium
+Exec=systemd-run --user --scope --slice=browser-chromium.slice --collect -q /usr/bin/chromium %U
+Terminal=false
+StartupNotify=true
+Categories=Network;WebBrowser;
+MimeType=application/pdf;application/rdf+xml;application/rss+xml;application/xhtml+xml;application/xhtml_xml;application/xml;image/gif;image/jpeg;image/png;image/webp;text/html;text/xml;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/chromium;
+Actions=new-window;incognito;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=systemd-run --user --scope --slice=browser-chromium.slice --collect -q /usr/bin/chromium
+
+[Desktop Action incognito]
+Name=Incognito Window
+Exec=systemd-run --user --scope --slice=browser-chromium.slice --collect -q /usr/bin/chromium --incognito

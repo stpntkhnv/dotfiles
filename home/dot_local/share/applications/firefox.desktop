@@ -1,0 +1,24 @@
+# Shadows /usr/share/applications/firefox.desktop (same filename wins in
+# ~/.local): identical entry, but the browser starts inside
+# browser-firefox.slice so its memory is capped. Kept minimal on purpose --
+# only the keys launchers actually use, not upstream's translation wall.
+[Desktop Entry]
+Type=Application
+Name=Firefox
+GenericName=Web Browser
+Icon=firefox
+Exec=systemd-run --user --scope --slice=browser-firefox.slice --collect -q /usr/lib/firefox/firefox %u
+Terminal=false
+StartupNotify=true
+StartupWMClass=firefox
+Categories=Network;WebBrowser;
+MimeType=application/json;application/pdf;application/rdf+xml;application/rss+xml;application/x-xpinstall;application/xhtml+xml;application/xml;audio/flac;audio/ogg;audio/webm;image/avif;image/gif;image/jpeg;image/png;image/svg+xml;image/webp;text/html;text/xml;video/ogg;video/webm;x-scheme-handler/chrome;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/mailto;
+Actions=new-window;new-private-window;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=systemd-run --user --scope --slice=browser-firefox.slice --collect -q /usr/lib/firefox/firefox --new-window %u
+
+[Desktop Action new-private-window]
+Name=New Private Window
+Exec=systemd-run --user --scope --slice=browser-firefox.slice --collect -q /usr/lib/firefox/firefox --private-window %u

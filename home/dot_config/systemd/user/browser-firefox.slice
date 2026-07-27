@@ -1,0 +1,12 @@
+# All Firefox processes live here (the .desktop override launches it via
+# systemd-run into this slice; extra windows join the first process anyway).
+# MemoryHigh throttles and reclaims well before the cap; MemoryMax is the
+# hard wall -- the kernel OOM-kills inside the slice, the rest of the
+# system never feels it. Tune the numbers here, `systemctl --user
+# daemon-reload`, restart the browser.
+[Unit]
+Description=Firefox resource slice
+
+[Slice]
+MemoryHigh=3G
+MemoryMax=4G

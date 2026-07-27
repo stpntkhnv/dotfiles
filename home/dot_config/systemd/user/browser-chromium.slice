@@ -1,0 +1,7 @@
+# Same idea as browser-firefox.slice; see the comments there.
+[Unit]
+Description=Chromium resource slice
+
+[Slice]
+MemoryHigh=3G
+MemoryMax=4G

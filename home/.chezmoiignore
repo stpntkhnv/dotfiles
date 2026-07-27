@@ -36,6 +36,12 @@
 Pictures/**
 {{ end }}
 
+{{ if not (has "browsers" .enabled) }}
+.config/systemd/user/browser-*.slice
+.local/share/applications/firefox.desktop
+.local/share/applications/chromium.desktop
+{{ end }}
+
 {{ if not (has "ziti" .enabled) }}
 bin/update-ziti-hosts.sh
 {{ end }}
