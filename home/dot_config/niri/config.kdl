@@ -24,10 +24,9 @@ input {
 
             // Alt+Shift cycles layouts. Note: grp:win_space_toggle would
             // collide with Mod+Space (DMS spotlight launcher).
-            // No ctrl:swapcaps any more: it came along from the old
-            // Hyprland config and kept eating Ctrl+Shift+V (the "Ctrl"
-            // key was really Caps Lock). Removed 2026-07-27.
-            options "grp:alt_shift_toggle"
+            // ctrl:swapcaps is DELIBERATE and loved -- the user types
+            // Ctrl on the Caps Lock key. Do not remove it again.
+            options "grp:alt_shift_toggle,ctrl:swapcaps"
         }
 
         // Enable numlock on startup, omitting this setting disables it.
