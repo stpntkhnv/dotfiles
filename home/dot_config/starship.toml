@@ -5,7 +5,8 @@
 palette = "latte"
 add_newline = true
 
-format = "[](fg:surface2)$directory[](fg:surface2 bg:surface1)$git_branch$git_status[](fg:surface1 bg:surface0)$dotnet$nodejs$python$rust$golang$c[](fg:surface0)$fill$cmd_duration$line_break$character "
+# Пустая строка между плашкой и строкой ввода: курсор не липнет к индикатору.
+format = "[](fg:surface2)$directory[](fg:surface2 bg:surface1)$git_branch$git_status[](fg:surface1 bg:surface0)$dotnet$nodejs$python$rust$golang$c[](fg:surface0)$fill$cmd_duration\n\n$character "
 
 [palettes.latte]
 rosewater = "#dc8a78"
