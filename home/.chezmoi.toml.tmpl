@@ -94,12 +94,12 @@
 {{-   end -}}
 {{- end -}}
 
-{{/* autoPush is off on purpose: an apply should not quietly publish to GitHub
-     something you have not looked at yet. autoCommit stays -- a local commit
-     is reversible, a push is not. */}}
+{{/* autoPush went true on 2026-07-27 at the user's request: with autoCommit
+     every change is already recorded, and commits piling up unpushed meant
+     the GitHub copy was silently stale until someone remembered to push. */}}
 [git]
     autoCommit = true
-    autoPush = false
+    autoPush = true
 
 [data]
     git_name = {{ $gitName | quote }}
