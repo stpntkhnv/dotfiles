@@ -48,3 +48,10 @@ background-opacity = 0.94
 
 # Newline instead of submit in agent CLIs (Claude Code and friends).
 keybind = shift+enter=text:\n
+
+# Bind by physical key position (W3C key codes), not the translated
+# character: the default ctrl+shift+v matches the letter "v", which the
+# Russian layout never produces (that key types Cyrillic), so copy/paste
+# went dead on ru.
+keybind = ctrl+shift+KeyC=copy_to_clipboard
+keybind = ctrl+shift+KeyV=paste_from_clipboard

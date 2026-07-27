@@ -238,6 +238,7 @@ features:
   - key: dotnet
     label: ".NET SDK + ASP.NET, freetds, devtunnel"
     scope: both
+    default: true
     pacman:
       - aspnet-runtime
       - aspnet-targeting-pack
