@@ -23,6 +23,7 @@
 #   pacman   Packages from the official repositories.
 #   aur      Packages from the AUR (installed with yay, which is built on demand).
 #   npm      Global npm packages (they land in ~/.npm-global).
+#   dotnet   Global dotnet tools (they land in ~/.dotnet/tools).
 #
 # The order of features here is the order of lines in the checklist.
 
@@ -227,6 +228,7 @@ features:
     pacman:
       - docker
       - docker-buildx
+      - docker-compose
       - lazydocker
 
   - key: go
@@ -248,6 +250,40 @@ features:
       # Not `devtunnel`: no such package in the AUR any more, which is what the
       # old install script tripped over.
       - devtunnel-cli-bin
+    dotnet:
+      - dotnet-ef
+      - csharpier
+      - dotnet-outdated-tool
+
+  - key: rider
+    label: "JetBrains Rider"
+    scope: both
+    default: true
+    needs: [dotnet]
+    aur:
+      - rider
+
+  # Databases themselves run in containers (see docker); these are the
+  # clients. DBeaver rather than DataGrip because Rider bundles the same
+  # database tooling anyway -- DBeaver is the free universal fallback.
+  - key: db-tools
+    label: "DB clients: DBeaver (GUI), lazysql, usql, sqlcmd (TUI)"
+    scope: both
+    default: true
+    pacman:
+      - dbeaver
+    aur:
+      - go-sqlcmd
+      - lazysql-bin
+      - usql-bin
+
+  - key: api-tools
+    label: "API clients: Bruno (GUI), posting (TUI)"
+    scope: both
+    default: true
+    aur:
+      - bruno-bin
+      - posting
 
   - key: claude
     label: "Claude Code CLI"

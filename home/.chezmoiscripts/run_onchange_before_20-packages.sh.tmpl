@@ -14,16 +14,19 @@ set -euo pipefail
 {{- $pacman := list }}
 {{- $aur := list }}
 {{- $npm := list }}
+{{- $dotnet := list }}
 {{- range .features }}
 {{-   if has .key $enabled }}
 {{-     if hasKey . "pacman" }}{{ $pacman = concat $pacman .pacman }}{{ end }}
 {{-     if hasKey . "aur"    }}{{ $aur    = concat $aur    .aur    }}{{ end }}
 {{-     if hasKey . "npm"    }}{{ $npm    = concat $npm    .npm    }}{{ end }}
+{{-     if hasKey . "dotnet" }}{{ $dotnet = concat $dotnet .dotnet }}{{ end }}
 {{-   end }}
 {{- end }}
 {{- $pacman = $pacman | uniq | sortAlpha }}
 {{- $aur = $aur | uniq | sortAlpha }}
 {{- $npm = $npm | uniq | sortAlpha }}
+{{- $dotnet = $dotnet | uniq | sortAlpha }}
 
 # Selected features: {{ $enabled | join " " }}
 
@@ -63,6 +66,16 @@ fi
 
 echo "==> Installing global npm packages..."
 npm install -g{{ range $npm }} {{ . | quote }}{{ end }}
+{{- end }}
+{{ if $dotnet }}
+# ---- dotnet tools ----------------------------------------------------------
+# `tool update` rather than `tool install`: since .NET 8 it installs when the
+# tool is missing and is a no-op when it is current, so the script stays
+# idempotent. Tools land in ~/.dotnet/tools, which .bashrc keeps on PATH.
+echo "==> Installing global dotnet tools..."
+{{- range $dotnet }}
+dotnet tool update -g {{ . | quote }}
+{{- end }}
 {{- end }}
 
 echo "==> Packages done."
