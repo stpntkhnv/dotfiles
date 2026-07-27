@@ -361,6 +361,14 @@ features:
     aur:
       - handy-bin
 
+  # No packages -- this feature only gates the images under home/Pictures/
+  # wallpapers/ (see .chezmoiignore). Separate from `desktop` so a future
+  # machine can skip 7 MB of jpgs without losing the desktop itself.
+  - key: wallpapers
+    label: "Wallpapers into ~/Pictures/wallpapers"
+    scope: host
+    default: true
+
   - key: bluetooth-fix
     label: "Fix for cheap USB Bluetooth dongle (10d7:b012)"
     scope: host

@@ -32,6 +32,10 @@
 .config/distrobox/**
 {{ end }}
 
+{{ if not (has "wallpapers" .enabled) }}
+Pictures/**
+{{ end }}
+
 {{ if not (has "ziti" .enabled) }}
 bin/update-ziti-hosts.sh
 {{ end }}
