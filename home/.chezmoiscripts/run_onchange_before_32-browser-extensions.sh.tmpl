@@ -1,0 +1,39 @@
+#!/bin/bash
+set -euo pipefail
+{{- if and (has "browsers" .enabled) (has "bitwarden" .enabled) }}
+
+# Ship the Bitwarden extension to both browsers through system policies:
+# the browser installs it on next start, no store visit needed.
+# `normal_installed` rather than a force-list on purpose -- the extension
+# arrives enabled but stays removable, this is a personal machine, not a
+# corporate fleet. Both files are wholly owned by this script; anything else
+# that ever needs a browser policy belongs here too.
+
+echo "==> Installing Bitwarden browser extension policies..."
+
+sudo install -d /etc/chromium/policies/managed /etc/firefox/policies
+
+sudo tee /etc/chromium/policies/managed/bitwarden-extension.json >/dev/null <<'EOF'
+{
+  "ExtensionSettings": {
+    "nngceckbapebfimnlniiiahkandclblb": {
+      "installation_mode": "normal_installed",
+      "update_url": "https://clients2.google.com/service/update2/crx"
+    }
+  }
+}
+EOF
+
+sudo tee /etc/firefox/policies/policies.json >/dev/null <<'EOF'
+{
+  "policies": {
+    "ExtensionSettings": {
+      "{446900e4-71c2-419f-a6a7-df9c091e268b}": {
+        "installation_mode": "normal_installed",
+        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi"
+      }
+    }
+  }
+}
+EOF
+{{- end }}
