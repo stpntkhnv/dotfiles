@@ -26,7 +26,6 @@
 {{ if not (has "desktop" .enabled) }}
 .config/niri/**
 .config/DankMaterialShell/**
-.asoundrc
 {{ end }}
 
 {{ if not (has "distrobox" .enabled) }}
