@@ -1,0 +1,56 @@
+#!/bin/bash
+{{- if not (has "zen" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# user.js rather than an enterprise policy: policies cover only a subset of
+# preferences, and Zen hides its profiles behind about:profiles, so there is no
+# stable path to check a file into. user.js is re-applied at every start, which
+# is what we want -- these are not suggestions.
+#
+# Profiles do not exist until Zen has been launched once. Nothing to do then;
+# the reminder lives in run_after_zz-next-steps.sh.
+
+ZEN_ROOT="{{ .chezmoi.homeDir }}/.zen"
+[[ -d "$ZEN_ROOT" ]] || { echo "Zen has not created a profile yet, skipping prefs."; exit 0; }
+
+read -r -d '' PREFS <<'JS' || true
+// Managed by chezmoi -- .chezmoiscripts/run_onchange_after_40-zen-prefs.sh
+
+// ICE otherwise bypasses the proxy and opens direct UDP flows from the host
+// interface, which defeats the whole per-context routing.
+user_pref("media.peerconnection.ice.proxy_only", true);
+
+// Web push is a notification surface during screen sharing.
+user_pref("permissions.default.desktop-notification", 2);
+
+// ext+container: is how a URL carries its container in the link itself.
+// Without the second pref every hand-off stops at a confirmation dialog.
+user_pref("network.protocol-handler.external.ext+container", true);
+user_pref("security.external_protocol_requires_permission", false);
+
+// Passwords live in Bitwarden. Browser autofill would replay the exact leak
+// scenario: a foreign tenant's login page loads, credentials get submitted,
+// the sign-in shows up in that tenant's logs.
+user_pref("signon.rememberSignons", false);
+user_pref("signon.autofillForms", false);
+
+// Memory. fission.autostart is deliberately NOT touched: site isolation costs
+// RAM but breaking it for a few hundred megabytes is a bad trade.
+user_pref("browser.tabs.unloadOnLowMemory", true);
+user_pref("dom.ipc.processCount", 4);
+JS
+
+# Profile directory names contain spaces ("<hash>.Default (alpha)"), hence the
+# quoted glob rather than find/read plumbing.
+found=0
+for prof in "$ZEN_ROOT"/*/; do
+    [[ -e "$prof/prefs.js" || -e "$prof/times.json" ]] || continue
+    printf '%s\n' "$PREFS" > "$prof/user.js"
+    echo "==> Zen prefs written to $prof"
+    found=1
+done
+
+((found)) || echo "No Zen profile directories found under $ZEN_ROOT."
+{{- end }}
