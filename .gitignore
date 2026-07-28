@@ -1,0 +1,4 @@
+# Working documents: specs and plans stay local. They name work
+# contexts and describe the threat model, which is exactly what this
+# repository must not publish.
+docs/
