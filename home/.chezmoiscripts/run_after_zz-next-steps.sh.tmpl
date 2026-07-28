@@ -68,25 +68,38 @@ fi
 
 {{- if eq .env "host" }}
 {{- if has "zen" .enabled }}
-[[ -d "$HOME/.zen" ]] || \
+# Older Zen keeps profiles in ~/.zen, current builds in ~/.config/zen.
+zen_root=""
+for r in "$HOME/.zen" "$HOME/.config/zen"; do
+    [[ -d "$r" ]] && zen_root="$r"
+done
+
+if [[ -z "$zen_root" ]]; then
     steps+=("Zen: never launched -- run 'zen-browser' once, then 'chezmoi apply' to write user.js")
+else
+    compgen -G "$zen_root/*/user.js" >/dev/null 2>&1 || \
+        steps+=("Zen: prefs not applied -- run 'chezmoi apply' with Zen closed")
 
-if [[ -d "$HOME/.zen" ]] && ! compgen -G "$HOME/.zen/*/user.js" >/dev/null 2>&1; then
-    steps+=("Zen: prefs not applied -- run 'chezmoi apply' with Zen closed")
-fi
-
-# The two extensions that carry the container boundary. Policies install them,
-# but a policy that never took (wrong path, Zen ignoring /etc/firefox) fails
-# silently, and a silent failure here means every context shares one cookie jar.
-if [[ -d "$HOME/.zen" ]]; then
+    # The two extensions that carry the container boundary. Policies install
+    # them, but a policy that never took (wrong path, a GUID that matches no
+    # add-on) fails silently, and a silent failure here means every context
+    # shares one cookie jar.
     for ext in "@testpilot-containers" "{f069aec0-43c5-4bbf-b6b4-df95c4326b98}"; do
-        compgen -G "$HOME/.zen/*/extensions/$ext.xpi" >/dev/null 2>&1 || \
+        compgen -G "$zen_root/*/extensions/$ext.xpi" >/dev/null 2>&1 || \
             steps+=("Zen: extension $ext is missing -- check about:policies, install from addons.mozilla.org if the policy did not take")
     done
 fi
 
+# Zen grabs x-scheme-handler/http(s) on its first launch, before user.js can
+# turn browser.shell.checkDefaultBrowser off. Re-assert rather than warn: the
+# script that sets it is run_onchange and will not fire again on its own.
 if [[ "$(xdg-mime query default x-scheme-handler/https 2>/dev/null)" != *[Jj]unction* ]]; then
-    steps+=("Links: Junction is not the default https handler -- run 'chezmoi apply'")
+    if junction_id=$(pacman -Ql junction 2>/dev/null | grep -o '[^/]*\.desktop$' | head -1) && [[ -n "$junction_id" ]]; then
+        xdg-mime default "$junction_id" x-scheme-handler/http x-scheme-handler/https
+        echo "==> Link handler reclaimed from the browser: $junction_id"
+    else
+        steps+=("Links: Junction is not the default https handler and the package is missing")
+    fi
 fi
 {{- end }}
 {{- range .contexts }}

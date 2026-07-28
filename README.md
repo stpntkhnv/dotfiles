@@ -227,7 +227,14 @@ ss -ltnp | grep -E '1108[0-9]'                                   # bridges liste
 ls -l ~/.local/share/wsproxy/*/socks.sock                        # containers answer
 curl -s --socks5-hostname 127.0.0.1:11081 https://api.ipify.org  # end to end
 distrobox enter digi3 -- ls /mnt/sockets                         # only its own socket
+ls ~/.config/zen/*/extensions/                                   # policy took
 ```
+
+Extensions arrive through a system policy file, and its directory is derived
+from the application name: Zen reads `/etc/zen/policies/policies.json`, not
+`/etc/firefox/policies/policies.json`. A policy at the wrong path is silent --
+the browser starts normally and simply has no extensions, which means no
+container boundary. Hence the last check above, and `about:policies` -> Active.
 
 ### Routing test
 

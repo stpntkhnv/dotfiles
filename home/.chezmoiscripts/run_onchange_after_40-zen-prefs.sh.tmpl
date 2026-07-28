@@ -12,8 +12,12 @@ set -euo pipefail
 # Profiles do not exist until Zen has been launched once. Nothing to do then;
 # the reminder lives in run_after_zz-next-steps.sh.
 
-ZEN_ROOT="{{ .chezmoi.homeDir }}/.zen"
-[[ -d "$ZEN_ROOT" ]] || { echo "Zen has not created a profile yet, skipping prefs."; exit 0; }
+# Two roots because Zen moved: older builds keep profiles in ~/.zen, current
+# ones in ~/.config/zen. Whichever exists gets the prefs; both, if both do.
+ZEN_ROOTS=(
+    "{{ .chezmoi.homeDir }}/.zen"
+    "{{ .chezmoi.homeDir }}/.config/zen"
+)
 
 read -r -d '' PREFS <<'JS' || true
 // Managed by chezmoi -- .chezmoiscripts/run_onchange_after_40-zen-prefs.sh
@@ -40,17 +44,27 @@ user_pref("signon.autofillForms", false);
 // RAM but breaking it for a few hundred megabytes is a bad trade.
 user_pref("browser.tabs.unloadOnLowMemory", true);
 user_pref("dom.ipc.processCount", 4);
+
+// Zen claims x-scheme-handler/http(s) on first launch and writes itself into
+// mimeapps.list as userapp-Zen-*.desktop. That silently replaces the link
+// picker: every link would then open in whatever container the current
+// workspace uses. The default handler must stay Junction.
+user_pref("browser.shell.checkDefaultBrowser", false);
 JS
 
 # Profile directory names contain spaces ("<hash>.Default (alpha)"), hence the
-# quoted glob rather than find/read plumbing.
+# quoted glob rather than find/read plumbing. "Profile Groups" is a Zen
+# bookkeeping directory, not a profile, and carries neither marker file.
 found=0
-for prof in "$ZEN_ROOT"/*/; do
-    [[ -e "$prof/prefs.js" || -e "$prof/times.json" ]] || continue
-    printf '%s\n' "$PREFS" > "$prof/user.js"
-    echo "==> Zen prefs written to $prof"
-    found=1
+for root in "${ZEN_ROOTS[@]}"; do
+    [[ -d "$root" ]] || continue
+    for prof in "$root"/*/; do
+        [[ -e "$prof/prefs.js" || -e "$prof/times.json" ]] || continue
+        printf '%s\n' "$PREFS" > "$prof/user.js"
+        echo "==> Zen prefs written to $prof"
+        found=1
+    done
 done
 
-((found)) || echo "No Zen profile directories found under $ZEN_ROOT."
+((found)) || echo "Zen has not created a profile yet, skipping prefs."
 {{- end }}

@@ -3,19 +3,24 @@ set -euo pipefail
 {{- if or (has "browsers" .enabled) (has "zen" .enabled) }}
 
 # Extensions arrive through system policies: the browser installs them on next
-# start, no store visit needed. Both files are wholly owned by this script;
-# anything else that ever needs a browser policy belongs here too.
+# start, no store visit needed. Every file below is wholly owned by this
+# script; anything else that ever needs a browser policy belongs here too.
 #
-# /etc/firefox/policies is read by Firefox forks as well, Zen included: the
-# path is a literal in the Mozilla source, not derived from the app name.
-# Verify after the first launch with about:policies -> Active.
+# The system policy directory is /etc/<MOZ_APP_NAME>/policies, derived from the
+# app name -- NOT a literal /etc/firefox that every fork honours. Zen builds
+# with MOZ_APP_NAME=zen (see RemotingName in /opt/zen-browser-bin/
+# application.ini), so it reads /etc/zen/policies/policies.json and ignores the
+# Firefox one entirely. Getting this wrong is silent: the browser starts fine,
+# reports no error, and simply has no extensions.
 #
-# That path also WINS over the app directory, so writing it discards whatever
-# the package shipped in /opt/zen-browser-bin/distribution/policies.json.
-# DisableAppUpdate and DefaultSerialGuardSetting are carried over from there:
-# without the first, a pacman-installed browser starts updating itself behind
-# pacman's back. Both are correct for Firefox too, which is equally
-# pacman-managed here.
+# That directory WINS over <appdir>/distribution/policies.json, so writing it
+# discards what the package shipped. DisableAppUpdate and
+# DefaultSerialGuardSetting are carried over from there: without the first, a
+# pacman-installed browser starts updating itself behind pacman's back.
+#
+# The two browsers get different extension sets. Zen is the one carrying work
+# contexts, so it gets the container stack; Firefox is the everything-else
+# browser and only wants the password manager.
 #
 # installation_mode is not uniform, and the split is the point:
 #   force_installed  -- Multi-Account Containers and Open external links. These
@@ -27,15 +32,35 @@ set -euo pipefail
 #
 # GUIDs come from the AMO API (addons.mozilla.org/api/v5/addons/addon/<slug>/),
 # not from guessing: a wrong key installs nothing and says nothing.
-{{- $exts := list }}
+{{- $bitwarden := dict "guid" "{446900e4-71c2-419f-a6a7-df9c091e268b}" "slug" "bitwarden-password-manager" "mode" "normal_installed" }}
+{{- $zenExts := list }}
 {{- if has "zen" .enabled }}
-{{-   $exts = append $exts (dict "guid" "@testpilot-containers"                  "slug" "multi-account-containers" "mode" "force_installed") }}
-{{-   $exts = append $exts (dict "guid" "{f069aec0-43c5-4bbf-b6b4-df95c4326b98}" "slug" "open-url-in-container"    "mode" "force_installed") }}
-{{-   $exts = append $exts (dict "guid" "{c607c8df-14a7-4f28-894f-29e8722976af}" "slug" "temporary-containers"     "mode" "normal_installed") }}
+{{-   $zenExts = append $zenExts (dict "guid" "@testpilot-containers"                  "slug" "multi-account-containers" "mode" "force_installed") }}
+{{-   $zenExts = append $zenExts (dict "guid" "{f069aec0-43c5-4bbf-b6b4-df95c4326b98}" "slug" "open-url-in-container"    "mode" "force_installed") }}
+{{-   $zenExts = append $zenExts (dict "guid" "{c607c8df-14a7-4f28-894f-29e8722976af}" "slug" "temporary-containers"     "mode" "normal_installed") }}
+{{-   if has "bitwarden" .enabled }}{{ $zenExts = append $zenExts $bitwarden }}{{ end }}
 {{- end }}
-{{- if has "bitwarden" .enabled }}
-{{-   $exts = append $exts (dict "guid" "{446900e4-71c2-419f-a6a7-df9c091e268b}" "slug" "bitwarden-password-manager" "mode" "normal_installed") }}
+{{- $ffExts := list }}
+{{- if and (has "browsers" .enabled) (has "bitwarden" .enabled) }}
+{{-   $ffExts = append $ffExts $bitwarden }}
 {{- end }}
+
+# $1 is the /etc directory of one Gecko application, $2 the already-rendered
+# body of ExtensionSettings (empty for none).
+write_gecko_policy() {
+    local dir="$1" exts="$2" settings=""
+    [[ -n "$exts" ]] && settings=$(printf ',\n    "ExtensionSettings": {\n%s\n    }' "$exts")
+    sudo install -d "$dir/policies"
+    sudo tee "$dir/policies/policies.json" >/dev/null <<EOF
+{
+  "policies": {
+    "DisableAppUpdate": true,
+    "DefaultSerialGuardSetting": 3$settings
+  }
+}
+EOF
+    echo "==> Policy written: $dir/policies/policies.json"
+}
 
 echo "==> Installing browser extension policies..."
 {{- if and (has "browsers" .enabled) (has "bitwarden" .enabled) }}
@@ -52,22 +77,14 @@ sudo tee /etc/chromium/policies/managed/bitwarden-extension.json >/dev/null <<'E
 }
 EOF
 {{- end }}
+{{- range $app := list (dict "dir" "/etc/firefox" "exts" $ffExts "on" (has "browsers" .enabled)) (dict "dir" "/etc/zen" "exts" $zenExts "on" (has "zen" .enabled)) }}
+{{- if $app.on }}
 
-sudo install -d /etc/firefox/policies
-sudo tee /etc/firefox/policies/policies.json >/dev/null <<'EOF'
-{
-  "policies": {
-    "DisableAppUpdate": true,
-    "DefaultSerialGuardSetting": 3{{ if $exts }},
-    "ExtensionSettings": {
-{{- range $i, $e := $exts }}
-      {{ if $i }},{{ end }}"{{ $e.guid }}": {
+write_gecko_policy {{ $app.dir }} '{{ range $i, $e := $app.exts }}{{ if $i }},
+{{ end }}      "{{ $e.guid }}": {
         "installation_mode": "{{ $e.mode }}",
         "install_url": "https://addons.mozilla.org/firefox/downloads/latest/{{ $e.slug }}/latest.xpi"
-      }
+      }{{ end }}'
 {{- end }}
-    }{{ end }}
-  }
-}
-EOF
+{{- end }}
 {{- end }}
