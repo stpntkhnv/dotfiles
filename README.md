@@ -206,7 +206,7 @@ Per context:
 Zen container "digi3"
   -> SOCKS5 127.0.0.1:11081            (host, wsproxy-digi3.service)
   -> ~/.local/share/wsproxy/digi3/socks.sock
-  -> /mnt/sockets/socks.sock           (container, wsproxy-bridge.service)
+  -> /var/lib/wsproxy/socks.sock       (container, wsproxy-bridge.service)
   -> 127.0.0.1:1080                    (container, wsproxy-socks.service)
   -> digi3's netns / resolver / VPN
 ```
@@ -226,7 +226,7 @@ After changing anything:
 ss -ltnp | grep -E '1108[0-9]'                                   # bridges listen
 ls -l ~/.local/share/wsproxy/*/socks.sock                        # containers answer
 curl -s --socks5-hostname 127.0.0.1:11081 https://api.ipify.org  # end to end
-distrobox enter digi3 -- ls /mnt/sockets                         # only its own socket
+distrobox enter digi3 -- ls /var/lib/wsproxy                     # only its own socket
 ls ~/.config/zen/*/extensions/                                   # policy took
 ```
 

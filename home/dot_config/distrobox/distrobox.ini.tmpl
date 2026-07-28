@@ -52,5 +52,12 @@ home={{ $.chezmoi.homeDir }}/homes/{{ .name }}
 # context's SOCKS socket. Per-context and NOT shared: one common directory
 # would let any container dial another container's proxy and leave through the
 # wrong VPN, which is exactly the correlation this whole thing prevents.
-additional_flags="--memory=8g --volume {{ $.chezmoi.homeDir }}/.local/share/wsproxy/{{ .name }}:/mnt/sockets:rw"
+#
+# /var/lib and not /mnt: distrobox-init bind-mounts the host's /mnt (along with
+# /media, /run/media and /var/mnt) over the container's at every start, which
+# lands ON TOP of a podman volume placed there and hides it. The mount stays
+# listed in /proc/self/mountinfo, so the failure reads as "mounted but the
+# directory does not exist". Nothing under /var/lib is claimed except
+# /var/lib/libvirt.
+additional_flags="--memory=8g --volume {{ $.chezmoi.homeDir }}/.local/share/wsproxy/{{ .name }}:/var/lib/wsproxy:rw"
 {{ end }}
