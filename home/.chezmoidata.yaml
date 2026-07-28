@@ -91,6 +91,11 @@ features:
   # Packages that are only useful inside distrobox: locale-gen for container
   # locales, xauth for X11 forwarding to the host, nss-mdns to resolve .local,
   # and sox/mesa/vte-common for applications exported back to the host.
+  #
+  # microsocks and socat publish this container's egress to the host browser
+  # over a UNIX socket, which is how a Zen container gets its own network
+  # without the browser living in here. nftables is there for the opt-in
+  # kill-switch and does nothing until that feature is selected.
   - key: container-base
     label: "Container plumbing"
     scope: container
@@ -99,7 +104,10 @@ features:
       - alsa-plugins
       - glibc-locales
       - mesa
+      - microsocks
+      - nftables
       - nss-mdns
+      - socat
       - sox
       - vte-common
       - words
