@@ -48,10 +48,11 @@ Pictures/**
 .local/share/applications/zen.desktop
 {{ end }}
 
-{{/* The umbrella belongs to whichever browsers exist, so it only goes away
-     when none of them do. */}}
+{{/* The umbrella and the launcher helper belong to whichever browsers exist,
+     so they only go away when none of them do. */}}
 {{ if and (not (has "browsers" .enabled)) (not (has "zen" .enabled)) }}
 .config/systemd/user/browser.slice
+.local/bin/slice-run
 {{ end }}
 
 {{ if not (has "ziti" .enabled) }}

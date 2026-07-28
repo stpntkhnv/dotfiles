@@ -5,7 +5,7 @@ Type=Application
 Name=Chromium
 GenericName=Web Browser
 Icon=chromium
-Exec=systemd-run --user --scope --slice=browser-chromium.slice --collect -q /usr/bin/chromium %U
+Exec={{ .chezmoi.homeDir }}/.local/bin/slice-run browser-chromium.slice /usr/bin/chromium %U
 Terminal=false
 StartupNotify=true
 Categories=Network;WebBrowser;
@@ -14,8 +14,8 @@ Actions=new-window;incognito;
 
 [Desktop Action new-window]
 Name=New Window
-Exec=systemd-run --user --scope --slice=browser-chromium.slice --collect -q /usr/bin/chromium
+Exec={{ .chezmoi.homeDir }}/.local/bin/slice-run browser-chromium.slice /usr/bin/chromium
 
 [Desktop Action incognito]
 Name=Incognito Window
-Exec=systemd-run --user --scope --slice=browser-chromium.slice --collect -q /usr/bin/chromium --incognito
+Exec={{ .chezmoi.homeDir }}/.local/bin/slice-run browser-chromium.slice /usr/bin/chromium --incognito

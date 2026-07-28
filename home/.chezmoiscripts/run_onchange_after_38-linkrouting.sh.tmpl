@@ -32,14 +32,20 @@ enc=$(printf '%s' "$url" | jq -sRr @uri)
 uri="ext+container:name=${ctx}&url=${enc}"
 
 # Detached so the caller returns immediately, and inside the memory slice so a
-# cold start from a link is capped the same way a launcher start is.
-if [ -n "${XDG_RUNTIME_DIR:-}" ] && command -v systemd-run >/dev/null 2>&1; then
-    setsid systemd-run --user --scope --slice=browser-zen.slice --collect -q -- \
-        /usr/bin/zen-browser "$uri" >/dev/null 2>&1 &
+# cold start from a link is capped the same way a launcher start is. slice-run
+# rather than a bare systemd-run: this is reached from a .desktop through the
+# panel, where a second auto-named scope for one PID collides.
+SLICE_RUN="__HOME__/.local/bin/slice-run"
+if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -x "$SLICE_RUN" ]; then
+    setsid "$SLICE_RUN" browser-zen.slice /usr/bin/zen-browser "$uri" >/dev/null 2>&1 &
 else
     setsid /usr/bin/zen-browser "$uri" >/dev/null 2>&1 &
 fi
 OPEN
+
+# The heredoc above is quoted so the shell inside it stays literal; the one
+# value that must come from chezmoi is patched in afterwards.
+sudo sed -i 's|__HOME__|{{ .chezmoi.homeDir }}|' /usr/local/bin/zen-open
 
 sudo chmod 755 /usr/local/bin/zen-open
 

@@ -1,0 +1,20 @@
+#!/bin/sh
+# Run a command in its own transient scope inside a given user slice.
+#
+# Why this exists: the panel (DMS) already wraps .desktop Exec lines in
+# `systemd-run --user --scope`. A second bare `systemd-run --scope` inside
+# Exec derives the same auto unit name (run-p<PID>-i<invocation>.scope) for
+# the same PID and dies with "Unit ... was already loaded". Passing an
+# explicit --unit sidesteps the collision, so launching works from the panel
+# and from a shell alike.
+#
+# Usage: slice-run <slice-name> <command> [args...]
+set -eu
+
+slice=$1
+shift
+
+exec systemd-run --user --scope \
+	--slice="$slice" \
+	--unit="${slice%.slice}-$$" \
+	--collect -q -- "$@"
