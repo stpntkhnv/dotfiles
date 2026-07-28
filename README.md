@@ -283,59 +283,57 @@ for c in digi3 stellium personal; do
 done
 ```
 
+### Set up automatically
+
+The parts that used to be twenty minutes of clicking now come out of
+`contexts:` like everything else:
+
+| What | How |
+|---|---|
+| Containers, with names, colours and icons | the `Containers` enterprise policy, which replaces the built-in set on a fresh profile |
+| A SOCKS proxy and remote DNS per container | a generated extension, `/usr/local/lib/zen-context-proxy.xpi`, installed `force_installed` from a `file://` URL |
+| One space per context, bound to its container | `run_after_43-zen-spaces.sh` writes `zen-sessions.jsonlz4` |
+
+The extension exists because doing this in Multi-Account Containers by hand
+had two silent failure modes: `socks5://` parses to nothing there, and the
+proxy field does not appear at all until an optional permission is granted.
+Neither says a word when it goes wrong. It also creates any container it
+cannot find by name, which closes the last one -- a hand-typed name that
+matches nothing.
+
+Do **not** also set proxies in Multi-Account Containers. One owner is enough,
+and two disagreeing ones would be invisible.
+
+The space seeding is deliberately timid, because that file also holds every
+open tab and the format is Zen's internal one. It refuses if Zen is running,
+if the profile has any tab, or if a space is already named after a context.
+So on a fresh machine: `chezmoi apply`, launch Zen once so the profile and
+containers exist, quit, `chezmoi apply` again.
+
 ### Configured by hand
 
-Browser profile state has no update-proof file representation, so this part is
-manual, once:
+What is left, once:
 
-1. **Proxy permission.** Multi-Account Containers -> Manage Extension ->
-   Optional Permissions -> *Allow extension to control proxy settings*.
-   Without it the per-container proxy field does not appear at all.
-2. **Containers.** Multi-Account Containers -> create `digi3`, `stellium`,
-   `personal`, `scratch`. The names must match `contexts:` exactly, case
-   included: `zen-open` substitutes them into `ext+container:name=...`
-   verbatim, and `opener.js` creates any name it fails to find -- so a typo
-   yields a real container with **no proxy** and no warning.
-3. **Proxy per container.** Edit the container -> *Advanced proxy settings*:
-
-   ```
-   digi3      socks://127.0.0.1:11081
-   stellium   socks://127.0.0.1:11082
-   personal   socks://127.0.0.1:11083
-   scratch    (empty)
-   ```
-
-   `socks://` and not `socks5://`: the extension parses the scheme with
-   `/(https?)|(socks4?)/`, so `socks5://` matches nothing and the proxy is
-   dropped silently. In Gecko, `socks` already means SOCKS5.
-
-   There is no proxyDNS checkbox; the extension sets `proxyDNS` itself for any
-   socks proxy. It follows that a scheme typo also costs remote DNS: names
-   then resolve on the host, internal ones do not resolve at all, and the list
-   of internal hosts leaks outward.
-4. **Workspaces.** One per context. `Set Profile` on a workspace picks a
-   **container**, not a Firefox profile; real profiles are hidden behind
-   `about:profiles`.
-5. **Temporary Containers** -> automatic mode.
-6. **Container sync off.** Multi-Account Containers -> *Enable
+1. **Temporary Containers** -> automatic mode.
+2. **Container sync off.** Multi-Account Containers -> *Enable
    synchronization* shares container names and site assignments through a
    Firefox Account. That is a list of every context and its domains, held in
    one place off this machine.
-7. **"Always Open in Container" rules** go **only** on domains unique to one
+3. **"Always Open in Container" rules** go **only** on domains unique to one
    context. Never on shared ones such as `dev.azure.com`, `portal.azure.com`,
    `teams.microsoft.com` or `login.microsoftonline.com`: a domain rule *pulls*
    a link out of its current container.
-8. **Bookmarks** rewritten as `ext+container:name=<Context>&url=<encoded>`. The
+4. **Bookmarks** rewritten as `ext+container:name=<Context>&url=<encoded>`. The
    container belongs in the link, not in the ambient context: otherwise a
    bookmark for stellium clicked from the digi3 workspace lands in digi3.
    `zen-open <context> <url>` builds the string; it is then visible in the
    address bar of the tab it opens.
-9. **Pinned tabs and Essentials** per workspace, so reaching a frequent
+5. **Pinned tabs and Essentials** per workspace, so reaching a frequent
    resource needs neither a typed address nor a bookmark.
-10. **Bitwarden**: auto-fill on page load off; URI match detection `Never` for
-    the shared Microsoft domains, `Host` for unique ones; one account per
-    context.
-11. `about:logins` emptied.
+6. **Bitwarden**: auto-fill on page load off; URI match detection `Never` for
+   the shared Microsoft domains, `Host` for unique ones; one account per
+   context.
+7. `about:logins` emptied.
 
 Not available, despite what an earlier version of this file claimed: *Open
 external links in a container* 1.0.3 has no HMAC signing and no options page

@@ -1,0 +1,144 @@
+#!/bin/bash
+{{- if not (has "zen" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# A ~60-line extension that replaces the fiddliest part of the manual setup:
+# assigning a SOCKS proxy to each Firefox container by hand in Multi-Account
+# Containers. Doing it by hand cost two silent failure modes -- "socks5://"
+# parses to nothing there, and the proxy field does not even appear until an
+# optional permission is granted -- and neither says a word when it goes wrong.
+#
+# Here the table comes from `contexts` in .chezmoidata.yaml, the same source as
+# the host bridges and the container units, so a port can no longer disagree
+# with itself. The extension also CREATES any missing container, which closes
+# the last hole: a name typed by hand that matches nothing gets silently
+# created without a proxy.
+#
+# The config is baked into the XPI rather than delivered through the 3rdparty
+# policy and storage.managed. One less moving part, and the file is rebuilt on
+# every apply anyway. Policies.sys.mjs:3721 skips its "same addon, don't
+# reinstall" shortcut for file: URLs, so a rebuilt XPI is picked up on the next
+# start with no version juggling.
+#
+# Unsigned, which works because Zen ships MOZ_REQUIRE_SIGNING: false and
+# xpinstall.signatures.required = false. If a future build flips either, the
+# extension stops loading -- run_after_zz-next-steps.sh checks for it.
+
+XPI=/usr/local/lib/zen-context-proxy.xpi
+BUILD=$(mktemp -d)
+trap 'rm -rf "$BUILD"' EXIT
+
+cat > "$BUILD/manifest.json" <<'MANIFEST'
+{
+  "manifest_version": 2,
+  "name": "Work context proxy",
+  "description": "Routes each work container through its own SOCKS5 channel.",
+  "version": "1.0.0",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "context-proxy@dotfiles.local",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": [
+    "proxy",
+    "tabs",
+    "contextualIdentities",
+    "cookies",
+    "<all_urls>"
+  ],
+  "background": { "scripts": ["background.js"] }
+}
+MANIFEST
+
+# CONTEXTS carries a proxy; SCRATCH exists but deliberately gets none, so a
+# link with no work session attached leaves through the host.
+cat > "$BUILD/background.js" <<EOF
+const CONTEXTS = [
+{{- range $i, $c := .contexts }}
+  { name: {{ $c.name | quote }}, port: {{ $c.socks }}, color: "{{ index (list "blue" "green" "purple" "orange" "red" "yellow" "pink" "cyan") (mod $i 8) }}", icon: "briefcase" },
+{{- end }}
+];
+const SCRATCH = { name: "scratch", color: "gray", icon: "circle" };
+EOF
+
+cat >> "$BUILD/background.js" <<'JS'
+
+let byStore = new Map();
+let ready = null;
+
+// Named lookup, not a stored id: container ids are assigned in creation order
+// and differ between machines, so anything that pins one goes stale silently.
+async function resolve(spec) {
+    let found = await browser.contextualIdentities.query({ name: spec.name });
+    if (found.length) {
+        return found[0];
+    }
+    return await browser.contextualIdentities.create({
+        name: spec.name,
+        color: spec.color,
+        icon: spec.icon,
+    });
+}
+
+async function rebuild() {
+    const next = new Map();
+    for (const spec of CONTEXTS) {
+        try {
+            const identity = await resolve(spec);
+            next.set(identity.cookieStoreId, {
+                type: "socks",          // "socks" is SOCKS5; "socks4" is the old one
+                host: "127.0.0.1",
+                port: spec.port,
+                proxyDNS: true,         // names resolve inside the container, not here
+            });
+        } catch (e) {
+            console.error(`context-proxy: ${spec.name}: ${e}`);
+        }
+    }
+    try {
+        await resolve(SCRATCH);
+    } catch (e) {
+        console.error(`context-proxy: scratch: ${e}`);
+    }
+    byStore = next;
+}
+
+async function handler(info) {
+    // No tab means no container to attribute the request to. Firefox sends
+    // these for some internal fetches; they go direct, same as in
+    // Multi-Account Containers.
+    if (info.tabId < 0) {
+        return {};
+    }
+    if (ready) {
+        await ready;
+    }
+    let tab;
+    try {
+        tab = await browser.tabs.get(info.tabId);
+    } catch (e) {
+        return {};
+    }
+    return byStore.get(tab.cookieStoreId) || {};
+}
+
+browser.proxy.onRequest.addListener(handler, { urls: ["<all_urls>"] });
+
+for (const event of ["onCreated", "onRemoved", "onUpdated"]) {
+    browser.contextualIdentities[event].addListener(() => {
+        ready = rebuild();
+    });
+}
+
+ready = rebuild();
+JS
+
+( cd "$BUILD" && zip -q -r -X extension.xpi manifest.json background.js )
+
+sudo install -d /usr/local/lib
+sudo install -m 644 "$BUILD/extension.xpi" "$XPI"
+echo "==> Context proxy extension built: $XPI"
+{{- end }}

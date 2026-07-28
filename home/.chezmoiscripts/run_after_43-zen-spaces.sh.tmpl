@@ -1,0 +1,147 @@
+#!/bin/bash
+{{- if or (ne .env "host") (not (has "zen" .enabled)) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Seeds one Zen space per work context, each bound to its container, so a fresh
+# machine needs no clicking. run_after_ rather than run_onchange_: what it does
+# depends on the state of the profile, not on the state of this file, and it
+# has to re-evaluate that on every apply.
+#
+# Deliberately conservative. Spaces live in zen-sessions.jsonlz4, which also
+# holds every open tab, folder and group, and the format is Zen's internal one
+# with no compatibility promise. So this writes ONLY into an untouched profile
+# and refuses in every other case:
+#   * Zen running        -- it would overwrite the file on exit anyway
+#   * any open tab       -- not an untouched profile
+#   * a space already named after a context -- already done, or done by hand
+#
+# containerTabId is a userContextId read from containers.json rather than
+# predicted. The Containers policy does number them 1..N in array order, but
+# reading beats predicting when a profile can also be older than the policy.
+
+python3 - <<'PY'
+import json, os, glob, subprocess, uuid, sys
+
+HOME = os.path.expanduser("~")
+CONTEXTS = [
+{{- range .contexts }}
+    {{ .name | quote }},
+{{- end }}
+]
+
+
+def mozlz4_compress(data):
+    # Literals-only LZ4 block: valid by spec, since the final sequence must be
+    # literals with no match and one run covering the input is exactly that.
+    # Zen reads it back through the standard decoder.
+    out = bytearray()
+    n = len(data)
+    out.append((15 if n >= 15 else n) << 4)
+    if n >= 15:
+        rem = n - 15
+        while rem >= 255:
+            out.append(255)
+            rem -= 255
+        out.append(rem)
+    out += data
+    return b"mozLz40\0" + n.to_bytes(4, "little") + bytes(out)
+
+
+def mozlz4_decompress(raw):
+    if raw[:8] != b"mozLz40\0":
+        raise ValueError("not a mozlz4 file")
+    src, out, i = raw[12:], bytearray(), 0
+    while i < len(src):
+        token = src[i]
+        i += 1
+        ln = token >> 4
+        if ln == 15:
+            while True:
+                b = src[i]
+                i += 1
+                ln += b
+                if b != 255:
+                    break
+        out += src[i:i + ln]
+        i += ln
+        if i >= len(src):
+            break
+        off = src[i] | (src[i + 1] << 8)
+        i += 2
+        ml = token & 0xF
+        if ml == 15:
+            while True:
+                b = src[i]
+                i += 1
+                ml += b
+                if b != 255:
+                    break
+        ml += 4
+        start = len(out) - off
+        for k in range(ml):
+            out.append(out[start + k])
+    return bytes(out)
+
+
+def profiles():
+    for root in (f"{HOME}/.zen", f"{HOME}/.config/zen"):
+        for path in sorted(glob.glob(f"{root}/*/")):
+            if os.path.exists(path + "containers.json"):
+                yield path.rstrip("/")
+
+
+def skip(reason):
+    print(f"==> Zen spaces: {reason}")
+    sys.exit(0)
+
+
+if subprocess.run(["pgrep", "-x", "zen-bin"], capture_output=True).returncode == 0:
+    skip("Zen is running, not touching its session")
+
+seeded = False
+for profile in profiles():
+    session = f"{profile}/zen-sessions.jsonlz4"
+    if not os.path.exists(session):
+        continue
+
+    ids = {}
+    with open(f"{profile}/containers.json") as fh:
+        for identity in json.load(fh).get("identities", []):
+            if identity.get("public", True) and identity.get("name"):
+                ids[identity["name"]] = identity["userContextId"]
+
+    missing = [name for name in CONTEXTS if name not in ids]
+    if missing:
+        skip(f"no container yet for {', '.join(missing)} -- launch Zen once first")
+
+    data = json.loads(mozlz4_decompress(open(session, "rb").read()))
+    if data.get("tabs"):
+        skip("profile already has tabs, leaving the session alone")
+    if any(s.get("name") in CONTEXTS for s in data.get("spaces", [])):
+        skip("spaces already exist")
+
+    data["spaces"] = [
+        {
+            "uuid": "{%s}" % uuid.uuid4(),
+            "name": name,
+            "theme": {"type": "gradient", "gradientColors": [], "opacity": 0.5, "texture": 0},
+            "containerTabId": ids[name],
+            "hasCollapsedPinnedTabs": False,
+        }
+        for name in CONTEXTS
+    ]
+
+    payload = json.dumps(data, separators=(",", ":")).encode()
+    tmp = session + ".new"
+    with open(tmp, "wb") as fh:
+        fh.write(mozlz4_compress(payload))
+    os.replace(tmp, session)
+    print(f"==> Zen spaces seeded: {', '.join(CONTEXTS)}")
+    seeded = True
+
+if not seeded:
+    print("==> Zen spaces: no untouched profile to seed")
+PY
+{{- end }}

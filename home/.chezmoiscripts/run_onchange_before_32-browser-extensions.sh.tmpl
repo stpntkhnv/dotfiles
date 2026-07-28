@@ -39,6 +39,19 @@ set -euo pipefail
 {{-   $zenExts = append $zenExts (dict "guid" "{f069aec0-43c5-4bbf-b6b4-df95c4326b98}" "slug" "open-url-in-container"    "mode" "force_installed") }}
 {{-   $zenExts = append $zenExts (dict "guid" "{c607c8df-14a7-4f28-894f-29e8722976af}" "slug" "temporary-containers"     "mode" "normal_installed") }}
 {{-   if has "bitwarden" .enabled }}{{ $zenExts = append $zenExts $bitwarden }}{{ end }}
+{{-   $zenExts = append $zenExts (dict "guid" "context-proxy@dotfiles.local" "url" "file:///usr/local/lib/zen-context-proxy.xpi" "mode" "force_installed") }}
+{{- end }}
+{{/* Containers.Default replaces the built-in set on a FRESH profile and
+     numbers them 1..N in array order (ContextualIdentityService.sys.mjs:226).
+     On a profile that already has containers.json it does nothing, so this
+     seeds a new machine and never disturbs a working one. Scratch last, and
+     without a proxy: it is the "no work session attached" one. */}}
+{{- $containers := list }}
+{{- if has "zen" .enabled }}
+{{-   range $i, $c := .contexts }}
+{{-     $containers = append $containers (dict "name" $c.name "icon" "briefcase" "color" (index (list "blue" "green" "purple" "orange" "red" "yellow" "pink" "cyan") (mod $i 8))) }}
+{{-   end }}
+{{-   $containers = append $containers (dict "name" "scratch" "icon" "circle" "color" "gray") }}
 {{- end }}
 {{- $ffExts := list }}
 {{- if and (has "browsers" .enabled) (has "bitwarden" .enabled) }}
@@ -46,16 +59,18 @@ set -euo pipefail
 {{- end }}
 
 # $1 is the /etc directory of one Gecko application, $2 the already-rendered
-# body of ExtensionSettings (empty for none).
+# body of ExtensionSettings (empty for none), $3 the body of Containers.Default
+# (empty for none).
 write_gecko_policy() {
-    local dir="$1" exts="$2" settings=""
+    local dir="$1" exts="$2" containers="${3:-}" settings="" contblock=""
     [[ -n "$exts" ]] && settings=$(printf ',\n    "ExtensionSettings": {\n%s\n    }' "$exts")
+    [[ -n "$containers" ]] && contblock=$(printf ',\n    "Containers": {\n      "Default": [\n%s\n      ]\n    }' "$containers")
     sudo install -d "$dir/policies"
     sudo tee "$dir/policies/policies.json" >/dev/null <<EOF
 {
   "policies": {
     "DisableAppUpdate": true,
-    "DefaultSerialGuardSetting": 3$settings
+    "DefaultSerialGuardSetting": 3$settings$contblock
   }
 }
 EOF
@@ -77,14 +92,15 @@ sudo tee /etc/chromium/policies/managed/bitwarden-extension.json >/dev/null <<'E
 }
 EOF
 {{- end }}
-{{- range $app := list (dict "dir" "/etc/firefox" "exts" $ffExts "on" (has "browsers" .enabled)) (dict "dir" "/etc/zen" "exts" $zenExts "on" (has "zen" .enabled)) }}
+{{- range $app := list (dict "dir" "/etc/firefox" "exts" $ffExts "containers" list "on" (has "browsers" .enabled)) (dict "dir" "/etc/zen" "exts" $zenExts "containers" $containers "on" (has "zen" .enabled)) }}
 {{- if $app.on }}
 
 write_gecko_policy {{ $app.dir }} '{{ range $i, $e := $app.exts }}{{ if $i }},
 {{ end }}      "{{ $e.guid }}": {
         "installation_mode": "{{ $e.mode }}",
-        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/{{ $e.slug }}/latest.xpi"
-      }{{ end }}'
+        "install_url": "{{ if hasKey $e "url" }}{{ $e.url }}{{ else }}https://addons.mozilla.org/firefox/downloads/latest/{{ $e.slug }}/latest.xpi{{ end }}"
+      }{{ end }}' '{{ range $i, $c := $app.containers }}{{ if $i }},
+{{ end }}        { "name": "{{ $c.name }}", "icon": "{{ $c.icon }}", "color": "{{ $c.color }}" }{{ end }}'
 {{- end }}
 {{- end }}
 {{- end }}

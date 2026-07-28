@@ -80,15 +80,21 @@ else
     compgen -G "$zen_root/*/user.js" >/dev/null 2>&1 || \
         steps+=("Zen: prefs not applied -- run 'chezmoi apply' with Zen closed")
 
-    # The two extensions that carry the container boundary. Policies install
+    # The three extensions that carry the container boundary. Policies install
     # them, but a policy that never took (wrong path, a GUID that matches no
     # add-on) fails silently, and a silent failure here means every context
     # shares one cookie jar.
-    for ext in "@testpilot-containers" "{f069aec0-43c5-4bbf-b6b4-df95c4326b98}"; do
+    for ext in "@testpilot-containers" "{f069aec0-43c5-4bbf-b6b4-df95c4326b98}" "context-proxy@dotfiles.local"; do
         compgen -G "$zen_root/*/extensions/$ext.xpi" >/dev/null 2>&1 || \
             steps+=("Zen: extension $ext is missing -- check about:policies, install from addons.mozilla.org if the policy did not take")
     done
 fi
+
+# Our own extension is unsigned, which only loads because Zen ships
+# MOZ_REQUIRE_SIGNING: false. A build that flips it would drop the proxies
+# without a word, so check the file the policy points at actually exists.
+[[ -f /usr/local/lib/zen-context-proxy.xpi ]] || \
+    steps+=("Zen: the context proxy extension was never built -- run 'chezmoi apply'")
 
 # Zen grabs x-scheme-handler/http(s) on its first launch, before user.js can
 # turn browser.shell.checkDefaultBrowser off. Re-assert rather than warn: the
