@@ -1,0 +1,100 @@
+#!/bin/bash
+{{- if not (has "killswitch" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Default-drop on output, with three holes: loopback, the tunnel interface, and
+# the handshake with the VPN endpoint itself. Everything else dies, which is
+# the point -- a request that took the wrong proxy must not fall back to a
+# direct route.
+#
+# The values live in /etc/killswitch.conf rather than in this script: the
+# interface and endpoint are properties of the employer's VPN, not of the
+# dotfiles. Without that file the unit refuses to start instead of cutting the
+# network, because a kill-switch that fires on an empty config is just an
+# outage.
+#
+# Scope: one IPv4 endpoint. Hostname endpoints, several endpoints and an IPv6
+# endpoint are not supported, and all three fail CLOSED -- `table inet` with a
+# drop policy covers v4 and v6 alike, so an unhandled configuration means no
+# connectivity rather than connectivity in the clear. OpenZiti does not fit
+# this shape at all and stays without a kill-switch.
+
+CONF=/etc/killswitch.conf
+
+if [[ ! -f "$CONF" ]]; then
+    echo "==> Writing the kill-switch config template (unit stays disabled)"
+    sudo tee "$CONF" >/dev/null <<'CONF_TEMPLATE'
+# Managed by chezmoi -- fill these in, then:
+#   sudo systemctl enable --now killswitch.service
+#
+# VPN_IF        tunnel interface, e.g. wg0 / tun0 (ip -br link)
+# VPN_ENDPOINT  server address the client dials, IPv4
+# VPN_PROTO     udp or tcp
+# VPN_PORT      server port
+VPN_IF=
+VPN_ENDPOINT=
+VPN_PROTO=udp
+VPN_PORT=
+CONF_TEMPLATE
+    sudo chmod 600 "$CONF"
+fi
+
+sudo tee /usr/local/bin/killswitch-apply >/dev/null <<'APPLY'
+#!/bin/sh
+# Managed by chezmoi -- .chezmoiscripts/run_onchange_after_39-killswitch.sh
+set -eu
+. /etc/killswitch.conf
+
+if [ -z "${VPN_IF:-}" ]; then
+    echo "killswitch: VPN_IF is empty in /etc/killswitch.conf, refusing to drop traffic" >&2
+    exit 1
+fi
+
+endpoint_rule=""
+if [ -n "${VPN_ENDPOINT:-}" ] && [ -n "${VPN_PORT:-}" ]; then
+    endpoint_rule="    ip daddr ${VPN_ENDPOINT} ${VPN_PROTO:-udp} dport ${VPN_PORT} accept"
+fi
+
+nft -f - <<RULES
+table inet killswitch
+delete table inet killswitch
+table inet killswitch {
+  chain output {
+    type filter hook output priority 0; policy drop;
+    oifname "lo" accept
+    oifname "${VPN_IF}" accept
+    ct state established,related accept
+${endpoint_rule}
+  }
+}
+RULES
+APPLY
+
+sudo chmod 755 /usr/local/bin/killswitch-apply
+
+sudo tee /etc/systemd/system/killswitch.service >/dev/null <<'UNIT'
+[Unit]
+Description=Drop container egress that bypasses the VPN
+After=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/killswitch-apply
+ExecStop=/usr/bin/nft delete table inet killswitch
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+sudo systemctl daemon-reload
+
+if grep -q '^VPN_IF=.\+' "$CONF"; then
+    sudo systemctl enable --now killswitch.service
+else
+    echo "==> /etc/killswitch.conf has no VPN_IF yet; killswitch.service left disabled."
+fi
+{{- end }}

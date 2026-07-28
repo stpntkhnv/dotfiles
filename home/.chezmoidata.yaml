@@ -399,6 +399,18 @@ features:
     aur:
       - ziti-edge-tunnel
 
+  # Egress lock for a container that has a VPN. Off by default and deliberately
+  # so: with no tunnel to allow, a default-drop output chain takes the whole
+  # network with it. Turn it on in the container that gets a VPN
+  # (chezmoi init --prompt inside it), fill /etc/killswitch.conf, done.
+  #
+  # It restores a guarantee the old three-browser layout had for free: a
+  # request that ends up in the wrong context must die rather than leave
+  # through the host.
+  - key: killswitch
+    label: "Kill-switch: drop egress that bypasses the VPN"
+    scope: container
+
   # Handy is an offline speech-to-text app. The Whisper inside it reaches the
   # GPU through Vulkan rather than CUDA, so a card only needs its regular
   # driver and ICD. openblas is an undeclared dependency of handy-bin 0.9.4.
