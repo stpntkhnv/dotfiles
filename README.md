@@ -200,6 +200,11 @@ the matching distrobox container over SOCKS5 carried on a UNIX socket, so the
 traffic still leaves through that context's own netns, resolver and VPN
 rather than through the host.
 
+**[BROWSER-ISOLATION.md](BROWSER-ISOLATION.md)** explains the whole mechanism
+from first principles, with diagrams: every term, every hop a request takes,
+what each extension contributes, and an honest account of what is not isolated.
+What follows here is the operational summary.
+
 Per context:
 
 ```
