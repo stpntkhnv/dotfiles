@@ -27,6 +27,22 @@
 #
 # The order of features here is the order of lines in the checklist.
 
+# Work contexts. One name drags everything else along: the section in
+# distrobox.ini, the UNIX-socket directory, the host systemd bridge unit, the
+# container and workspace name in Zen, and the .desktop entry in the link
+# picker. `socks` is what socat listens on at 127.0.0.1 on the host; the same
+# port goes into the per-container proxy in Multi-Account Containers.
+#
+# The name "Scratch" is reserved: it is the no-proxy Zen container for links
+# that belong to nobody.
+contexts:
+  - name: digi3
+    socks: 11081
+  - name: stellium
+    socks: 11082
+  - name: personal
+    socks: 11083
+
 features:
   # ---------------------------------------------------------------- base ---
   - key: core

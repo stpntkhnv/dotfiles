@@ -1,0 +1,56 @@
+# NOTE: distrobox-assemble treats every [section] as a container, including
+# [base]. Always pass --name <containername>, otherwise a redundant "base"
+# container will be created alongside the real one.
+#
+#   distrobox assemble create --name digi3 --file ~/.config/distrobox/distrobox.ini
+#
+# Inside a container the setup is driven by the same one-line installer as on
+# the host: it detects that it is in a container by itself and only offers the
+# features that make sense there.
+#
+# The per-context sections below are generated from `contexts` in
+# .chezmoidata.yaml. Adding a work context means adding one entry there.
+
+[base]
+image=docker.io/library/archlinux:latest
+pull=false
+init=true
+nvidia=false
+root=false
+entry=true
+start_now=false
+replace=false
+
+# netns is the one that carries the whole threat model: a corporate VPN or DNS
+# resolver must never see another job's domains. process costs nothing and
+# stops one context's process list from being readable in another.
+#
+# ipc and devsys stay SHARED on purpose. unshare_devsys drops the /dev bind
+# mount and takes GPU and sound with it; unshare_ipc replaces the host /dev/shm
+# with podman's 64M default, which is where Electron and JVM applications fall
+# over. Neither buys anything against attribution.
+unshare_netns=true
+unshare_process=true
+unshare_ipc=false
+unshare_devsys=false
+unshare_groups=false
+unshare_all=false
+
+# The browser has moved to the host: one instance, one container per work
+# context, egress routed back here over SOCKS. What stays is the toolchain.
+additional_packages="pass"
+exported_apps=""
+pre_init_hooks=""
+exported_bins=""
+exported_bins_path="~/.local/bin"
+{{ range .contexts }}
+[{{ .name }}]
+include=base
+home={{ $.chezmoi.homeDir }}/homes/{{ .name }}
+# --memory: hard lid on the container, so three of them can never gang up on
+# the host. --volume: the only channel to the host, one directory holding this
+# context's SOCKS socket. Per-context and NOT shared: one common directory
+# would let any container dial another container's proxy and leave through the
+# wrong VPN, which is exactly the correlation this whole thing prevents.
+additional_flags="--memory=8g --volume {{ $.chezmoi.homeDir }}/.local/share/wsproxy/{{ .name }}:/mnt/sockets:rw"
+{{ end }}
