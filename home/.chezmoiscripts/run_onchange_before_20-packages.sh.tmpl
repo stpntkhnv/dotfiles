@@ -64,8 +64,14 @@ if [[ "$(npm config get prefix)" != "$HOME/.npm-global" ]]; then
     npm config set prefix "$HOME/.npm-global"
 fi
 
+# --allow-scripts on the command line rather than from ~/.npmrc, which says the
+# same thing: this is a `before` script, so on a fresh machine it runs while
+# that file does not exist yet. npm then blocks the postinstall that links the
+# claude native binary, leaving ~/.npm-global/bin/claude as a dangling symlink
+# -- and a dangling symlink in PATH reports as "No such file or directory",
+# naming a file that is right there.
 echo "==> Installing global npm packages..."
-npm install -g{{ range $npm }} {{ . | quote }}{{ end }}
+npm install -g --allow-scripts=@anthropic-ai/claude-code{{ range $npm }} {{ . | quote }}{{ end }}
 {{- end }}
 {{ if $dotnet }}
 # ---- dotnet tools ----------------------------------------------------------

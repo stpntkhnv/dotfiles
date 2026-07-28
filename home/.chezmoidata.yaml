@@ -27,13 +27,28 @@
 #
 # The order of features here is the order of lines in the checklist.
 
+# Bookmarks placed in every context's toolbar folder, with that context baked
+# into the link. Shared addresses belong here rather than in an "Always Open in
+# Container" rule: a domain rule PULLS a link into one container, so a rule on
+# teams.microsoft.com for one job would swallow the sign-in for another. A
+# bookmark carries its container and pulls nothing.
+#
+# Per-context additions go under `bookmarks` on the context itself.
+bookmarks:
+  - title: Teams
+    url: https://teams.microsoft.com
+  - title: Azure DevOps
+    url: https://dev.azure.com
+  - title: GitHub
+    url: https://github.com
+
 # Work contexts. One name drags everything else along: the section in
 # distrobox.ini, the UNIX-socket directory, the host systemd bridge unit, the
-# container and workspace name in Zen, and the .desktop entry in the link
+# Zen container, space and toolbar folder, and the .desktop entry in the link
 # picker. `socks` is what socat listens on at 127.0.0.1 on the host; the same
-# port goes into the per-container proxy in Multi-Account Containers.
+# port is baked into the generated context-proxy extension.
 #
-# The name "Scratch" is reserved: it is the no-proxy Zen container for links
+# The name "scratch" is reserved: it is the no-proxy Zen container for links
 # that belong to nobody.
 contexts:
   - name: digi3

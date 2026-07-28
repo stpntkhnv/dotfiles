@@ -4,15 +4,15 @@ exit 0
 {{- else }}
 set -euo pipefail
 
-# Seeds one Zen space per work context, each bound to its container, so a fresh
-# machine needs no clicking. run_after_ rather than run_onchange_: what it does
-# depends on the state of the profile, not on the state of this file, and it
-# has to re-evaluate that on every apply.
+# Seeds a Zen space per work context, each bound to its container, and the
+# Essentials inside it, so a fresh machine needs no clicking. run_after_ rather
+# than run_onchange_: what it does depends on the state of the profile, not on
+# the state of this file, and it has to re-evaluate that on every apply.
 #
-# Deliberately conservative. Spaces live in zen-sessions.jsonlz4, which also
-# holds every open tab, folder and group, and the format is Zen's internal one
-# with no compatibility promise. So this writes ONLY into an untouched profile
-# and refuses in every other case:
+# Deliberately conservative. All of this lives in zen-sessions.jsonlz4, which
+# also holds every open tab, and the format is Zen's internal one with no
+# compatibility promise. So this writes ONLY into an untouched profile and
+# refuses in every other case:
 #   * Zen running        -- it would overwrite the file on exit anyway
 #   * any open tab       -- not an untouched profile
 #   * a space already named after a context -- already done, or done by hand
@@ -20,16 +20,20 @@ set -euo pipefail
 # containerTabId is a userContextId read from containers.json rather than
 # predicted. The Containers policy does number them 1..N in array order, but
 # reading beats predicting when a profile can also be older than the policy.
+#
+# Essentials carry a PLAIN url, unlike the bookmarks the policy generates,
+# which carry ext+container:. The difference is not an oversight: a pinned tab
+# already sits in a space bound to a container and states its userContextId
+# outright, while a bookmark can be clicked from anywhere and has to carry its
+# container in the link.
 
 python3 - <<'PY'
 import json, os, glob, subprocess, uuid, sys
 
 HOME = os.path.expanduser("~")
-CONTEXTS = [
-{{- range .contexts }}
-    {{ .name | quote }},
-{{- end }}
-]
+# [{"name": ..., "bookmarks": [{"title": ..., "url": ...}]}]
+SEED = json.loads(r'''{{ $seed := list }}{{ range $c := .contexts }}{{ $own := list }}{{ if hasKey $c "bookmarks" }}{{ $own = $c.bookmarks }}{{ end }}{{ $seed = append $seed (dict "name" $c.name "bookmarks" (concat $.bookmarks $own)) }}{{ end }}{{ $seed | toJson }}''')
+CONTEXTS = [c["name"] for c in SEED]
 
 
 def mozlz4_compress(data):
@@ -122,26 +126,54 @@ for profile in profiles():
     if any(s.get("name") in CONTEXTS for s in data.get("spaces", [])):
         skip("spaces already exist")
 
-    data["spaces"] = [
-        {
-            "uuid": "{%s}" % uuid.uuid4(),
+    spaces, tabs = [], []
+    for entry in SEED:
+        name = entry["name"]
+        space_uuid = "{%s}" % uuid.uuid4()
+        context_id = ids[name]
+        spaces.append({
+            "uuid": space_uuid,
             "name": name,
             "theme": {"type": "gradient", "gradientColors": [], "opacity": 0.5, "texture": 0},
-            "containerTabId": ids[name],
+            "containerTabId": context_id,
             "hasCollapsedPinnedTabs": False,
-        }
-        for name in CONTEXTS
-    ]
+        })
+        for mark in entry["bookmarks"]:
+            url = mark["url"]
+            tabs.append({
+                "entries": [{
+                    "url": url,
+                    "title": mark["title"],
+                    "cacheKey": 0,
+                    # Session restore drops an entry with no principal. The
+                    # field is named base64 but holds JSON in current Gecko:
+                    # {"1": content principal} with origin and the container
+                    # as an origin attribute.
+                    "triggeringPrincipal_base64": json.dumps(
+                        {"1": {"0": url, "2": f"^userContextId={context_id}"}}
+                    ),
+                }],
+                "index": 1,
+                "pinned": True,
+                "hidden": False,
+                "zenWorkspace": space_uuid,
+                "zenEssential": True,
+                "userContextId": context_id,
+                "requestedIndex": 0,
+            })
+
+    data["spaces"] = spaces
+    data["tabs"] = tabs
 
     payload = json.dumps(data, separators=(",", ":")).encode()
     tmp = session + ".new"
     with open(tmp, "wb") as fh:
         fh.write(mozlz4_compress(payload))
     os.replace(tmp, session)
-    print(f"==> Zen spaces seeded: {', '.join(CONTEXTS)}")
+    print(f"==> Zen session seeded: {len(spaces)} spaces, {len(tabs)} essentials")
     seeded = True
 
 if not seeded:
-    print("==> Zen spaces: no untouched profile to seed")
+    print("==> Zen session: no untouched profile to seed")
 PY
 {{- end }}

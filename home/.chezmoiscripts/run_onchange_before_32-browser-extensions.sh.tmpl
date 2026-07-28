@@ -53,24 +53,44 @@ set -euo pipefail
 {{-   end }}
 {{-   $containers = append $containers (dict "name" "scratch" "icon" "circle" "color" "gray") }}
 {{- end }}
+{{/* One toolbar folder per context, holding the shared bookmarks plus that
+     context's own, each as an ext+container: link. The container travels in
+     the link, so a bookmark clicked from the wrong space still lands right --
+     which is the whole point, and the reason these are not plain URLs.
+
+     The policy engine OWNS these: it diffs Places against the list on every
+     start (BookmarksPolicies.sys.mjs, guidPrefix), adding and removing to
+     match. Editing one in the browser is therefore pointless; edit the table. */}}
+{{- $marks := list }}
+{{- if has "zen" .enabled }}
+{{-   range $c := .contexts }}
+{{-     $own := list }}
+{{-     if hasKey $c "bookmarks" }}{{ $own = $c.bookmarks }}{{ end }}
+{{-     range $b := concat $.bookmarks $own }}
+{{-       $marks = append $marks (dict "title" $b.title "folder" $c.name "url" (printf "ext+container:name=%s&url=%s" $c.name (urlquery $b.url))) }}
+{{-     end }}
+{{-   end }}
+{{- end }}
 {{- $ffExts := list }}
 {{- if and (has "browsers" .enabled) (has "bitwarden" .enabled) }}
 {{-   $ffExts = append $ffExts $bitwarden }}
 {{- end }}
 
 # $1 is the /etc directory of one Gecko application, $2 the already-rendered
-# body of ExtensionSettings (empty for none), $3 the body of Containers.Default
-# (empty for none).
+# body of ExtensionSettings, $3 of Containers.Default, $4 of Bookmarks. Empty
+# for none.
 write_gecko_policy() {
-    local dir="$1" exts="$2" containers="${3:-}" settings="" contblock=""
+    local dir="$1" exts="$2" containers="${3:-}" marks="${4:-}"
+    local settings="" contblock="" markblock=""
     [[ -n "$exts" ]] && settings=$(printf ',\n    "ExtensionSettings": {\n%s\n    }' "$exts")
     [[ -n "$containers" ]] && contblock=$(printf ',\n    "Containers": {\n      "Default": [\n%s\n      ]\n    }' "$containers")
+    [[ -n "$marks" ]] && markblock=$(printf ',\n    "Bookmarks": [\n%s\n    ]' "$marks")
     sudo install -d "$dir/policies"
     sudo tee "$dir/policies/policies.json" >/dev/null <<EOF
 {
   "policies": {
     "DisableAppUpdate": true,
-    "DefaultSerialGuardSetting": 3$settings$contblock
+    "DefaultSerialGuardSetting": 3$settings$contblock$markblock
   }
 }
 EOF
@@ -92,7 +112,7 @@ sudo tee /etc/chromium/policies/managed/bitwarden-extension.json >/dev/null <<'E
 }
 EOF
 {{- end }}
-{{- range $app := list (dict "dir" "/etc/firefox" "exts" $ffExts "containers" list "on" (has "browsers" .enabled)) (dict "dir" "/etc/zen" "exts" $zenExts "containers" $containers "on" (has "zen" .enabled)) }}
+{{- range $app := list (dict "dir" "/etc/firefox" "exts" $ffExts "containers" list "marks" list "on" (has "browsers" .enabled)) (dict "dir" "/etc/zen" "exts" $zenExts "containers" $containers "marks" $marks "on" (has "zen" .enabled)) }}
 {{- if $app.on }}
 
 write_gecko_policy {{ $app.dir }} '{{ range $i, $e := $app.exts }}{{ if $i }},
@@ -100,7 +120,8 @@ write_gecko_policy {{ $app.dir }} '{{ range $i, $e := $app.exts }}{{ if $i }},
         "installation_mode": "{{ $e.mode }}",
         "install_url": "{{ if hasKey $e "url" }}{{ $e.url }}{{ else }}https://addons.mozilla.org/firefox/downloads/latest/{{ $e.slug }}/latest.xpi{{ end }}"
       }{{ end }}' '{{ range $i, $c := $app.containers }}{{ if $i }},
-{{ end }}        { "name": "{{ $c.name }}", "icon": "{{ $c.icon }}", "color": "{{ $c.color }}" }{{ end }}'
+{{ end }}        { "name": "{{ $c.name }}", "icon": "{{ $c.icon }}", "color": "{{ $c.color }}" }{{ end }}' '{{ range $i, $b := $app.marks }}{{ if $i }},
+{{ end }}      { "Title": {{ $b.title | toJson }}, "URL": {{ $b.url | toJson }}, "Folder": {{ $b.folder | toJson }}, "Placement": "toolbar" }{{ end }}'
 {{- end }}
 {{- end }}
 {{- end }}
