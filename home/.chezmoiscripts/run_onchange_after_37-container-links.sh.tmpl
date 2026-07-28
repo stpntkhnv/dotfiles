@@ -1,0 +1,34 @@
+#!/bin/bash
+{{- if ne .env "container" }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Everything clicked inside this container that is a web link goes to the host
+# browser AND carries this container's name in the URL, so it lands in the
+# matching Zen container no matter which workspace is focused.
+#
+# /usr/local/bin comes before /usr/bin on PATH, so this shadows xdg-utils.
+# Non-web arguments fall through to the real xdg-open: with init=true distrobox
+# does NOT replace xdg-open (see distrobox-init, the symlink is guarded by
+# `init -eq 0`), so a PDF still opens in this container's own viewer, which is
+# the behaviour that was there before.
+
+echo "==> Installing the container link wrapper..."
+
+sudo tee /usr/local/bin/xdg-open >/dev/null <<'WRAP'
+#!/bin/sh
+# Managed by chezmoi -- .chezmoiscripts/run_onchange_after_37-container-links.sh
+case "${1:-}" in
+    http://*|https://*) ;;
+    *) exec /usr/bin/xdg-open "$@" ;;
+esac
+
+ctx=$(. /run/.containerenv 2>/dev/null; printf '%s' "${name:-}")
+[ -n "$ctx" ] || exec /usr/bin/xdg-open "$@"
+
+exec distrobox-host-exec /usr/local/bin/zen-open "$ctx" "$1"
+WRAP
+
+sudo chmod 755 /usr/local/bin/xdg-open
+{{- end }}

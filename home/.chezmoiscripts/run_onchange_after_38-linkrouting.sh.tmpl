@@ -1,0 +1,107 @@
+#!/bin/bash
+{{- if ne .env "host" }}
+exit 0
+{{- else }}
+{{- if not (has "zen" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# A URL arriving from outside the browser has no correct container -- the
+# question is malformed. So the default must be harmless rather than dangerous:
+# Junction asks, and every answer pins the container into the URL itself.
+#
+# zen-open lives in /usr/local/bin rather than ~/.local/bin because containers
+# call it through distrobox-host-exec, where the host HOME is not a value the
+# container can compute (its own HOME is ~/homes/<name>).
+
+echo "==> Installing the link router..."
+
+sudo tee /usr/local/bin/zen-open >/dev/null <<'OPEN'
+#!/bin/sh
+# Managed by chezmoi -- .chezmoiscripts/run_onchange_after_38-linkrouting.sh
+# zen-open <zen-container-name> <url>
+set -eu
+
+ctx=$1
+url=$2
+
+# @uri encodes ':' '/' '&' '?' too, which is what makes it safe as a query
+# parameter value. Without this a URL carrying its own '&' would truncate.
+enc=$(printf '%s' "$url" | jq -sRr @uri)
+uri="ext+container:name=${ctx}&url=${enc}"
+
+# Detached so the caller returns immediately, and inside the memory slice so a
+# cold start from a link is capped the same way a launcher start is.
+if [ -n "${XDG_RUNTIME_DIR:-}" ] && command -v systemd-run >/dev/null 2>&1; then
+    setsid systemd-run --user --scope --slice=browser-zen.slice --collect -q -- \
+        /usr/bin/zen-browser "$uri" >/dev/null 2>&1 &
+else
+    setsid /usr/bin/zen-browser "$uri" >/dev/null 2>&1 &
+fi
+OPEN
+
+sudo chmod 755 /usr/local/bin/zen-open
+
+APPS="{{ .chezmoi.homeDir }}/.local/share/applications"
+mkdir -p "$APPS"
+
+# Prune first, same reason as the proxy units: a renamed context must not leave
+# an entry in the picker pointing at a container that no longer exists.
+keep=" {{ range .contexts }}zen-{{ .name }}.desktop {{ end }}zen-scratch.desktop "
+for f in "$APPS"/zen-*.desktop; do
+    [[ -e "$f" ]] || continue
+    case "$keep" in
+        *" $(basename "$f") "*) ;;
+        *) rm -f "$f" ;;
+    esac
+done
+{{ range .contexts }}
+cat > "$APPS/zen-{{ .name }}.desktop" <<'ENTRY'
+[Desktop Entry]
+Type=Application
+Name=Zen: {{ .name }}
+Comment=Open the link in the {{ .name }} work context
+Icon=zen-browser
+Exec=/usr/local/bin/zen-open {{ .name }} %u
+Terminal=false
+StartupNotify=true
+StartupWMClass=zen
+Categories=Network;WebBrowser;
+MimeType=x-scheme-handler/http;x-scheme-handler/https;
+ENTRY
+{{ end }}
+cat > "$APPS/zen-scratch.desktop" <<'ENTRY'
+[Desktop Entry]
+Type=Application
+Name=Zen: Scratch
+Comment=Open the link with no work session attached
+Icon=zen-browser
+Exec=/usr/local/bin/zen-open Scratch %u
+Terminal=false
+StartupNotify=true
+StartupWMClass=zen
+Categories=Network;WebBrowser;
+MimeType=x-scheme-handler/http;x-scheme-handler/https;
+ENTRY
+
+update-desktop-database "$APPS"
+
+# Junction as the default handler. Its desktop id is read from the package
+# rather than hardcoded: a rename upstream would otherwise silently leave the
+# old handler in place.
+junction_desktop=$(pacman -Ql junction \
+    | awk '/\/usr\/share\/applications\/.*\.desktop$/{print $2}' \
+    | head -1 | xargs -r basename)
+
+if [[ -n "$junction_desktop" ]]; then
+    current=$(xdg-mime query default x-scheme-handler/https || true)
+    if [[ "$current" != "$junction_desktop" ]]; then
+        echo "==> Default link handler: $junction_desktop"
+        xdg-mime default "$junction_desktop" x-scheme-handler/http x-scheme-handler/https
+    fi
+else
+    echo "!! junction is installed but ships no .desktop; default handler left alone." >&2
+fi
+{{- end }}
+{{- end }}
