@@ -66,6 +66,35 @@ if ! id -nG "$USER" | grep -qw docker; then
 fi
 {{- end }}
 
+{{- if eq .env "host" }}
+{{- if has "zen" .enabled }}
+[[ -d "$HOME/.zen" ]] || \
+    steps+=("Zen: never launched -- run 'zen-browser' once, then 'chezmoi apply' to write user.js")
+
+if [[ -d "$HOME/.zen" ]] && ! compgen -G "$HOME/.zen/*/user.js" >/dev/null 2>&1; then
+    steps+=("Zen: prefs not applied -- run 'chezmoi apply' with Zen closed")
+fi
+
+# The two extensions that carry the container boundary. Policies install them,
+# but a policy that never took (wrong path, Zen ignoring /etc/firefox) fails
+# silently, and a silent failure here means every context shares one cookie jar.
+if [[ -d "$HOME/.zen" ]]; then
+    for ext in "@testpilot-containers" "{f069aec0-43c5-4bbf-b6b4-df95c4326b98}"; do
+        compgen -G "$HOME/.zen/*/extensions/$ext.xpi" >/dev/null 2>&1 || \
+            steps+=("Zen: extension $ext is missing -- check about:policies, install from addons.mozilla.org if the policy did not take")
+    done
+fi
+
+if [[ "$(xdg-mime query default x-scheme-handler/https 2>/dev/null)" != *[Jj]unction* ]]; then
+    steps+=("Links: Junction is not the default https handler -- run 'chezmoi apply'")
+fi
+{{- end }}
+{{- range .contexts }}
+[[ -S "$HOME/.local/share/wsproxy/{{ .name }}/socks.sock" ]] || \
+    steps+=("Proxy {{ .name }}: no socket -- start the container ('distrobox enter {{ .name }} -- true') and check wsproxy-bridge.service inside it")
+{{- end }}
+{{- end }}
+
 if ((${#steps[@]} > 0)); then
     echo ""
     echo "================ NEXT STEPS ================"
