@@ -77,13 +77,17 @@ Categories=Network;WebBrowser;
 MimeType=x-scheme-handler/http;x-scheme-handler/https;
 ENTRY
 {{ end }}
+# The name passed to zen-open is lowercase, matching the contexts and the
+# container it has to find: contextualIdentities.query is case-sensitive, and
+# the extension creates whatever name it fails to match. "Scratch" here would
+# quietly leave a second, empty container next to "scratch".
 cat > "$APPS/zen-scratch.desktop" <<'ENTRY'
 [Desktop Entry]
 Type=Application
 Name=Zen: Scratch
 Comment=Open the link with no work session attached
 Icon=zen-browser
-Exec=/usr/local/bin/zen-open Scratch %u
+Exec=/usr/local/bin/zen-open scratch %u
 Terminal=false
 StartupNotify=true
 StartupWMClass=zen

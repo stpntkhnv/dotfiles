@@ -270,7 +270,7 @@ done                                                    # must print digi3, stel
 ```
 
 Then open `http://127.0.0.1:8099/` from each Zen workspace: the page must name
-that workspace's context. From `Scratch` it must not load at all. Clean up:
+that workspace's context. From `scratch` it must not load at all. Clean up:
 
 ```sh
 for c in digi3 stellium personal; do
@@ -287,7 +287,7 @@ manual, once:
    Optional Permissions -> *Allow extension to control proxy settings*.
    Without it the per-container proxy field does not appear at all.
 2. **Containers.** Multi-Account Containers -> create `digi3`, `stellium`,
-   `personal`, `Scratch`. The names must match `contexts:` exactly, case
+   `personal`, `scratch`. The names must match `contexts:` exactly, case
    included: `zen-open` substitutes them into `ext+container:name=...`
    verbatim, and `opener.js` creates any name it fails to find -- so a typo
    yields a real container with **no proxy** and no warning.
@@ -297,7 +297,7 @@ manual, once:
    digi3      socks://127.0.0.1:11081
    stellium   socks://127.0.0.1:11082
    personal   socks://127.0.0.1:11083
-   Scratch    (empty)
+   scratch    (empty)
    ```
 
    `socks://` and not `socks5://`: the extension parses the scheme with
