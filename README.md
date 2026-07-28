@@ -245,10 +245,14 @@ extension then creates it silently, without a proxy) all look fine from
 outside. Comparing public IPs does not discriminate either while no context
 has a VPN. A container's own loopback does.
 
+`/var/tmp` and not `/tmp`: distrobox bind-mounts the host's `/tmp` into every
+container, so a marker written there would be one file shared by all three and
+the test would report the same name for every channel.
+
 ```sh
 for c in digi3 stellium personal; do
-  distrobox enter "$c" -- sh -c "printf 'HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n%s\n' \"\$(. /run/.containerenv; echo \$name)\" > /tmp/whoami.http"
-  distrobox enter "$c" -- sh -c 'setsid socat TCP-LISTEN:8099,bind=127.0.0.1,fork,reuseaddr SYSTEM:"cat /tmp/whoami.http" >/dev/null 2>&1 &'
+  distrobox enter "$c" -- sh -c "printf 'HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n%s\n' \"\$(. /run/.containerenv; echo \$name)\" > /var/tmp/whoami.http"
+  distrobox enter "$c" -- sh -c 'setsid socat TCP-LISTEN:8099,bind=127.0.0.1,fork,reuseaddr SYSTEM:"cat /var/tmp/whoami.http" >/dev/null 2>&1 &'
 done
 
 curl -s --max-time 5 http://127.0.0.1:8099/            # must fail: host has nothing there
@@ -263,7 +267,7 @@ that workspace's context. From `Scratch` it must not load at all. Clean up:
 
 ```sh
 for c in digi3 stellium personal; do
-  distrobox enter "$c" -- sh -c 'pkill -f "TCP-LISTEN:8099" || true; rm -f /tmp/whoami.http'
+  distrobox enter "$c" -- sh -c 'pkill -f "TCP-LISTEN:8099" || true; rm -f /var/tmp/whoami.http'
 done
 ```
 
