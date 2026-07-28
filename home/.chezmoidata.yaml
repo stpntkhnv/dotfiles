@@ -119,11 +119,18 @@ features:
       # chezmoi installs itself so that later updates come from pacman rather
       # than the copy install.sh drops in ~/.local/bin.
       - chezmoi
+      # jq builds the ext+container: URIs in /usr/local/bin/zen-open: it is the
+      # only tool here that URL-encodes a whole URL correctly, and a URL of its
+      # own '&' would otherwise truncate the hand-off.
+      - jq
       - networkmanager
       # Fallback editor for when the graphical session is broken. neovim is a
       # separate, optional feature; something has to exist regardless.
       - nano
       - smartmontools
+      # The host half of the browser proxy: one socat per work context,
+      # republishing that container's UNIX socket on a loopback port.
+      - socat
       - ufw
       - wpa_supplicant
       # xdg-open, used by anything that opens a link or a file by MIME type.

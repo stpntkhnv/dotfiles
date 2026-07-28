@@ -1,0 +1,80 @@
+#!/bin/bash
+{{- if ne .env "host" }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# One socat per work context, bridging 127.0.0.1:<port> on the host to that
+# container's UNIX socket. The socket crosses the network-namespace boundary
+# without weakening it: it is a filesystem object, the host always dials in,
+# and the container never learns a route to the host or to its neighbours.
+#
+# The units are generated rather than checked in: their names and ports come
+# from `contexts` in .chezmoidata.yaml, and a checked-in unit would duplicate
+# that list.
+
+SOCKDIR="{{ .chezmoi.homeDir }}/.local/share/wsproxy"
+UNITDIR="{{ .chezmoi.homeDir }}/.config/systemd/user"
+mkdir -p "$UNITDIR"
+
+# Validate the table before acting on it. This is the one place that sees the
+# whole list, and every failure mode below is silent downstream:
+#   duplicate name  -> two containers share one socket directory, which is a
+#                      direct cross-context leak, the exact thing this
+#                      architecture exists to prevent;
+#   duplicate port  -> the second socat fails to bind and that context ends up
+#                      with no proxy while the browser still points at the port;
+#   name "Scratch"  -> collides with the no-proxy Zen container used for links
+#                      that belong to nobody.
+names=$(printf '%s\n'{{ range .contexts }} {{ .name | quote }}{{ end }})
+ports=$(printf '%s\n'{{ range .contexts }} {{ .socks }}{{ end }})
+dup_names=$(sort <<<"$names" | uniq -d | tr '\n' ' ')
+dup_ports=$(sort <<<"$ports" | uniq -d | tr '\n' ' ')
+reserved=$(grep -ix 'scratch' <<<"$names" | tr '\n' ' ' || true)
+
+if [[ -n "${dup_names}${dup_ports}${reserved}" ]]; then
+    echo "!! Bad contexts in .chezmoidata.yaml:" >&2
+    [[ -z "$dup_names" ]] || echo "!!   duplicate name: $dup_names" >&2
+    [[ -z "$dup_ports" ]] || echo "!!   duplicate socks port: $dup_ports" >&2
+    [[ -z "$reserved"  ]] || echo "!!   reserved name: $reserved" >&2
+    exit 1
+fi
+
+# Prune first: renaming or dropping a context must not leave a listener behind
+# on a port that Multi-Account Containers still points at.
+keep=" {{ range .contexts }}wsproxy-{{ .name }}.service {{ end }}"
+for unit in "$UNITDIR"/wsproxy-*.service; do
+    [[ -e "$unit" ]] || continue
+    base=$(basename "$unit")
+    case "$keep" in
+        *" $base "*) ;;
+        *)  echo "==> Removing stale $base"
+            systemctl --user disable --now "$base" 2>/dev/null || true
+            rm -f "$unit" ;;
+    esac
+done
+{{ range .contexts }}
+install -d -m 700 "$SOCKDIR/{{ .name }}"
+
+cat > "$UNITDIR/wsproxy-{{ .name }}.service" <<'UNIT'
+[Unit]
+Description=SOCKS5 bridge to the {{ .name }} container
+
+[Service]
+# fork keeps the listener alive per connection, so the unit stays up while the
+# container is down; only individual connections fail. No restart loop.
+ExecStart=/usr/bin/socat TCP-LISTEN:{{ .socks }},bind=127.0.0.1,fork,reuseaddr UNIX-CONNECT:{{ $.chezmoi.homeDir }}/.local/share/wsproxy/{{ .name }}/socks.sock
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+UNIT
+{{ end }}
+systemctl --user daemon-reload
+{{- range .contexts }}
+systemctl --user enable --now wsproxy-{{ .name }}.service
+{{- end }}
+
+echo "==> Browser proxy bridges up: {{ range .contexts }}{{ .socks }} {{ end }}"
+{{- end }}
