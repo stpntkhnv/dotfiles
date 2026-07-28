@@ -250,6 +250,24 @@ features:
       - chromium
       - firefox
 
+  # The browser for work contexts, and the reason there is one browser process
+  # instead of three. Zen shows only the current workspace's tabs in the
+  # sidebar, and a workspace is bound to a Firefox container, which is what
+  # carries the per-context proxy and cookie jar. always: true because the
+  # whole context-isolation setup is built on it.
+  #
+  # Junction is the link picker: it becomes the default https handler, so a
+  # link opened from a host document asks which context it belongs to instead
+  # of silently landing in whichever one was last focused.
+  - key: zen
+    label: "Zen browser + Junction link picker"
+    scope: host
+    always: true
+    pacman:
+      - junction
+    aur:
+      - zen-browser-bin
+
   # cups-pk-helper is also what lets DankMaterialShell manage printers from
   # its own UI, so it belongs with the printing stack rather than the desktop.
   - key: printing

@@ -7,5 +7,5 @@
 Description=Total budget for all browsers
 
 [Slice]
-MemoryHigh=4G
-MemoryMax=6G
+MemoryHigh=6G
+MemoryMax=8G

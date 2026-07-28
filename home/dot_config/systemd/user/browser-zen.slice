@@ -1,0 +1,10 @@
+# Zen holds all three work contexts in one process tree, so its budget is
+# larger than a single-purpose browser's -- but it replaces three Firefox
+# instances, so the total is still lower. Same idea as browser-firefox.slice;
+# see the comments there.
+[Unit]
+Description=Zen resource slice
+
+[Slice]
+MemoryHigh=5G
+MemoryMax=6G

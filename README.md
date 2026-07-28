@@ -53,6 +53,19 @@ Add a block to `home/.chezmoidata.yaml`. Nothing else needs editing. Fields:
 `key`, `label`, `scope`, optionally `always` (install without asking),
 `default`, `needs` (other features), `pacman`, `aur`, `npm`.
 
+Adding packages to an existing feature takes effect on the next `chezmoi
+apply`. A brand new **feature key** does not: `data.enabled` is computed once,
+at init, and `apply` never re-renders `.chezmoi.toml.tmpl`. So a fresh
+`always: true` feature is missing from `enabled`, and `.chezmoiignore` silently
+drops its targets. On an already-configured machine, run init once:
+
+```sh
+chezmoi init      # no --prompt: recomputes `always`, keeps the saved answers
+```
+
+`--prompt` is a different thing: it re-asks the whole checklist. Use the bare
+form unless you actually want to redo the selection.
+
 To preview what would run, without applying:
 
 ```sh

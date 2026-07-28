@@ -37,9 +37,21 @@ Pictures/**
 {{ end }}
 
 {{ if not (has "browsers" .enabled) }}
-.config/systemd/user/browser-*.slice
+.config/systemd/user/browser-firefox.slice
+.config/systemd/user/browser-chromium.slice
 .local/share/applications/firefox.desktop
 .local/share/applications/chromium.desktop
+{{ end }}
+
+{{ if not (has "zen" .enabled) }}
+.config/systemd/user/browser-zen.slice
+.local/share/applications/zen.desktop
+{{ end }}
+
+{{/* The umbrella belongs to whichever browsers exist, so it only goes away
+     when none of them do. */}}
+{{ if and (not (has "browsers" .enabled)) (not (has "zen" .enabled)) }}
+.config/systemd/user/browser.slice
 {{ end }}
 
 {{ if not (has "ziti" .enabled) }}
