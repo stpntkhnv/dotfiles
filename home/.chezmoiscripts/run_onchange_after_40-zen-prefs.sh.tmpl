@@ -50,6 +50,14 @@ user_pref("dom.ipc.processCount", 4);
 // picker: every link would then open in whatever container the current
 // workspace uses. The default handler must stay Junction.
 user_pref("browser.shell.checkDefaultBrowser", false);
+
+// Gecko exempts localhost from proxying by default, which here means a work
+// tab asking for 127.0.0.1 reaches the HOST rather than that context's
+// container: a dev server running inside the container is unreachable from
+// its own tab, while every host port is reachable from every context. The
+// proxy is ours, so letting it claim localhost is what the design already
+// assumes. Also what makes the loopback-marker routing test possible.
+user_pref("network.proxy.allow_hijacking_localhost", true);
 JS
 
 # Profile directory names contain spaces ("<hash>.Default (alpha)"), hence the

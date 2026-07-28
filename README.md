@@ -247,12 +247,19 @@ has a VPN. A container's own loopback does.
 
 `/var/tmp` and not `/tmp`: distrobox bind-mounts the host's `/tmp` into every
 container, so a marker written there would be one file shared by all three and
-the test would report the same name for every channel.
+the test would report the same name for every channel. `podman exec -d` and
+not a backgrounded `distrobox enter`: the listener is killed with the exec
+session, `setsid` included.
+
+Reading the marker from a tab needs
+`network.proxy.allow_hijacking_localhost`, which `user.js` turns on. Gecko
+exempts localhost from proxying by default, which would send the request to
+the host instead and fail with "unable to connect".
 
 ```sh
 for c in digi3 stellium personal; do
   distrobox enter "$c" -- sh -c "printf 'HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n%s\n' \"\$(. /run/.containerenv; echo \$name)\" > /var/tmp/whoami.http"
-  distrobox enter "$c" -- sh -c 'setsid socat TCP-LISTEN:8099,bind=127.0.0.1,fork,reuseaddr SYSTEM:"cat /var/tmp/whoami.http" >/dev/null 2>&1 &'
+  podman exec -d "$c" sh -c 'socat TCP-LISTEN:8099,bind=127.0.0.1,fork,reuseaddr SYSTEM:"cat /var/tmp/whoami.http"'
 done
 
 curl -s --max-time 5 http://127.0.0.1:8099/            # must fail: host has nothing there
@@ -276,33 +283,60 @@ done
 Browser profile state has no update-proof file representation, so this part is
 manual, once:
 
-1. **Containers.** Multi-Account Containers -> create `digi3`, `stellium`,
-   `personal`, `Scratch`. The names must match `contexts:` exactly: `zen-open`
-   substitutes them into `ext+container:name=...` verbatim.
-2. **Proxy per container.** For each work container: SOCKS5, `127.0.0.1`, the
-   port from `contexts:`, **proxyDNS on**. Without it resolution goes to the
-   host resolver, internal names do not resolve, and the list of internal hosts
-   leaks outward. `Scratch` gets no proxy.
-3. **Workspaces.** One per context. `Set Profile` on a workspace picks a
+1. **Proxy permission.** Multi-Account Containers -> Manage Extension ->
+   Optional Permissions -> *Allow extension to control proxy settings*.
+   Without it the per-container proxy field does not appear at all.
+2. **Containers.** Multi-Account Containers -> create `digi3`, `stellium`,
+   `personal`, `Scratch`. The names must match `contexts:` exactly, case
+   included: `zen-open` substitutes them into `ext+container:name=...`
+   verbatim, and `opener.js` creates any name it fails to find -- so a typo
+   yields a real container with **no proxy** and no warning.
+3. **Proxy per container.** Edit the container -> *Advanced proxy settings*:
+
+   ```
+   digi3      socks://127.0.0.1:11081
+   stellium   socks://127.0.0.1:11082
+   personal   socks://127.0.0.1:11083
+   Scratch    (empty)
+   ```
+
+   `socks://` and not `socks5://`: the extension parses the scheme with
+   `/(https?)|(socks4?)/`, so `socks5://` matches nothing and the proxy is
+   dropped silently. In Gecko, `socks` already means SOCKS5.
+
+   There is no proxyDNS checkbox; the extension sets `proxyDNS` itself for any
+   socks proxy. It follows that a scheme typo also costs remote DNS: names
+   then resolve on the host, internal ones do not resolve at all, and the list
+   of internal hosts leaks outward.
+4. **Workspaces.** One per context. `Set Profile` on a workspace picks a
    **container**, not a Firefox profile; real profiles are hidden behind
    `about:profiles`.
-4. **Temporary Containers** -> automatic mode.
-5. **Open external links in a container** -> enable HMAC signing, which closes
-   the case where a page feeds an `ext+container:` link aimed at a container
-   other than the current one.
-6. **"Always Open in Container" rules** go **only** on domains unique to one
+5. **Temporary Containers** -> automatic mode.
+6. **Container sync off.** Multi-Account Containers -> *Enable
+   synchronization* shares container names and site assignments through a
+   Firefox Account. That is a list of every context and its domains, held in
+   one place off this machine.
+7. **"Always Open in Container" rules** go **only** on domains unique to one
    context. Never on shared ones such as `dev.azure.com`, `portal.azure.com`,
    `teams.microsoft.com` or `login.microsoftonline.com`: a domain rule *pulls*
    a link out of its current container.
-7. **Bookmarks** rewritten as `ext+container:name=<Context>&url=<encoded>`. The
+8. **Bookmarks** rewritten as `ext+container:name=<Context>&url=<encoded>`. The
    container belongs in the link, not in the ambient context: otherwise a
    bookmark for stellium clicked from the digi3 workspace lands in digi3.
-8. **Pinned tabs and Essentials** per workspace, so reaching a frequent
+   `zen-open <context> <url>` builds the string; it is then visible in the
+   address bar of the tab it opens.
+9. **Pinned tabs and Essentials** per workspace, so reaching a frequent
    resource needs neither a typed address nor a bookmark.
-9. **Bitwarden**: auto-fill on page load off; URI match detection `Never` for
-   the shared Microsoft domains, `Host` for unique ones; one account per
-   context.
-10. `about:logins` emptied.
+10. **Bitwarden**: auto-fill on page load off; URI match detection `Never` for
+    the shared Microsoft domains, `Host` for unique ones; one account per
+    context.
+11. `about:logins` emptied.
+
+Not available, despite what an earlier version of this file claimed: *Open
+external links in a container* 1.0.3 has no HMAC signing and no options page
+at all. A page that feeds an `ext+container:` link therefore picks the
+container, which is only bounded by the threat model putting hostile pages out
+of scope.
 
 Containers not in use get stopped (`distrobox stop <name>`): memory, and fewer
 live network stacks at once. The host bridge survives it -- the listener stays
