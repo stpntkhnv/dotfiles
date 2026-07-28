@@ -162,6 +162,24 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/in
 After that use the `.bashrc` aliases (`digi3`, `stellium`, `personal`); each
 gets its own tmux socket.
 
+### `podman info` fails on overlay
+
+```
+Error: configure storage: kernel does not support overlay fs:
+'overlay' is not supported over extfs
+```
+
+This is not about the filesystem. Upgrading the `linux` package removes the
+modules of the running kernel, and `overlay` stops existing until a reboot:
+
+```sh
+uname -r          # running kernel
+pacman -Q linux   # installed package
+grep -c overlay /proc/filesystems
+```
+
+Versions disagree and the third line prints `0` -- reboot, nothing else.
+
 ## Voice input
 
 The `voice` feature installs [Handy](https://handy.computer), an offline
