@@ -177,7 +177,13 @@ SYNCTHING_CATALOG_EOF
     while IFS= read -r st_pair; do
         st_name="${st_pair%% *}"; st_id="${st_pair##* }"
         [[ "$st_id" == "$st_myid" ]] && continue
-        st_seen="$(jq -r --arg id "$st_id" '.[$id].lastSeen // "0001-01-01T00:00:00Z"' <<<"$st_stats")"
+        # `|| true` here too, and the reason is subtler than for the others: the
+        # `[[ -n "$st_stats" ]]` fallback above only catches a wholly empty reply.
+        # A curl cut off mid-transfer leaves a non-empty but truncated body, jq
+        # fails to parse it, and an unguarded assignment would take the whole
+        # checklist down -- including every item that has nothing to do with
+        # Syncthing. Empty here means "cannot tell", which prints nothing.
+        st_seen="$(jq -r --arg id "$st_id" '.[$id].lastSeen // "0001-01-01T00:00:00Z"' <<<"$st_stats" || true)"
         if [[ "$st_seen" == 0001-01-01* ]]; then
             steps+=("Syncthing: device '$st_name' has never been seen -- it has to add this machine's ID too (paired from one side only)")
         fi
@@ -226,7 +232,7 @@ SYNCTHING_CATALOG_EOF
         st_vault="$(jq -r '.kb.vault_path // ""' "$st_secrets" 2>/dev/null || true)"
         st_vault="${st_vault/#\~/$HOME}"
         [[ -z "$st_vault" ]] && st_vault="$HOME/Documents/Notes/kb"
-        st_kb="$HOME/$(jq -rn --argjson c "$st_catalog" '$c[] | select(.id == "kb") | .path')"
+        st_kb="$HOME/$(jq -rn --argjson c "$st_catalog" '$c[] | select(.id == "kb") | .path' || true)"
         if [[ "${st_vault%/}" != "$st_kb" ]]; then
             steps+=("Syncthing: claudefiles syncs the vault at $st_vault but the catalogue syncs $st_kb -- make them the same")
         fi
