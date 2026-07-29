@@ -44,6 +44,17 @@ ensure_server() {
     exit 1
 }
 
+# A herdr call further down can still fail if the server dies between
+# contexts, after ensure_server already found it up -- reproduced by killing
+# the server mid-run. Left unguarded the caller's `Error: Os { .. }` becomes
+# the script's last line, with no hint that this is the same situation
+# ensure_server already has words for. Aborting is still right; dying with a
+# Rust struct is not.
+server_gone_hint() {
+    echo "work: lost contact with the herdr server." >&2
+    echo "work: see ~/.config/herdr/herdr-server.log" >&2
+}
+
 # Space labels are NOT unique: `workspace create --label digi3` on a server that
 # already has digi3 happily makes a second one. Hence the lookup.
 #
@@ -58,24 +69,37 @@ workspace_for() {
 }
 
 # The root pane of the first tab, and only when that tab has exactly one pane.
-# A split tab is the user's arrangement and is left alone.
+# A split tab is the user's arrangement and is left alone -- but this used to
+# return empty for three different situations and only ever explain one of
+# them:
+#   - the workspace has no tabs at all;
+#   - the workspace vanished between workspace_for and here (closed from
+#     elsewhere while the loop was still going);
+#   - the first tab exists and is split into more than one pane.
+# The first two are indistinguishable from here and genuinely nothing to say
+# about -- a gone workspace is not this context's fault. The third is not:
+# the space is real, the user split it on purpose, and silently doing nothing
+# left them with a `work` that appeared to skip that context for no reason.
+# That one now says so.
 #
-# Both herdr calls are `|| true`-guarded: the workspace found by workspace_for
-# can vanish before this runs (closed from elsewhere while the loop was still
-# going). `herdr tab list --workspace <gone>` then exits non-zero, and under
-# `set -o pipefail` that took the whole script down before this guard existed
-# -- the remaining contexts never opened and the TUI never attached. A gone
-# workspace now reads the same as "no tab found", and the caller moves on to
-# the next context.
+# Both herdr calls are `|| true`-guarded: `herdr tab list --workspace <gone>`
+# exits non-zero on a vanished workspace, and under `set -o pipefail` that
+# took the whole script down before this guard existed -- the remaining
+# contexts never opened and the TUI never attached.
 first_tab_pane() {
-    local ws=$1 tab
+    local ws=$1 ctx=$2 tab panes count
     tab=$(herdr tab list --workspace "$ws" 2>/dev/null \
         | jq -r '[.result.tabs[]] | sort_by(.number) | .[0].tab_id // empty' || true)
     [ -n "$tab" ] || return 0
-    herdr pane list --workspace "$ws" 2>/dev/null \
-        | jq -r --arg t "$tab" \
-            '[.result.panes[] | select(.tab_id == $t)]
-             | if length == 1 then .[0].pane_id else empty end' || true
+    panes=$(herdr pane list --workspace "$ws" 2>/dev/null || true)
+    count=$(printf '%s' "$panes" | jq -r --arg t "$tab" \
+        '[.result.panes[] | select(.tab_id == $t)] | length' 2>/dev/null || true)
+    if [ "$count" = 1 ]; then
+        printf '%s' "$panes" | jq -r --arg t "$tab" \
+            '.result.panes[] | select(.tab_id == $t) | .pane_id'
+    elif [ -n "$count" ] && [ "$count" -gt 1 ] 2>/dev/null; then
+        echo "work: '$ctx' left alone, its first tab is split into $count panes." >&2
+    fi
 }
 
 # Positive rule, deliberately: "nothing but the pane's own shell is running".
@@ -141,7 +165,14 @@ enter_context() {
     local pane=$1 ctx=$2
     herdr pane send-keys "$pane" ctrl+c >/dev/null 2>&1 || true
     sleep 0.2
-    herdr pane run "$pane" distrobox enter --no-workdir "$ctx" >/dev/null
+    # The pane found idle by the caller can still vanish before this write --
+    # closed from elsewhere in the gap between the check and here, the same
+    # race first_tab_pane above is guarded against. Unguarded this took
+    # `set -e` down with it: later contexts never opened and `exec herdr`
+    # never ran. A failure here now means only that this one context is not
+    # entered; herdr's own error stays on stderr instead of being thrown away.
+    herdr pane run "$pane" distrobox enter --no-workdir "$ctx" >/dev/null \
+        || echo "work: could not enter '$ctx', pane $pane may already be gone." >&2
 }
 
 # The container scan needs no server, so it runs before ensure_server can have
@@ -167,20 +198,28 @@ ensure_server
 first_ws=""
 
 for ctx in "${usable[@]}"; do
-    ws=$(workspace_for "$ctx")
+    ws=$(workspace_for "$ctx") || { server_gone_hint; exit 1; }
     if [ -n "$ws" ]; then
-        pane=$(first_tab_pane "$ws")
+        pane=$(first_tab_pane "$ws" "$ctx")
         # An existing space may hold real work. Only a pane that is nothing but
         # an idle shell gets the entry typed into it.
         if [ -n "$pane" ] && pane_is_idle_shell "$pane"; then
             enter_context "$pane" "$ctx"
         fi
     else
-        created=$(herdr workspace create --label "$ctx" --no-focus)
+        created=$(herdr workspace create --label "$ctx" --no-focus) \
+            || { server_gone_hint; exit 1; }
         ws=$(printf '%s' "$created" | jq -r '.result.workspace.workspace_id // empty')
         pane=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
-        # Freshly created, so the only thing to wait for is the shell.
-        if wait_for_idle_shell "$pane"; then
+        # An empty pane id is a real, if rare, shape of the response -- and
+        # wait_for_idle_shell does not know that; it would poll an id that
+        # was never a pane for the full 50 tries (5s) and then print "pane
+        # $pane never produced a shell" with nothing where the id should be.
+        # Caught here instead, immediately and honestly.
+        if [ -z "$pane" ]; then
+            echo "work: '$ctx' created a workspace but no pane id came back, leaving it empty" >&2
+        # Freshly created, so the only other thing to wait for is the shell.
+        elif wait_for_idle_shell "$pane"; then
             enter_context "$pane" "$ctx"
         else
             echo "work: pane $pane never produced a shell, leaving it empty" >&2

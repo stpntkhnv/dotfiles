@@ -165,9 +165,10 @@ On a machine that already had this repository before this change, neither
 key is there: `herdr` and `tmux` are new asked features, and a stored
 `data.enabled` never gains a new key by itself (see [Adding a
 program](#adding-a-program)). Left alone, the context aliases quietly degrade
-to a bare `distrobox enter <name>`, `work` is never deployed, and
-`~/.tmux.conf` stops being managed -- nothing errors, so the `apply` looks
-successful. Add both keys to `data.enabled` by hand before applying.
+to `distrobox enter --no-workdir <name>` with none of the multiplexer twins,
+`work` is never deployed, and `~/.tmux.conf` stops being managed -- nothing
+errors, so the `apply` looks successful. Add both keys to `data.enabled` by
+hand before applying.
 
 [herdr](https://herdr.dev) is the primary one. It is a multiplexer in the tmux
 sense -- panes, tabs, detach and reattach -- that additionally knows the thing
@@ -275,7 +276,9 @@ podman exec digi3 kill <pid>
 ```
 
 Measured: `sleep 600` started through a pane was still listed by `podman top
-digi3` after the space holding it had been closed.
+digi3` after the space holding it had been closed, and `kill` cleared it. An
+interactive shell does not go as quietly: a `bash -l` left the same way
+ignored `kill` and stayed listed until `kill -9 <pid>`.
 
 **A container can drive the host's herdr.** distrobox mounts the whole host
 root into every container as `/run/host`, and the host home at its own path
@@ -405,9 +408,22 @@ Zen container "digi3"
 
 A UNIX socket rather than a port because it is a filesystem object: it crosses
 the network-namespace boundary without weakening it. The host always dials in,
-the container never learns a route back. Each container sees only its own
-socket directory; a shared one would let any container reach a neighbour's
-proxy and leave through the wrong VPN.
+the container never learns a route back. Each container's own mount at
+`/var/lib/wsproxy/` holds nothing but its own socket -- verified: `ls` there
+from inside `digi3` prints `socks.sock` alone.
+
+That mount guards against picking the wrong path by accident; it is not a
+boundary against code already running inside a container. distrobox
+bind-mounts the whole host home into every container besides, so the
+directory holding all three sockets is reachable too: `ls -l
+~/.local/share/wsproxy/*/socks.sock` from inside `digi3` lists digi3, personal
+and stellium, mode `srw-------`, owned by the same uid the container runs as.
+Connecting to a neighbour's socket from there gets back a SOCKS5 greeting, the
+same as connecting to its own -- reaching a neighbour's proxy and leaving
+through its VPN is one command away. What separates the contexts is the
+network namespace at the end of the chain; the socket in the middle separates
+nothing. [BROWSER-ISOLATION.md](BROWSER-ISOLATION.md) documents the identical
+route with socat.
 
 The list of contexts and ports is `contexts:` in `home/.chezmoidata.yaml`.
 Adding a context means adding one entry there and running `chezmoi apply`.
