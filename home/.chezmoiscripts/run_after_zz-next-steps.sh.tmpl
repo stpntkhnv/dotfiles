@@ -108,6 +108,131 @@ if [[ "$(xdg-mime query default x-scheme-handler/https 2>/dev/null)" != *[Jj]unc
     fi
 fi
 {{- end }}
+{{- if has "syncthing" .enabled }}
+# Six different causes with one appearance from outside: everything configured,
+# nothing synchronising. Each one gets its own line with the command that fixes
+# it, because guessing which of the six it is costs an evening.
+st_conf="$(syncthing paths 2>/dev/null | grep -oE '[^[:space:]]*config\.xml' | head -1 || true)"
+if [[ -z "$st_conf" || ! -f "$st_conf" ]]; then
+    steps+=("Syncthing: no configuration yet -- run 'chezmoi apply' once the service has started")
+else
+    st_key="$(sed -n 's:.*<apikey>\(.*\)</apikey>.*:\1:p' "$st_conf" | head -1)"
+    st_addr="$(awk '/<gui/,/<\/gui>/' "$st_conf" | sed -n 's:.*<address>\(.*\)</address>.*:\1:p' | head -1)"
+    [[ -n "$st_addr" ]] || st_addr="127.0.0.1:8384"
+    st_api() { curl -sf --max-time 5 -H "X-API-Key: $st_key" "http://$st_addr$1" 2>/dev/null; }
+
+    if ! systemctl --user is-active --quiet syncthing.service; then
+        steps+=("Syncthing: the user service is not running -- 'systemctl --user enable --now syncthing.service'")
+    fi
+
+    # Every assignment below ends in `|| true`. This file opens with
+    # `set -euo pipefail`, and an unreachable daemon would otherwise take the
+    # WHOLE checklist down -- not just the Syncthing lines, but GitHub, Tailscale
+    # and everything else in it.
+    st_myid="$(st_api /rest/system/status | jq -r '.myID // empty' || true)"
+    # Quoted heredocs rather than single-quoted assignments: an apostrophe in a
+    # folder label would otherwise end the string early and take this whole file
+    # down, checklist included.
+    st_devices="$(cat <<'SYNCTHING_DEVICES_EOF'
+{{ if hasKey .syncthing "devices" }}{{ .syncthing.devices | toJson }}{{ else }}{}{{ end }}
+SYNCTHING_DEVICES_EOF
+)"
+    st_catalog="$(cat <<'SYNCTHING_CATALOG_EOF'
+{{ .syncthing.folders | toJson }}
+SYNCTHING_CATALOG_EOF
+)"
+    st_self="$(jq -rn --argjson d "$st_devices" --arg id "$st_myid" \
+        '[$d | to_entries[] | select(.value.id == $id) | .key] | first // empty' 2>/dev/null || true)"
+
+    if [[ -n "$st_myid" && -z "$st_self" ]]; then
+        steps+=("Syncthing: this machine is not in the device map -- add to ~/.config/chezmoi/chezmoi.toml under [data.syncthing.devices]: thismachine = { id = \"$st_myid\", addresses = [\"dynamic\", \"tcp://<name>.<tailnet>.ts.net:22000\"] }, then add the same line on every other machine and run 'chezmoi apply' there too")
+    fi
+
+    # Pairing is mutual, so a device named in the catalogue but absent from the
+    # map means a folder is quietly synchronising with one participant fewer
+    # than it claims. Iterated in bash over a deduplicated list rather than in
+    # the template: `laptop` is named by three folders and deserves one line,
+    # not three.
+    while IFS= read -r st_name; do
+        [[ -n "$st_name" ]] || continue
+        if [[ "$(jq -rn --argjson d "$st_devices" --arg n "$st_name" '$d[$n].id // empty')" == "" ]]; then
+            steps+=("Syncthing: device '$st_name' is named in the catalogue but has no ID in the map -- run 'chezmoi apply' on it and copy the ID it prints")
+        fi
+    done < <(jq -rn --argjson c "$st_catalog" '[$c[].devices[]] | unique[]')
+
+    # Only folders this machine takes part in. `camera` is deliberately absent on
+    # the laptop, and a check that does not know that would demand it forever.
+    if [[ -n "$st_self" ]]; then
+        st_have="$(st_api /rest/config/folders | jq -r '.[].id' || true)"
+        while IFS= read -r st_fid; do
+            grep -qx "$st_fid" <<<"$st_have" || \
+                steps+=("Syncthing: folder '$st_fid' is not configured -- run 'chezmoi apply'")
+        done < <(jq -rn --argjson c "$st_catalog" --arg s "$st_self" '$c[] | select(.devices | index($s)) | .id')
+    fi
+
+    # lastSeen rather than the current connection state: a sleeping laptop is not
+    # an unpaired one, and a check that cries every day gets ignored.
+    st_stats="$(st_api /rest/stats/device || true)"
+    [[ -n "$st_stats" ]] || st_stats='{}'
+    while IFS= read -r st_pair; do
+        st_name="${st_pair%% *}"; st_id="${st_pair##* }"
+        [[ "$st_id" == "$st_myid" ]] && continue
+        st_seen="$(jq -r --arg id "$st_id" '.[$id].lastSeen // "0001-01-01T00:00:00Z"' <<<"$st_stats")"
+        if [[ "$st_seen" == 0001-01-01* ]]; then
+            steps+=("Syncthing: device '$st_name' has never been seen -- it has to add this machine's ID too (paired from one side only)")
+        fi
+
+        # A map entry with `dynamic` alone is the quietest failure of the lot:
+        # everything looks configured and the device is simply unreachable the
+        # moment it leaves the home network, because global discovery is off.
+        #
+        # An address still carrying <angle brackets> counts as absent. The tailnet
+        # domain cannot be known before `tailscale up`, so writing a placeholder is
+        # the honest thing to do -- but it begins with tcp:// and would sail through
+        # a check that only looked at the scheme.
+        if [[ "$(jq -rn --argjson d "$st_devices" --arg n "$st_name" \
+                 '[$d[$n].addresses[]? | select(startswith("tcp://")) | select(test("[<>]") | not)] | length')" == "0" ]]; then
+            steps+=("Syncthing: device '$st_name' has no usable static address -- put \"tcp://<name>.<tailnet>.ts.net:22000\" beside \"dynamic\" in ~/.config/chezmoi/chezmoi.toml with the real tailnet name from 'tailscale status', or the device is only reachable on the local network")
+        fi
+    done < <(jq -rn --argjson d "$st_devices" '$d | to_entries[] | "\(.key) \(.value.id)"')
+
+    # `ufw status` needs root, and this file must never ask for a password. During
+    # a real apply the sudo timestamp is still warm from 30-system, so the check
+    # runs; standalone it stays silent instead of reporting closed ports it could
+    # not actually look at.
+    if sudo -n true 2>/dev/null; then
+        st_ufw="$(sudo -n ufw status 2>/dev/null || true)"
+        for st_port in 22000/tcp 22000/udp 21027/udp; do
+            if ! grep -q "^${st_port%%/*}.*${st_port##*/}.*ALLOW" <<<"$st_ufw"; then
+                steps+=("Syncthing: incoming $st_port is closed -- run 'chezmoi apply' (30-system opens it)")
+                break
+            fi
+        done
+    fi
+
+    # A conflict file is an ordinary .md to an agent, and its name no longer
+    # matches the `name:` in its front matter, which is what [[links]] stand on.
+    while IFS= read -r st_path; do
+        while IFS= read -r st_conflict; do
+            steps+=("Syncthing: conflict file $st_conflict -- resolve with the kb-curate skill, do not delete blindly")
+        done < <(find "$HOME/$st_path" -name '*.sync-conflict-*' -type f 2>/dev/null)
+    done < <(jq -rn --argjson c "$st_catalog" --arg s "${st_self:-none}" '$c[] | select(.devices | index($s)) | .path')
+
+    # The vault path is owned by claudefiles, not by this repository. If the two
+    # disagree, the agents read one directory while Syncthing dutifully mirrors
+    # another, and both halves look healthy.
+    st_secrets="$HOME/.config/claudefiles/secrets.json"
+    if [[ -f "$st_secrets" ]] && [[ "$(jq -r '.flags.kb // false' "$st_secrets" 2>/dev/null)" == "true" ]]; then
+        st_vault="$(jq -r '.kb.vault_path // ""' "$st_secrets" 2>/dev/null || true)"
+        st_vault="${st_vault/#\~/$HOME}"
+        [[ -z "$st_vault" ]] && st_vault="$HOME/Documents/Notes/kb"
+        st_kb="$HOME/$(jq -rn --argjson c "$st_catalog" '$c[] | select(.id == "kb") | .path')"
+        if [[ "${st_vault%/}" != "$st_kb" ]]; then
+            steps+=("Syncthing: claudefiles syncs the vault at $st_vault but the catalogue syncs $st_kb -- make them the same")
+        fi
+    fi
+fi
+{{- end }}
 {{- range .contexts }}
 [[ -S "$HOME/.local/share/wsproxy/{{ .name }}/socks.sock" ]] || \
     steps+=("Proxy {{ .name }}: no socket -- start the container ('distrobox enter {{ .name }} -- true') and check wsproxy-bridge.service inside it")
