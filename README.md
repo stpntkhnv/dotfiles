@@ -87,10 +87,22 @@ chezmoi execute-template < home/.chezmoiscripts/run_onchange_before_20-packages.
 
 ### Changing the selection later
 
+`--prompt` really does re-ask everything, but "re-ask" starts from the
+**catalogue defaults** in `home/.chezmoidata.yaml`, not from what this
+machine currently has ticked — the same trap as the new asked feature above.
+Accepting the pre-ticked checklist silently drops every feature that is not
+`default: true`; anything picked by hand has to be re-ticked or it does not
+survive the `apply`.
+
 ```sh
-chezmoi init --prompt     # re-asks everything, including the checklist
+chezmoi init --prompt     # re-asks everything, pre-ticked with defaults only
 chezmoi apply
 ```
+
+That is still the right tool when the goal is genuinely to redo the whole
+selection. To add or drop a single feature without disturbing the rest, skip
+`--prompt` and edit `data.enabled` by hand instead, as under [Adding a
+program](#adding-a-program).
 
 ### Non-interactive install
 
@@ -142,6 +154,14 @@ overwrite each other forever, same story as the niri `dms/` includes.
 Two of them, and that is deliberate. Both are ordinary checklist features, so
 a machine can have either or both.
 
+On a machine that already had this repository before this change, neither
+key is there: `herdr` and `tmux` are new asked features, and a stored
+`data.enabled` never gains a new key by itself (see [Adding a
+program](#adding-a-program)). Left alone, the context aliases quietly degrade
+to a bare `distrobox enter <name>` with no multiplexer at all, and
+`~/.tmux.conf` stops being managed — nothing errors, so the `apply` looks
+successful. Add both keys to `data.enabled` by hand before applying.
+
 [herdr](https://herdr.dev) is the primary one. It is a multiplexer in the tmux
 sense — panes, tabs, detach and reattach — that additionally knows the thing in
 a pane is a coding agent and shows its state in a sidebar. It is also a 0.x
@@ -171,10 +191,15 @@ equivalent.
 
 Two things that are not what they look like:
 
-- **Unticking `tmux` removes nothing.** The package installer only ever
-  installs, and `chezmoi apply` does not delete a file that has become
-  ignored. The binary stays, `~/.tmux.conf` stays where it was and simply
-  stops being managed. Removing tmux for real is `pacman -Rns tmux` by hand.
+- **Unticking `tmux` removes the `-tmux` twin, not the package.** The package
+  installer only ever installs, and `chezmoi apply` does not delete a file
+  that has become ignored: the binary stays, and `~/.tmux.conf` stays where
+  it was and simply stops being managed. What does go is `digi3-tmux` itself
+  — `dot_bashrc.tmpl` only renders the twin when both multiplexers are
+  selected, so the fallback this section advertises above stops existing as
+  an alias. Falling back then means typing `tmux -L digi3 new-session -A -s
+  work` by hand, or ticking `tmux` again. Removing tmux for real is still
+  `pacman -Rns tmux` by hand.
 - **The DankMaterialShell session panel only speaks tmux and zellij.** It
   probes for the binary rather than reading the feature list, so it keeps
   listing tmux sessions regardless of the checklist, and it will never see a
