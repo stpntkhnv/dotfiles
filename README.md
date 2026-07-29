@@ -442,14 +442,72 @@ question is asked at init rather than mid-apply because the install needs a
 reboot.
 
 Tauri cannot grab global shortcuts on wlroots-style compositors, so niri owns
-the keybind and signals the running process instead: **Mod+Shift+D** sends
-`SIGUSR2`. That binding and `spawn-at-startup` live in
-`home/dot_config/niri/voice.kdl.tmpl`, which `config.kdl` includes
-unconditionally and which renders to a comment-only file when the feature is
-off.
+the keybind and signals the running process with a Unix signal instead. Which
+signal, and how many bindings, depends on whether `voice-postprocess` is
+selected -- see the table under [Punctuation](#punctuation). Those bindings and
+`spawn-at-startup` live in `home/dot_config/niri/voice.kdl.tmpl`, which
+`config.kdl` includes unconditionally and which renders to a comment-only file
+when the feature is off.
 
 After installing, launch Handy once and download a model (Settings → Model).
 Whisper Large v3 Turbo (~1.6 GB) is the multilingual, GPU-accelerated one.
+
+### Punctuation
+
+Whisper picks a transcription style at the first token of every 30-second
+decode window and holds it, autoregressively, to the end of that window. With
+nothing to pin the choice, punctuation showed up in roughly half the
+dictations: of 40 transcripts longer than 60 characters, 7 began in lowercase
+and 6 of those carried no sentence-ending punctuation at all. Long recordings
+gave it away -- they start unpunctuated and switch to clean prose mid-text, at
+a window boundary.
+
+Handy's only lever on that is the whisper `initial_prompt`, and its only
+source is the Custom Words list, which the UI restricts to single space-free
+words and which doubles as a fuzzy find-replace list. It also pins the first
+window only.
+
+So the `voice-postprocess` feature takes the other route: the finished
+transcript goes to `gemma2:9b`, served by `ollama-vulkan` on
+`127.0.0.1:11434`, which restores punctuation and joins fragments into
+sentences. It was chosen by measurement against the 12B/14B class and runs
+entirely on the GPU, alongside the Whisper model, with room to spare. Running
+on the finished text means window boundaries stop mattering.
+
+| Key | What it does |
+|---|---|
+| **Mod+Shift+D** | dictate, then clean up (`SIGUSR1`) |
+| **Mod+Ctrl+D** | dictate raw, no LLM (`SIGUSR2`) |
+
+Without the feature, **Mod+Shift+D** stays raw and the second binding does not
+exist.
+
+Nothing leaves the machine: the endpoint is loopback and no cloud provider is
+configured. Nothing is lost either -- post-processing returns an `Option`, and
+a failure of any kind leaves the raw transcript in place. A stopped
+`ollama.service` costs punctuation, not the dictation.
+
+Cleanup is not equally reliable on every input. Across 18 test transcripts,
+one very long dictation (162 seconds) came back with the Russian "прыгни на"
+("jump to") rendered as the English "jumping on the" -- a mid-sentence
+language slip, the only one seen. The same recording was also the only one
+left with an over-long, unpunctuated stretch after cleanup: long, rambling
+dictations are the weak case, and shorter ones stay reliable.
+
+That is part of why the raw transcript is never thrown away. Handy keeps both
+the raw and the cleaned text in its history database, and this work raised
+`history_limit` from 5 to 100 for that reason: so the original survives long
+enough to be found and recovered if a cleanup pass ever mangles something.
+
+The settings live in `settings_store.json`, which Handy owns and rewrites from
+its own UI, so `run_after_44-handy-postprocess` patches the eight keys we care
+about rather than the repository managing the file. Every one of them sits
+under the top-level `settings` object; writing to the root instead is silent,
+not an error.
+
+On a fresh machine that file does not exist until Handy has started once, the
+same shape as the Zen profiles: `chezmoi apply`, launch Handy and download a
+Whisper model, `chezmoi apply` again.
 
 ## niri and DankMaterialShell files
 
