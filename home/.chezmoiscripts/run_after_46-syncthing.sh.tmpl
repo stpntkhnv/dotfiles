@@ -72,8 +72,20 @@ for _ in $(seq 30); do
 done
 [[ -n "$myid" ]] || bail "the daemon did not answer within 30s"
 
-CATALOG='{{ .syncthing.folders | toJson }}'
-DEVICES='{{ if hasKey .syncthing "devices" }}{{ .syncthing.devices | toJson }}{{ else }}{}{{ end }}'
+# Through a quoted heredoc, not a single-quoted assignment. toJson escapes " and
+# \ but not ', so one apostrophe in a folder label ends the shell string early:
+# with an odd number of them the script dies of a syntax error and takes the
+# whole apply with it, and with an even number it silently executes part of the
+# JSON as a command and leaves the variable empty. A <<'EOF' body is never
+# expanded or word-split, so the JSON arrives byte for byte.
+CATALOG="$(cat <<'SYNCTHING_CATALOG_EOF'
+{{ .syncthing.folders | toJson }}
+SYNCTHING_CATALOG_EOF
+)"
+DEVICES="$(cat <<'SYNCTHING_DEVICES_EOF'
+{{ if hasKey .syncthing "devices" }}{{ .syncthing.devices | toJson }}{{ else }}{}{{ end }}
+SYNCTHING_DEVICES_EOF
+)"
 
 # Which machine am I? Answered by matching my own device ID against the map
 # rather than by a name written somewhere. A name would have to be remembered
