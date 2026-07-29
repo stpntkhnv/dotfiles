@@ -48,10 +48,15 @@ if ! systemctl --user is-active --quiet syncthing.service; then
         || bail "could not start the user service"
 fi
 
-API_KEY="$(sed -n 's:.*<apikey>\(.*\)</apikey>.*:\1:p' "$CONF_XML" | head -1)"
+# `|| true` on the two extractions below and on SELF further down. A pipeline
+# ending in `head -1` does NOT return 0 when an earlier stage fails: this file
+# sets `pipefail`, so a failing sed propagates and an unguarded assignment ends
+# the script. Each of the three is followed by its own emptiness check, which is
+# where the real handling lives.
+API_KEY="$(sed -n 's:.*<apikey>\(.*\)</apikey>.*:\1:p' "$CONF_XML" | head -1 || true)"
 [[ -n "$API_KEY" ]] || bail "no API key in $CONF_XML"
 
-GUI_ADDR="$(awk '/<gui/,/<\/gui>/' "$CONF_XML" | sed -n 's:.*<address>\(.*\)</address>.*:\1:p' | head -1)"
+GUI_ADDR="$(awk '/<gui/,/<\/gui>/' "$CONF_XML" | sed -n 's:.*<address>\(.*\)</address>.*:\1:p' | head -1 || true)"
 [[ -n "$GUI_ADDR" ]] || GUI_ADDR="127.0.0.1:8384"
 BASE="http://$GUI_ADDR"
 
@@ -92,7 +97,7 @@ SYNCTHING_DEVICES_EOF
 # when a config is copied to another box, and would then lie silently: the
 # machine would answer to someone else's name and adopt their folders.
 SELF="$(jq -rn --argjson d "$DEVICES" --arg id "$myid" \
-    '[$d | to_entries[] | select(.value.id == $id) | .key] | first // empty')"
+    '[$d | to_entries[] | select(.value.id == $id) | .key] | first // empty' || true)"
 
 if [[ -z "$SELF" ]]; then
     say "this machine is not in [data.syncthing.devices] yet; its ID is $myid"
@@ -112,8 +117,12 @@ known_devices="$(api "$BASE/rest/config/devices" | jq -r '.[].deviceID')" \
 
 while IFS= read -r name; do
     [[ -n "$name" ]] || continue
-    dev_id="$(jq -rn --argjson d "$DEVICES" --arg n "$name" '$d[$n].id')"
-    dev_addrs="$(jq -cn --argjson d "$DEVICES" --arg n "$name" '$d[$n].addresses')"
+    # A hand-written map entry of the wrong shape -- `laptop = "ID"` instead of
+    # `laptop = { id = "ID" }` -- makes jq exit non-zero here. That edit is what
+    # the README asks the user to make on every machine, so it is a likely
+    # mistake, and it must cost that one device rather than the whole apply.
+    dev_id="$(jq -rn --argjson d "$DEVICES" --arg n "$name" '$d[$n].id')" || continue
+    dev_addrs="$(jq -cn --argjson d "$DEVICES" --arg n "$name" '$d[$n].addresses')" || continue
 
     if grep -qx "$dev_id" <<<"$known_devices"; then
         current="$(api "$BASE/rest/config/devices/$dev_id")" || continue

@@ -434,7 +434,7 @@ Notes and phone photos stay in step across machines through
 [Syncthing](https://syncthing.net), driven from `home/.chezmoidata.yaml` under
 a `syncthing:` key rather than clicked together in the web UI. Four folders:
 
-| id | path | type | participants | versioning |
+| id | path | type on host | participants | versioning |
 |---|---|---|---|---|
 | `kb` | `~/Documents/Notes/kb` | `sendreceive` | desktop, laptop | staggered |
 | `personal` | `~/Documents/Notes/personal` | `sendreceive` | desktop, laptop, phone | staggered |
@@ -449,6 +449,15 @@ empty one. Ids are spelled out by hand (`kb`, `personal`, `kb-archive`,
 `camera`) rather than left to Syncthing's random generator, because the
 phone's app needs the same id typed in by hand and it has to match to the
 character.
+
+This change also adds `obsidian` as a feature, since the vaults Syncthing
+carries need something to open them. On a machine that already had this
+repository before this change, neither key is there: `syncthing` and
+`obsidian` are new asked features, and a stored `data.enabled` never gains a
+new key by itself (see [Adding a program](#adding-a-program)). Left alone, a
+plain `chezmoi apply` on that machine installs neither and configures
+neither -- nothing errors, so it gets a clean apply that installs nothing and
+says nothing. Add both keys to `data.enabled` by hand before applying.
 
 Syncthing runs on the host only, not inside every distrobox container. It
 does not need to: distrobox already mounts the whole host home directory tree
@@ -485,7 +494,8 @@ identifier of a machine that exists; publishing it, together with its
 address and how many such machines there are, gives away a correlation for
 nothing in return.
 
-Discovery is local plus tailnet, nothing further. On the same network,
+Discovery is local plus tailnet (the private network [Tailscale](https://tailscale.com)
+joins these machines to), nothing further. On the same network,
 `localAnnounceEnabled` finds the other machine directly; global announce,
 relays and NAT traversal are all off, so these machines are not advertised
 anywhere beyond that. That is why every entry above carries two addresses --
