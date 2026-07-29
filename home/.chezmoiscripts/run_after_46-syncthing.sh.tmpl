@@ -176,13 +176,18 @@ known_folders="$(api "$BASE/rest/config/folders" | jq -r '.[].id')" \
     || bail "could not read the folder list"
 
 while IFS= read -r folder; do
-    fid="$(jq -r '.id' <<<"$folder")"
-    fpath="$HOME/$(jq -r '.path' <<<"$folder")"
-    flabel="$(jq -r '.label' <<<"$folder")"
-    ftype="$(jq -r '.type' <<<"$folder")"
+    # `|| continue` on every parse below, for the reason the header states: this
+    # script may never exit non-zero. These read JSON the script itself produced,
+    # so a failure means something is badly wrong rather than merely missing, and
+    # skipping that one folder is the right answer either way -- a half-parsed
+    # folder must never reach the daemon.
+    fid="$(jq -r '.id' <<<"$folder")" || continue
+    fpath="$HOME/$(jq -r '.path' <<<"$folder")" || continue
+    flabel="$(jq -r '.label' <<<"$folder")" || continue
+    ftype="$(jq -r '.type' <<<"$folder")" || continue
 
     members="$(jq -cn --argjson f "$folder" --argjson d "$DEVICES" \
-        '[$f.devices[] | select($d[.] != null) | {deviceID: $d[.].id}] | sort_by(.deviceID)')"
+        '[$f.devices[] | select($d[.] != null) | {deviceID: $d[.].id}] | sort_by(.deviceID)')" || continue
 
     # A staggered version set is a bin, not a history: 31536000 is a year IN
     # SECONDS, and the plain "365" this field also accepts would mean six minutes.
@@ -193,13 +198,13 @@ while IFS= read -r folder; do
 
     desired="$(jq -cn --arg id "$fid" --arg label "$flabel" --arg path "$fpath" \
                      --arg type "$ftype" --argjson devices "$members" --argjson v "$versioning" \
-        '{id: $id, label: $label, path: $path, type: $type, devices: $devices, versioning: $v}')"
+        '{id: $id, label: $label, path: $path, type: $type, devices: $devices, versioning: $v}')" || continue
 
     if grep -qx "$fid" <<<"$known_folders"; then
         current="$(api "$BASE/rest/config/folders/$fid")" || continue
         same="$(jq -n --argjson cur "$current" --argjson des "$desired" \
             '($cur | {label, path, type, versioning} + {devices: ([.devices[] | {deviceID}] | sort_by(.deviceID))})
-             == ($des | {label, path, type, versioning, devices})')"
+             == ($des | {label, path, type, versioning, devices})')" || continue
         if [[ "$same" != "true" ]]; then
             say "folder $fid: drifted, fixing"
             api -X PATCH -H "Content-Type: application/json" -d "$desired" \
@@ -208,7 +213,12 @@ while IFS= read -r folder; do
         fi
     else
         say "folder $fid: adding"
-        mkdir -p "$fpath"
+        # The one call here that touches the filesystem, and the likeliest thing
+        # in this file to fail for an ordinary reason: a plain file already
+        # sitting at that path, a full or read-only filesystem, a parent nobody
+        # may write. Verified: mkdir -p over a regular file exits non-zero, which
+        # unguarded would end the apply.
+        mkdir -p "$fpath" || { say "folder $fid: cannot create $fpath, skipping"; continue; }
         api -X POST -H "Content-Type: application/json" \
             -d "$(api "$BASE/rest/config/defaults/folder" | jq -c --argjson des "$desired" '. * $des')" \
             "$BASE/rest/config/folders" >/dev/null || say "folder $fid: POST failed"
@@ -220,7 +230,7 @@ while IFS= read -r folder; do
     # a pattern added by hand is taken back on the next apply. That is the same
     # re-assertion this script is run_after_ for. Unmanaged folders are not read
     # and not written.
-    want_ignores="$(jq -cn --argjson f "$folder" '$f.ignore // []')"
+    want_ignores="$(jq -cn --argjson f "$folder" '$f.ignore // []')" || continue
     have_ignores="$(api "$BASE/rest/db/ignores?folder=$fid" | jq -c '.ignore // []')" || continue
     if [[ "$want_ignores" != "$have_ignores" ]]; then
         say "folder $fid: ignore patterns drifted, fixing"
