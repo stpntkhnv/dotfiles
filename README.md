@@ -553,6 +553,133 @@ matters for addresses that name a specific organisation
 (`dev.azure.com/<org>`, invite links), and those are never typed -- they arrive
 from outside, which is covered above.
 
+## Sync
+
+Notes and phone photos stay in step across machines through
+[Syncthing](https://syncthing.net), driven from `home/.chezmoidata.yaml` under
+a `syncthing:` key rather than clicked together in the web UI. Four folders:
+
+| id | path | type on host | participants | versioning |
+|---|---|---|---|---|
+| `kb` | `~/Documents/Notes/kb` | `sendreceive` | desktop, laptop | staggered |
+| `personal` | `~/Documents/Notes/personal` | `sendreceive` | desktop, laptop, phone | staggered |
+| `kb-archive` | `~/Documents/Notes/kb-archive` | `sendreceive` | desktop, laptop | none |
+| `camera` | `~/Pictures/Camera` | `receiveonly` | desktop, phone | none |
+
+`type` is Syncthing's own vocabulary: `sendreceive` folders sync both ways,
+`receiveonly` accepts incoming changes but never sends its own. A folder only
+gets created on the machines named in its own `devices` -- the laptop is not
+listed under `camera`, so the laptop gets no `camera` folder at all, not an
+empty one. Ids are spelled out by hand (`kb`, `personal`, `kb-archive`,
+`camera`) rather than left to Syncthing's random generator, because the
+phone's app needs the same id typed in by hand and it has to match to the
+character.
+
+This change also adds `obsidian` as a feature, since the vaults Syncthing
+carries need something to open them. On a machine that already had this
+repository before this change, neither key is there: `syncthing` and
+`obsidian` are new asked features, and a stored `data.enabled` never gains a
+new key by itself (see [Adding a program](#adding-a-program)). Left alone, a
+plain `chezmoi apply` on that machine installs neither and configures
+neither -- nothing errors, so it gets a clean apply that installs nothing and
+says nothing. Add both keys to `data.enabled` by hand before applying.
+
+Syncthing runs on the host only, not inside every distrobox container. It
+does not need to: distrobox already mounts the whole host home directory tree
+into each container, so a folder kept in sync on the host shows up in
+`digi3`, `stellium` and `personal` by itself. This is already relied on --
+the agent knowledge base's own machine index,
+`~/system/.claude/rules/machine-index.md`, is a symlink into the vault, and
+it resolves to the same file whether followed from the host or from inside a
+container. A daemon per container would move the same bytes again, need its
+own device identity and its own port, and would have to punch a hole through
+that container's own network namespace to do it. Nothing is gained.
+
+`camera` is an inbox, not an archive. `receiveonly` does not mean the host
+ignores what the phone deletes -- a delete from the phone is applied here
+like anywhere else. What `receiveonly` actually protects is the other
+direction: the host never pushes its own changes back, so a photo can be
+carried out of `~/Pictures/Camera` into permanent storage by hand, and the
+phone's gallery never notices. Clearing space on the phone's gallery still
+empties this folder too.
+
+Device IDs and addresses are not in the catalogue. They live in
+`~/.config/chezmoi/chezmoi.toml`, per machine:
+
+```toml
+[data.syncthing.devices]
+  desktop = { id = "<device-id>", addresses = ["dynamic", "tcp://<name>.<tailnet>.ts.net:22000"] }
+  laptop  = { id = "<device-id>", addresses = ["dynamic", "tcp://<name>.<tailnet>.ts.net:22000"] }
+  phone   = { id = "<device-id>", addresses = ["dynamic", "tcp://<name>.<tailnet>.ts.net:22000"] }
+```
+
+The catalogue names only folders and logical participants (`desktop`,
+`laptop`, `phone`). This repository is public, and a device ID is a stable
+identifier of a machine that exists; publishing it, together with its
+address and how many such machines there are, gives away a correlation for
+nothing in return.
+
+Discovery is local plus tailnet (the private network [Tailscale](https://tailscale.com)
+joins these machines to), nothing further. On the same network,
+`localAnnounceEnabled` finds the other machine directly; global announce,
+relays and NAT traversal are all off, so these machines are not advertised
+anywhere beyond that. That is why every entry above carries two addresses --
+`dynamic` alone only resolves inside the LAN, so reaching a device from
+anywhere else needs the static `tcp://<name>.<tailnet>.ts.net:22000` form
+too. The phone is the device most likely to be off the home network, and it
+has to actually be joined to the tailnet, or that second address means
+nothing.
+
+`sudo ufw` gets rules for `22000/tcp`, `22000/udp` and `21027/udp`. Without
+them the default-deny-incoming firewall blocks both directions and it fails
+quietly: the web UI works, both devices are listed, and the status just sits
+on Disconnected. An open port here is not an open door -- Syncthing checks
+the connecting device's certificate on every attempt and rejects anything it
+does not already know.
+
+Syncthing runs as a user service, because it has to read `~/Documents` and a
+system unit could not. The consequence: a machine that is powered on but not
+logged in does not sync. `loginctl enable-linger` removes that limit for
+whoever wants otherwise; it is not turned on here, on purpose.
+
+The notes vault's own path is owned by a different repository, `claudefiles`,
+which is what actually populates `~/Documents/Notes/kb`. After this, the same
+path exists a second time, as the `kb` folder's `path` above. The two can
+drift silently -- agents keep reading and writing the vault at their own
+path, Syncthing keeps faithfully syncing the directory next to it, and the
+first sign is an empty vault on the other machine. Reconciling them is a
+`chezmoi apply` next-steps check, not something this file can enforce: it
+compares the two paths and prints both when they disagree.
+
+### New machine
+
+Pairing is mutual; one machine acting alone cannot finish it.
+
+1. On the new machine, `chezmoi apply`. The script creates a Syncthing
+   identity, starts the service and exits; next-steps prints that machine's
+   device ID.
+2. That ID gets added to `[data.syncthing.devices]` on every machine that is
+   already running. This is the only step in the whole setup where an action
+   on one machine requires an action on another, and skipping it neither
+   errors nor warns -- both sides simply look configured and never connect.
+3. `chezmoi apply` on each of those already-running machines.
+4. The complete map, all machines together, is copied onto the new machine,
+   and `chezmoi apply` runs there again.
+5. The phone is added by hand, on both sides -- see below.
+
+### Phone
+
+Syncthing on Android is not touched by chezmoi at all; it is set up once, by
+hand, in the app:
+
+1. Join the tailnet.
+2. Add the computer as a device, using its device ID.
+3. Create `personal` and `camera` as folders with exactly those ids. A typo
+   here is not an error: Syncthing accepts it and quietly creates a second,
+   unrelated folder instead.
+4. Set `camera` to Send Only, matching the host's `receiveonly`.
+5. Leave `personal` two-way.
+
 ## Voice input
 
 The `voice` feature installs [Handy](https://handy.computer), an offline

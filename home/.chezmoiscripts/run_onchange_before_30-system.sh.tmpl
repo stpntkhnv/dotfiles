@@ -139,6 +139,25 @@ if ! sudo ufw status | grep -q '5353.*ALLOW'; then
     sudo ufw allow mdns
 fi
 {{- end }}
+{{- if has "syncthing" .enabled }}
+
+# Syncthing needs INCOMING tcp/22000 (sync), udp/22000 (QUIC) and udp/21027
+# (local discovery), all of which the default-deny rule above blocks. Nothing
+# reports this: the web GUI works, the devices are listed, and the status stays
+# Disconnected forever, because if both ends deny incoming neither can dial the
+# other.
+#
+# Not scoped to an interface. `allow in on tailscale0` reads tidier and breaks
+# quietly -- the interface name is not guaranteed and the home network changes.
+# An open port is not an open door here: Syncthing checks the device certificate
+# on every connection and rejects anything it was not told about.
+for rule in 22000/tcp 22000/udp 21027/udp; do
+    if ! sudo ufw status | grep -q "^${rule%%/*}.*${rule##*/}.*ALLOW"; then
+        echo "==> Allowing $rule for Syncthing"
+        sudo ufw allow "$rule"
+    fi
+done
+{{- end }}
 {{- if has "tailscale" .enabled }}
 
 # Tailscale: enable AND start -- `tailscale up` in the next-steps checklist

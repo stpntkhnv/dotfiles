@@ -1,0 +1,262 @@
+#!/bin/bash
+{{- if not (has "syncthing" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Syncthing's configuration belongs to the daemon: it rewrites config.xml whole
+# whenever anything changes in its own GUI. So chezmoi must not own that file --
+# the two would overwrite each other forever, the same mistake the README
+# documents for the DMS-generated niri includes. What happens here instead is a
+# per-object patch through the REST API.
+#
+# run_after_ rather than run_onchange_: an onchange script only re-runs when its
+# own rendered text changes, so a setting clobbered from the GUI would never be
+# restored. This one re-asserts on every apply and does nothing when nothing
+# drifted.
+#
+# NOTHING HERE MAY FAIL THE APPLY. A daemon that is not up, a user manager that
+# does not exist, a config in an unexpected place -- each of them means "say so
+# and leave", never a non-zero exit that `set -e` turns into a failed chezmoi
+# run. run_after_zz-next-steps reports what is missing.
+
+say()  { echo "==> syncthing: $*"; }
+bail() { say "$*"; exit 0; }
+
+command -v syncthing >/dev/null 2>&1 || bail "not installed, nothing to configure"
+command -v jq >/dev/null 2>&1 || bail "jq is missing"
+
+# The config directory is asked for rather than assumed. Since 1.27 the default
+# moved to $XDG_STATE_HOME/syncthing, an install predating it still lives in
+# ~/.config/syncthing, and --config or $STCONFDIR override both. Guessing wrong
+# would not fail loudly: `syncthing generate` would mint a SECOND identity beside
+# the real one and this machine would announce a device ID no peer has heard of.
+CONF_XML="$(syncthing paths 2>/dev/null | grep -oE '[^[:space:]]*config\.xml' | head -1 || true)"
+[[ -n "$CONF_XML" ]] || bail "could not locate config.xml"
+
+if [[ ! -f "$CONF_XML" ]]; then
+    say "no configuration yet, generating this machine's identity"
+    syncthing generate >/dev/null 2>&1 || bail "syncthing generate failed"
+fi
+
+# systemctl --user has no user manager to talk to when the apply runs outside a
+# login session, and the unit name is the packager's choice, not ours. Both are
+# reasons to report rather than die.
+if ! systemctl --user is-active --quiet syncthing.service; then
+    say "starting syncthing.service"
+    systemctl --user enable --now syncthing.service >/dev/null 2>&1 \
+        || bail "could not start the user service"
+fi
+
+# `|| true` on the two extractions below and on SELF further down. A pipeline
+# ending in `head -1` does NOT return 0 when an earlier stage fails: this file
+# sets `pipefail`, so a failing sed propagates and an unguarded assignment ends
+# the script. Each of the three is followed by its own emptiness check, which is
+# where the real handling lives.
+API_KEY="$(sed -n 's:.*<apikey>\(.*\)</apikey>.*:\1:p' "$CONF_XML" | head -1 || true)"
+[[ -n "$API_KEY" ]] || bail "no API key in $CONF_XML"
+
+GUI_ADDR="$(awk '/<gui/,/<\/gui>/' "$CONF_XML" | sed -n 's:.*<address>\(.*\)</address>.*:\1:p' | head -1 || true)"
+[[ -n "$GUI_ADDR" ]] || GUI_ADDR="127.0.0.1:8384"
+BASE="http://$GUI_ADDR"
+
+api() { curl -sf --max-time 10 -H "X-API-Key: $API_KEY" "$@"; }
+
+# The daemon has just been started and needs a moment on a cold machine. Bounded,
+# because an unbounded wait inside chezmoi apply is a hang with no message.
+#
+# `|| true` is load-bearing, not decoration: with `set -e` and `pipefail` an
+# assignment from a pipeline whose curl failed takes the whole script down, so
+# the retry loop written for robustness would die on its first miss instead of
+# sleeping.
+myid=""
+for _ in $(seq 30); do
+    myid="$(api "$BASE/rest/system/status" 2>/dev/null | jq -r '.myID // empty' || true)"
+    [[ -n "$myid" ]] && break
+    sleep 1
+done
+[[ -n "$myid" ]] || bail "the daemon did not answer within 30s"
+
+# Through a quoted heredoc, not a single-quoted assignment. toJson escapes " and
+# \ but not ', so one apostrophe in a folder label ends the shell string early:
+# with an odd number of them the script dies of a syntax error and takes the
+# whole apply with it, and with an even number it silently executes part of the
+# JSON as a command and leaves the variable empty. A <<'EOF' body is never
+# expanded or word-split, so the JSON arrives byte for byte.
+CATALOG="$(cat <<'SYNCTHING_CATALOG_EOF'
+{{ .syncthing.folders | toJson }}
+SYNCTHING_CATALOG_EOF
+)"
+DEVICES="$(cat <<'SYNCTHING_DEVICES_EOF'
+{{ if hasKey .syncthing "devices" }}{{ .syncthing.devices | toJson }}{{ else }}{}{{ end }}
+SYNCTHING_DEVICES_EOF
+)"
+
+# Which machine am I? Answered by matching my own device ID against the map
+# rather than by a name written somewhere. A name would have to be remembered
+# when a config is copied to another box, and would then lie silently: the
+# machine would answer to someone else's name and adopt their folders.
+SELF="$(jq -rn --argjson d "$DEVICES" --arg id "$myid" \
+    '[$d | to_entries[] | select(.value.id == $id) | .key] | first // empty' || true)"
+
+if [[ -z "$SELF" ]]; then
+    say "this machine is not in [data.syncthing.devices] yet; its ID is $myid"
+    exit 0
+fi
+
+say "this machine is '$SELF'"
+
+NEEDS_RESTART=0
+
+# Devices first: a folder cannot list a participant the daemon has never heard
+# of. A device already known is PATCHed with our keys only, so anything the user
+# set in the GUI on that device entry survives. A device not known yet is built
+# from the daemon's own template, which is why no default has to be guessed here.
+known_devices="$(api "$BASE/rest/config/devices" | jq -r '.[].deviceID')" \
+    || bail "could not read the device list"
+
+while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    # A hand-written map entry of the wrong shape -- `laptop = "ID"` instead of
+    # `laptop = { id = "ID" }` -- makes jq exit non-zero here. That edit is what
+    # the README asks the user to make on every machine, so it is a likely
+    # mistake, and it must cost that one device rather than the whole apply.
+    dev_id="$(jq -rn --argjson d "$DEVICES" --arg n "$name" '$d[$n].id')" || continue
+    dev_addrs="$(jq -cn --argjson d "$DEVICES" --arg n "$name" '$d[$n].addresses')" || continue
+
+    if grep -qx "$dev_id" <<<"$known_devices"; then
+        current="$(api "$BASE/rest/config/devices/$dev_id")" || continue
+        # Compared as a set. Which address Syncthing tries first is its business,
+        # and an exact-order comparison would rewrite the same entry on every
+        # apply if the daemon ever reorders it.
+        if [[ "$(jq -c --argjson a "$dev_addrs" --arg n "$name" \
+                 '(.addresses | sort) == ($a | sort) and .name == $n' <<<"$current")" != "true" ]]; then
+            say "device $name: addresses or name drifted, fixing"
+            api -X PATCH -H "Content-Type: application/json" \
+                -d "$(jq -cn --argjson a "$dev_addrs" --arg n "$name" '{name: $n, addresses: $a}')" \
+                "$BASE/rest/config/devices/$dev_id" >/dev/null || say "device $name: PATCH failed"
+        fi
+    else
+        say "device $name: adding"
+        api -X POST -H "Content-Type: application/json" \
+            -d "$(api "$BASE/rest/config/defaults/device" \
+                  | jq -c --arg id "$dev_id" --arg n "$name" --argjson a "$dev_addrs" \
+                         '.deviceID = $id | .name = $n | .addresses = $a')" \
+            "$BASE/rest/config/devices" >/dev/null || say "device $name: POST failed"
+    fi
+done < <(jq -rn --argjson d "$DEVICES" '$d | keys[]')
+
+# Options: PATCH touches only the keys named here, so everything else the daemon
+# or the user chose is left alone. urAccepted -1 is an explicit refusal of usage
+# reporting rather than the "ask me later" zero, and startBrowser false stops a
+# service start from opening a tab.
+desired_options='{
+  "localAnnounceEnabled": true,
+  "globalAnnounceEnabled": false,
+  "relaysEnabled": false,
+  "natEnabled": false,
+  "urAccepted": -1,
+  "crashReportingEnabled": false,
+  "startBrowser": false
+}'
+current_options="$(api "$BASE/rest/config/options")" || bail "could not read options"
+# -r, not just -n: without it jq prints an empty match list's joined string as
+# the two-character literal "", which is a non-empty bash string, so the drift
+# check would fire -- and PATCH -- on every single run forever.
+# `|| true` for the same reason as everywhere else in this file: an unguarded
+# assignment from a failing command ends the script, and this one runs inside
+# chezmoi apply. Failing to work out WHAT drifted must mean "change nothing this
+# time", never "take the apply down".
+drifted="$(jq -rn --argjson cur "$current_options" --argjson des "$desired_options" \
+    '[$des | to_entries[] | select($cur[.key] != .value) | .key] | join(", ")' || true)"
+if [[ -n "$drifted" ]]; then
+    say "options drifted ($drifted), fixing"
+    api -X PATCH -H "Content-Type: application/json" -d "$desired_options" \
+        "$BASE/rest/config/options" >/dev/null || say "options: PATCH failed"
+    NEEDS_RESTART=1
+fi
+
+# Folders. Only those whose `devices` list names this machine: the laptop is not
+# in `camera`, and an empty camera folder there would be a lie about what is
+# synchronised. Participants are resolved through the map, and a name with no ID
+# yet is skipped rather than invented -- next-steps reports the skip so it is
+# never silent.
+known_folders="$(api "$BASE/rest/config/folders" | jq -r '.[].id')" \
+    || bail "could not read the folder list"
+
+while IFS= read -r folder; do
+    # `|| continue` on every parse below, for the reason the header states: this
+    # script may never exit non-zero. These read JSON the script itself produced,
+    # so a failure means something is badly wrong rather than merely missing, and
+    # skipping that one folder is the right answer either way -- a half-parsed
+    # folder must never reach the daemon.
+    fid="$(jq -r '.id' <<<"$folder")" || continue
+    fpath="$HOME/$(jq -r '.path' <<<"$folder")" || continue
+    flabel="$(jq -r '.label' <<<"$folder")" || continue
+    ftype="$(jq -r '.type' <<<"$folder")" || continue
+
+    members="$(jq -cn --argjson f "$folder" --argjson d "$DEVICES" \
+        '[$f.devices[] | select($d[.] != null) | {deviceID: $d[.].id}] | sort_by(.deviceID)')" || continue
+
+    # A staggered version set is a bin, not a history: 31536000 is a year IN
+    # SECONDS, and the plain "365" this field also accepts would mean six minutes.
+    case "$(jq -r '.versioning' <<<"$folder")" in
+        staggered) versioning='{"type":"staggered","params":{"maxAge":"31536000"},"cleanupIntervalS":3600,"fsPath":"","fsType":"basic"}' ;;
+        *)         versioning='{"type":"","params":{},"cleanupIntervalS":3600,"fsPath":"","fsType":"basic"}' ;;
+    esac
+
+    desired="$(jq -cn --arg id "$fid" --arg label "$flabel" --arg path "$fpath" \
+                     --arg type "$ftype" --argjson devices "$members" --argjson v "$versioning" \
+        '{id: $id, label: $label, path: $path, type: $type, devices: $devices, versioning: $v}')" || continue
+
+    if grep -qx "$fid" <<<"$known_folders"; then
+        current="$(api "$BASE/rest/config/folders/$fid")" || continue
+        same="$(jq -n --argjson cur "$current" --argjson des "$desired" \
+            '($cur | {label, path, type, versioning} + {devices: ([.devices[] | {deviceID}] | sort_by(.deviceID))})
+             == ($des | {label, path, type, versioning, devices})')" || continue
+        if [[ "$same" != "true" ]]; then
+            say "folder $fid: drifted, fixing"
+            api -X PATCH -H "Content-Type: application/json" -d "$desired" \
+                "$BASE/rest/config/folders/$fid" >/dev/null || say "folder $fid: PATCH failed"
+            NEEDS_RESTART=1
+        fi
+    else
+        say "folder $fid: adding"
+        # The one call here that touches the filesystem, and the likeliest thing
+        # in this file to fail for an ordinary reason: a plain file already
+        # sitting at that path, a full or read-only filesystem, a parent nobody
+        # may write. Verified: mkdir -p over a regular file exits non-zero, which
+        # unguarded would end the apply.
+        mkdir -p "$fpath" || { say "folder $fid: cannot create $fpath, skipping"; continue; }
+        api -X POST -H "Content-Type: application/json" \
+            -d "$(api "$BASE/rest/config/defaults/folder" | jq -c --argjson des "$desired" '. * $des')" \
+            "$BASE/rest/config/folders" >/dev/null || say "folder $fid: POST failed"
+        NEEDS_RESTART=1
+    fi
+
+    # Ignore patterns belong to the folder definition, so on a managed folder the
+    # list is ours entirely: a folder with no `ignore` key gets an empty one, and
+    # a pattern added by hand is taken back on the next apply. That is the same
+    # re-assertion this script is run_after_ for. Unmanaged folders are not read
+    # and not written.
+    want_ignores="$(jq -cn --argjson f "$folder" '$f.ignore // []')" || continue
+    have_ignores="$(api "$BASE/rest/db/ignores?folder=$fid" | jq -c '.ignore // []')" || continue
+    if [[ "$want_ignores" != "$have_ignores" ]]; then
+        say "folder $fid: ignore patterns drifted, fixing"
+        # The folder goes in the query string and the body carries `ignore` only.
+        # The endpoint mirrors its GET, whose folder is a query parameter too.
+        api -X POST -H "Content-Type: application/json" \
+            -d "$(jq -cn --argjson i "$want_ignores" '{ignore: $i}')" \
+            "$BASE/rest/db/ignores?folder=$fid" >/dev/null || say "folder $fid: ignore POST failed"
+    fi
+done < <(jq -c --arg self "$SELF" '.[] | select(.devices | index($self))' <<<"$CATALOG")
+
+# Some accepted changes only take effect after a restart, and Syncthing says so
+# itself. Without this the apply would look successful while the settings sat
+# accepted and inert -- the same silent failure this repository keeps hunting.
+if [[ "$NEEDS_RESTART" == "1" ]] \
+   && [[ "$(api "$BASE/rest/config/restart-required" | jq -r '.requiresRestart // false')" == "true" ]]; then
+    say "restarting the daemon so the new configuration takes effect"
+    api -X POST "$BASE/rest/system/restart" >/dev/null || say "restart failed"
+fi
+{{- end }}
