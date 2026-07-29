@@ -456,11 +456,9 @@ Whisper Large v3 Turbo (~1.6 GB) is the multilingual, GPU-accelerated one.
 
 Whisper picks a transcription style at the first token of every 30-second
 decode window and holds it, autoregressively, to the end of that window. With
-nothing to pin the choice, punctuation showed up in roughly half the
-dictations: of 40 transcripts longer than 60 characters, 7 began in lowercase
-and 6 of those carried no sentence-ending punctuation at all. Long recordings
-gave it away -- they start unpunctuated and switch to clean prose mid-text, at
-a window boundary.
+nothing to pin the choice, of 40 transcripts longer than 60 characters, 6
+carried no sentence-ending punctuation at all, and two more began unpunctuated
+and switched to clean prose partway through, at a decode-window boundary.
 
 Handy's only lever on that is the whisper `initial_prompt`, and its only
 source is the Custom Words list, which the UI restricts to single space-free
@@ -470,9 +468,10 @@ window only.
 So the `voice-postprocess` feature takes the other route: the finished
 transcript goes to `gemma2:9b`, served by `ollama-vulkan` on
 `127.0.0.1:11434`, which restores punctuation and joins fragments into
-sentences. It was chosen by measurement against the 12B/14B class and runs
-entirely on the GPU, alongside the Whisper model, with room to spare. Running
-on the finished text means window boundaries stop mattering.
+sentences. A 12B candidate scored better on quality but spilled onto the CPU;
+`gemma2:9b` was chosen because it is the largest that runs entirely on the
+GPU, alongside the Whisper model, with room to spare. Running on the finished
+text means window boundaries stop mattering.
 
 | Key | What it does |
 |---|---|
@@ -482,22 +481,48 @@ on the finished text means window boundaries stop mattering.
 Without the feature, **Mod+Shift+D** stays raw and the second binding does not
 exist.
 
+On a machine that already had this repository before this change,
+`voice-postprocess` is simply not there: it is a new asked feature, and a
+stored `data.enabled` never gains a new key by itself (see [Adding a
+program](#adding-a-program)). Left alone, dictation keeps working exactly as
+it did before -- Mod+Shift+D stays raw, no service is pulled in, no binding
+changes -- nothing errors, so the `apply` looks entirely successful. Add
+`voice-postprocess` to `data.enabled` by hand before applying, and add `voice`
+alongside it if that was not already ticked: `needs: [voice]` is only
+expanded into `data.enabled` when the checklist is prompted at `init`, and a
+hand edit does not expand it.
+
 Nothing leaves the machine: the endpoint is loopback and no cloud provider is
 configured. Nothing is lost either -- post-processing returns an `Option`, and
 a failure of any kind leaves the raw transcript in place. A stopped
 `ollama.service` costs punctuation, not the dictation.
 
-Cleanup is not equally reliable on every input. Across 18 test transcripts,
-one very long dictation (162 seconds) came back with the Russian "прыгни на"
+Cleanup is not deterministic. The application sends no `temperature` to the
+model server, so it samples afresh on every call and the same dictation can
+come back different each time. Five consecutive runs on one 15.6-second
+recording left the longest unpunctuated stretch at 80, 99, 98, 184, and 80
+characters -- roughly one run in five came back with no sentence-ending
+punctuation anywhere in it. Forcing `temperature 0` in the request makes that
+recording identical every time (106 characters, five times), but the
+application does not expose the parameter, and pinning it instead in an
+Ollama Modelfile does not work either: the OpenAI-compatible endpoint ignores
+a model's own parameter (verified: 106, 106, 129, 184, 184).
+
+So most dictations come back clean, and occasionally one comes back
+under-punctuated -- pressing the key again usually fixes it, because the
+retry is a fresh sample, not a repeat of the same one. The one case that is
+consistently bad rather than occasionally bad is very long, rambling
+dictation: one 162-second recording stayed over-long and unpunctuated in
+every run, and also, in one run, came back with the Russian "прыгни на"
 ("jump to") rendered as the English "jumping on the" -- a mid-sentence
-language slip, the only one seen. The same recording was also the only one
-left with an over-long, unpunctuated stretch after cleanup: long, rambling
-dictations are the weak case, and shorter ones stay reliable.
+language slip, the only one seen.
 
 That is part of why the raw transcript is never thrown away. Handy keeps both
 the raw and the cleaned text in its history database, and this work raised
 `history_limit` from 5 to 100 for that reason: so the original survives long
 enough to be found and recovered if a cleanup pass ever mangles something.
+The same setting also retains the matching audio recording for every entry,
+so this keeps around a hundred recordings on disk too, on the order of 60 MB.
 
 The settings live in `settings_store.json`, which Handy owns and rewrites from
 its own UI, so `run_after_44-handy-postprocess` patches the eight keys we care

@@ -109,8 +109,32 @@ patch() {
 # process has been killed. `set -e` does not fire inside an `if` condition, so a
 # jq failure there would masquerade as "settings differ" and lead straight into
 # the destructive branch.
-NEW="$(mktemp)"
-trap 'rm -f "$NEW"' EXIT
+#
+# The temp file has to live beside $STORE, not under the default /tmp: /tmp is
+# typically its own filesystem (tmpfs on most installs), and replacing a file
+# with one from a different filesystem means a copy, not a rename. A copy can
+# be interrupted mid-write and leave a truncated settings_store.json behind --
+# every later run then dies at `patch "$STORE"` on invalid JSON, and Handy's
+# settings are gone. Same directory means the final step is a rename on one
+# filesystem, which the kernel makes atomic: it lands whole or not at all.
+NEW="$(mktemp "$(dirname "$STORE")/.settings_store.XXXXXX")"
+# mktemp creates the file 0600; carry $STORE's actual mode forward instead so
+# Handy sees the same permissions it wrote itself.
+chmod --reference="$STORE" "$NEW"
+
+# Whether Handy has been stopped for the swap, so the trap below knows whether
+# it owes a relaunch. Set right before `pkill`, not after: `set -e` means a
+# failure anywhere from here to the rename jumps straight to the trap, and the
+# relaunch must not depend on reaching the lines after the failure.
+HANDY_STOPPED=0
+cleanup() {
+    rm -f "$NEW"
+    if [[ "$HANDY_STOPPED" -eq 1 ]]; then
+        (setsid handy --start-hidden >/dev/null 2>&1 &) || true
+    fi
+}
+trap cleanup EXIT
+
 patch "$STORE" > "$NEW"
 
 if diff -q <(jq -S . "$NEW") <(jq -S . "$STORE") >/dev/null 2>&1; then
@@ -119,7 +143,7 @@ fi
 
 echo "Configuring Handy post-processing (model: $MODEL)."
 pkill -x handy || true
+HANDY_STOPPED=1
 sleep 1
-cp "$NEW" "$STORE"
-(setsid handy --start-hidden >/dev/null 2>&1 &) || true
+mv -f "$NEW" "$STORE"
 {{- end }}
