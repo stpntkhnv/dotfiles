@@ -23,6 +23,10 @@
 .npmrc
 {{ end }}
 
+{{ if not (has "tmux" .enabled) }}
+.tmux.conf
+{{ end }}
+
 {{ if not (has "desktop" .enabled) }}
 .config/niri/**
 .config/DankMaterialShell/**

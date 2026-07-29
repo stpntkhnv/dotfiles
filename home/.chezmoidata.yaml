@@ -88,7 +88,7 @@ features:
       - zip
 
   - key: shell
-    label: "Shell: starship, eza, bat, fzf, zoxide, ripgrep, fd, tmux"
+    label: "Shell: starship, eza, bat, fzf, zoxide, ripgrep, fd"
     scope: both
     always: true
     pacman:
@@ -100,7 +100,6 @@ features:
       - lazygit
       - ripgrep
       - starship
-      - tmux
       - zoxide
 
   # Packages that are only useful inside distrobox: locale-gen for container
@@ -235,6 +234,27 @@ features:
       - podman
 
   # ---------------------------------------------------------------- asked ---
+  # Two features rather than one with a sub-choice: the checklist is already
+  # multi-select, so ticking both is the ordinary answer and not a workaround.
+  #
+  # herdr knows that the thing in a pane is a coding agent and shows its state,
+  # which is the whole reason it is here. It is a 0.x project, so tmux stays
+  # beside it as the way back rather than being deleted. Neither is `always`:
+  # which multiplexer runs is a preference, not a property of the machine.
+  - key: herdr
+    label: "herdr: agent-aware multiplexer (primary)"
+    scope: both
+    default: true
+    aur:
+      - herdr-bin
+
+  - key: tmux
+    label: "tmux (fallback multiplexer)"
+    scope: both
+    default: true
+    pacman:
+      - tmux
+
   - key: neovim
     label: "Neovim + LSP, treesitter"
     scope: both
