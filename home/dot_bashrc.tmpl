@@ -23,9 +23,15 @@ export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.dotnet/tools:$PATH"
 # is what stops three contexts from sharing one server -- it must not be
 # dropped. herdr keeps its socket under $HOME
 # (~/.config/herdr/sessions/<name>/herdr.sock) and every container has its own
-# home=~/homes/<name>, so the boundary is structural and `--session <name>`
-# only buys legibility: `herdr session list` names the context instead of
-# saying "default".
+# home=~/homes/<name>, so the sockets never collide by accident and
+# `--session <name>` only buys legibility: `herdr session list` names the
+# context instead of saying "default".
+#
+# Neither of those is a boundary, and this comment used to claim otherwise.
+# distrobox bind-mounts the host home into every container, so one context
+# reads another's home and can connect to the herdr socket it finds there,
+# which runs commands in that container. Measured, not assumed. The netns is
+# the boundary; the multiplexer socket is not.
 {{- range .contexts }}
 {{- if $herdr }}
 alias {{ .name }}='distrobox enter {{ .name }} -- herdr --session {{ .name }}'

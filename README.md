@@ -179,9 +179,19 @@ new work context brings its own shortcuts along with everything else.
 The two session flags look alike and are not. tmux keeps its server socket in
 `/tmp`, which distrobox shares with every container, so `-L <name>` is what
 stops three contexts from sharing one server. herdr keeps its socket under
-`$HOME`, and every container has its own `home=~/homes/<name>`, so the
-separation is structural; `--session <name>` only makes `herdr session list`
-name the context instead of saying `default`.
+`$HOME`, and every container has its own `home=~/homes/<name>`, so the two
+never collide in the first place; `--session <name>` only makes `herdr session
+list` name the context instead of saying `default`.
+
+Neither of those is isolation, despite what an earlier version of this file
+claimed. distrobox bind-mounts the host home into every container at its own
+path, so `ls /home/stsiapan/homes/` from inside `digi3` lists all three
+contexts and reads them. A herdr socket sitting in a neighbour's home is
+therefore reachable, and connecting to it runs commands in that neighbour's
+container: verified by creating a workspace in `digi3`'s server from a shell
+in `stellium`, which spawned a shell inside `digi3`. A tmux socket in the
+shared `/tmp` is no better protected. What separates the contexts is the
+network namespace; the multiplexer socket separates nothing.
 
 No herdr config is shipped. The defaults are good, including the `ctrl+b`
 prefix, which differs from this repository's tmux (`C-a`). tmux declares
