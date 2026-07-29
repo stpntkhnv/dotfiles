@@ -14,34 +14,38 @@ export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.dotnet/tools:$PATH"
 # distrobox container shortcuts, generated from `contexts:` so the list of work
 # contexts lives in one place, like every other consumer of it.
 #
-# The bare name always goes to the primary multiplexer, so muscle memory does
-# not depend on what is installed; the -tmux twin is the way back while herdr
-# is a 0.x project.
+# The bare name is a shell inside the container. It used to start herdr in
+# there; herdr now runs on the host and these are what you type INSIDE one of
+# its panes. See the Multiplexer section of the README.
 #
-# The two session flags are NOT the same kind of thing. tmux keeps its server
-# socket in /tmp, which distrobox shares with every container, so `-L <name>`
-# is what stops three contexts from sharing one server -- it must not be
-# dropped. herdr keeps its socket under $HOME
-# (~/.config/herdr/sessions/<name>/herdr.sock) and every container has its own
-# home=~/homes/<name>, so the sockets never collide by accident and
-# `--session <name>` only buys legibility: `herdr session list` names the
-# context instead of saying "default".
+# --no-workdir on every single one of them, and it is not cosmetic. Without it
+# distrobox carries the host's working directory into the container through
+# /run/host, so the shell lands in the host's files while sitting in the
+# container's netns -- the worst of both. Measured:
+#     distrobox enter digi3 -- pwd               -> /run/host/home/stsiapan
+#     distrobox enter --no-workdir digi3 -- pwd  -> /home/stsiapan/homes/digi3
 #
-# Neither of those is a boundary, and this comment used to claim otherwise.
-# distrobox bind-mounts the host home into every container, so one context
-# reads another's home and can connect to the herdr socket it finds there,
-# which runs commands in that container. Measured, not assumed. The netns is
+# HERDR_AGENT is what makes the agent visible in herdr's sidebar. On Unix herdr
+# identifies an agent by the foreground process group, and through
+# `distrobox enter` that group is podman, not claude: without the hint the
+# sidebar stays empty, which is the whole reason herdr is here. It is set ON
+# THE COMMAND and never exported -- herdr's own documentation warns that a
+# global HERDR_AGENT labels every pane as that agent.
+#
+# The two session flags of the tmux twin are NOT the same kind of thing as
+# herdr's. tmux keeps its server socket in /tmp, which distrobox shares with
+# every container, so `-L <name>` is what stops three contexts from sharing one
+# server -- it must not be dropped. Neither socket is a boundary, though: the
+# host home is bind-mounted into every container, so one context can read
+# another's home and connect to whatever socket it finds there. The netns is
 # the boundary; the multiplexer socket is not.
 {{- range .contexts }}
+alias {{ .name }}='distrobox enter --no-workdir {{ .name }}'
 {{- if $herdr }}
-alias {{ .name }}='distrobox enter {{ .name }} -- herdr --session {{ .name }}'
-{{- if $tmux }}
-alias {{ .name }}-tmux='distrobox enter {{ .name }} -- tmux -L {{ .name }} new-session -A -s work'
+alias {{ .name }}-claude='HERDR_AGENT=claude distrobox enter --no-workdir {{ .name }} -- claude'
 {{- end }}
-{{- else if $tmux }}
-alias {{ .name }}='distrobox enter {{ .name }} -- tmux -L {{ .name }} new-session -A -s work'
-{{- else }}
-alias {{ .name }}='distrobox enter {{ .name }}'
+{{- if $tmux }}
+alias {{ .name }}-tmux='distrobox enter --no-workdir {{ .name }} -- tmux -L {{ .name }} new-session -A -s work'
 {{- end }}
 {{- end }}
 {{ end }}
