@@ -8,7 +8,7 @@ set -euo pipefail
 # rewritten whole whenever anything changes in its own UI. So chezmoi must not
 # own it as a target -- the two would overwrite each other forever, the same
 # mistake the README documents for the DMS-generated niri includes. What happens
-# here instead is a jq patch of the eight keys we care about.
+# here instead is a jq patch of the eleven keys we care about.
 #
 # run_after_ rather than run_onchange_: an onchange script only re-runs when its
 # own rendered text changes, so a setting clobbered from Handy's UI would never
@@ -87,6 +87,26 @@ DESIRED=$(jq -n \
 
 # `// []` on both arrays: a Handy schema change or a half-written settings file
 # would otherwise abort with "Cannot iterate over null" rather than rebuild them.
+#
+# The last three keys are not about the LLM at all, but they have nowhere else to
+# live: this is the only script that touches Handy's settings.
+#
+#   paste_method / external_script_path  hand the finished text to
+#     bin/handy-type.sh instead of Handy's own paste path, because that path
+#     drops characters on Cyrillic -- the reason is in the script's own header.
+#     Both were set from Handy's UI at first and so did not survive to any other
+#     machine, which is exactly the failure this script exists to prevent.
+#
+#   overlay_style  stays "none". The live overlay animates the embedded webview
+#     for as long as a recording runs, and that is the condition under which
+#     upstream sees phantom recordings: WebKit's JavaScriptCore uses SIGUSR1 to
+#     suspend its own threads for garbage collection, Handy registers a
+#     process-wide handler for that same signal, and so every collection reads
+#     as a hotkey press -- which, on a toggle binding, cuts a real dictation off
+#     mid-sentence (upstream cjpais/Handy#1660, fix in #1267, unmerged as of
+#     0.9.4). An idle webview collects rarely, so keeping the overlay off is
+#     what has kept this machine clear of it: not a fix, but the reason we are
+#     not being bitten, and worth holding still deliberately.
 patch() {
     jq --argjson d "$DESIRED" '
         .settings.post_process_enabled = true
@@ -101,6 +121,9 @@ patch() {
             [(.settings.post_process_prompts // [])[] | select(.id != $d.pid)]
             + [{id: $d.pid, name: "Dictation cleanup", prompt: $d.prompt}]
         | .settings.post_process_selected_prompt_id = $d.pid
+        | .settings.paste_method = "external_script"
+        | .settings.external_script_path = "{{ .chezmoi.homeDir }}/bin/handy-type.sh"
+        | .settings.overlay_style = "none"
     ' "$1"
 }
 

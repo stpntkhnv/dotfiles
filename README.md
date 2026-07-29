@@ -694,12 +694,14 @@ question is asked at init rather than mid-apply because the install needs a
 reboot.
 
 Tauri cannot grab global shortcuts on wlroots-style compositors, so niri owns
-the keybind and signals the running process with a Unix signal instead. Which
-signal, and how many bindings, depends on whether `voice-postprocess` is
-selected -- see the table under [Punctuation](#punctuation). Those bindings and
-`spawn-at-startup` live in `home/dot_config/niri/voice.kdl.tmpl`, which
-`config.kdl` includes unconditionally and which renders to a comment-only file
-when the feature is off.
+the keybind and pokes the already-running process instead. Handy documents two
+ways to do that, Unix signals and CLI flags; the bindings here use the flags,
+for reasons in [Signals](#signals) below. How many bindings there are depends on
+whether `voice-postprocess` is selected -- see the table under
+[Punctuation](#punctuation). Those bindings and `spawn-at-startup` live in
+`home/dot_config/niri/voice.kdl.tmpl`, which `config.kdl` includes
+unconditionally and which renders to a comment-only file when the feature is
+off.
 
 After installing, launch Handy once and download a model (Settings → Model).
 Whisper Large v3 Turbo (~1.6 GB) is the multilingual, GPU-accelerated one.
@@ -737,8 +739,8 @@ does.
 
 | Key | What it does |
 |---|---|
-| **Mod+Shift+D** | dictate, then clean up (`SIGUSR1`) |
-| **Mod+Ctrl+D** | dictate raw, no LLM (`SIGUSR2`) |
+| **Mod+Shift+D** | dictate, then clean up (`handy --toggle-post-process`) |
+| **Mod+Ctrl+D** | dictate raw, no LLM (`handy --toggle-transcription`) |
 
 Without the feature, **Mod+Shift+D** stays raw and the second binding does not
 exist.
@@ -786,11 +788,80 @@ enough to be found and recovered if a cleanup pass ever mangles something.
 The same setting also retains the matching audio recording for every entry,
 so this keeps around a hundred recordings on disk too, on the order of 60 MB.
 
+### Signals
+
+Handy's own README offers two ways to drive it from a compositor keybind:
+`pkill -USR2` to toggle transcription, `pkill -USR1` to toggle it with
+post-processing. Both are unusable here, and the reason is worth writing down
+because the surface symptom points at the wrong culprit.
+
+WebKitGTK, the webview engine Tauri embeds on Linux, uses `SIGUSR1` internally:
+JavaScriptCore suspends its own threads with it so the garbage collector can
+scan their stacks. Handy registers a process-wide handler for that same signal
+(`src-tauri/src/lib.rs`, `signal_handle.rs`), and the two uses collide in both
+directions.
+
+Outward, a `pkill -USR1` from the keybind kills the process. `signal-hook`, the
+crate Handy registers through, chains rather than replaces: it calls the
+previously installed handler after its own. So the signal reaches
+JavaScriptCore's thread-suspend handler outside the collection protocol that
+handler exists to serve, and it dereferences from there. Six coredumps here say
+the same thing: frame #0 in `libjavascriptcoregtk-4.1`, frame #1 in `handy`,
+frame #2 the libc signal trampoline, the interrupted context an ordinary
+`ppoll` in the GTK main loop.
+
+Inward is the bug that bites users who never send a signal at all. Every
+collection delivers `SIGUSR1` inside Handy's own process, Handy's handler reads
+it as a hotkey press, and on a toggle binding that starts a recording nobody
+asked for -- or stops one that is still being spoken, transcribes the fragment
+and pastes it. Upstream has it as
+[#1660](https://github.com/cjpais/Handy/issues/1660), with a second report
+measuring ten dictations destroyed in one morning, each cut at 122 seconds. The
+fix, [#1267](https://github.com/cjpais/Handy/pull/1267), moves remote control to
+`SIGRTMIN+1`/`+2`; it has been open since April and is not in 0.9.4. There is no
+way to share the signal: filtering by sender was tried and hangs the app within
+the hour, because Handy's handler consumes a delivery WebKit needs to receive.
+
+So the bindings use `handy --toggle-post-process` and `handy --toggle-transcription`,
+which is also what #1267 itself tells signal users to migrate to. The flags
+reach the same `send_transcription_input` the signal handler calls, so nothing
+about the behaviour differs; the cost is spawning a process per keypress,
+measured at 60 ms.
+
+This repository is not exposed to the phantom recordings either, and that is
+not luck twice over: `overlay_style` is pinned to `none` by the settings patch.
+The overlay is what keeps the webview busy during a recording, and a busy
+webview is what makes the collector run often enough to matter.
+
+### Typing the text out
+
+`paste_method` is pinned to `external_script`, pointing at
+`home/bin/executable_handy-type.sh`. Handy's own paste path drops characters on
+Cyrillic: `wtype` builds a virtual keymap from the text's unique characters in
+order of first appearance, and this stack silently eats keycodes #14 and #15 of
+it -- across several dictations, exactly the 14th and 15th unique character
+vanished, every occurrence of them. The script types in chunks of 12, which
+keeps every keymap short enough that nothing lands on a dead keycode. It also
+strips leading and trailing whitespace, because the cleanup model likes to
+append newlines and those arrive as blank lines in the target window.
+
+Handy is a Tauri app whose paste path goes through a library that only speaks
+X11, so `config.kdl` sets `DISPLAY :12` for `xwayland-satellite`. Without it the
+typing fails with no visible error.
+
+### Settings
+
 The settings live in `settings_store.json`, which Handy owns and rewrites from
-its own UI, so `run_after_44-handy-postprocess` patches the eight keys we care
+its own UI, so `run_after_44-handy-postprocess` patches the eleven keys we care
 about rather than the repository managing the file. Every one of them sits
 under the top-level `settings` object; writing to the root instead is silent,
 not an error.
+
+Three of the eleven -- `paste_method`, `external_script_path`, `overlay_style` --
+have nothing to do with post-processing, but the script is the only thing that
+touches Handy's settings, so they live there too. Note the gate: that script is
+skipped entirely unless `voice-postprocess` is selected, so a machine with plain
+`voice` gets the typing script deployed and never told to use it.
 
 On a fresh machine that file does not exist until Handy has started once, the
 same shape as the Zen profiles: `chezmoi apply`, launch Handy and download a
