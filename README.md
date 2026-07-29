@@ -55,16 +55,29 @@ Add a block to `home/.chezmoidata.yaml`. Nothing else needs editing. Fields:
 
 Adding packages to an existing feature takes effect on the next `chezmoi
 apply`. A brand new **feature key** does not: `data.enabled` is computed once,
-at init, and `apply` never re-renders `.chezmoi.toml.tmpl`. So a fresh
-`always: true` feature is missing from `enabled`, and `.chezmoiignore` silently
-drops its targets. On an already-configured machine, run init once:
+at init, and `apply` never re-renders `.chezmoi.toml.tmpl`. What fixes that
+depends on the kind of feature.
+
+An `always: true` feature needs one bare init, which recomputes the always-set
+and leaves the saved checklist answer alone:
 
 ```sh
 chezmoi init      # no --prompt: recomputes `always`, keeps the saved answers
 ```
 
-`--prompt` is a different thing: it re-asks the whole checklist. Use the bare
-form unless you actually want to redo the selection.
+An **asked** feature is not fixed by that. The checklist answer is read with
+`promptMultichoiceOnce`, and `Once` means a stored value is returned as-is —
+new choices are never mixed in. `--prompt` does re-ask, but it offers the
+*catalogue defaults*, not what you picked last time, so accepting them silently
+drops every non-default feature you had. It re-asks the git identity too, and
+an empty answer stores an empty string.
+
+So for a new asked feature, edit the list by hand:
+
+```sh
+$EDITOR ~/.config/chezmoi/chezmoi.toml   # add the key to data.enabled
+chezmoi apply
+```
 
 To preview what would run, without applying:
 
@@ -100,7 +113,7 @@ Two traps worth knowing about:
 
 No questions asked, because without these the machine does not work:
 
-- base utilities and shell tooling (starship, eza, bat, fzf, zoxide, tmux);
+- base utilities and shell tooling (starship, eza, bat, fzf, zoxide);
 - on the host — the niri + DankMaterialShell desktop with fonts, pipewire,
   portals and sddm;
 - on the host — distrobox and podman;
@@ -124,8 +137,48 @@ Colors are not in the repository: DankMaterialShell renders
 colors until DMS runs once; managing the real file would have chezmoi and DMS
 overwrite each other forever, same story as the niri `dms/` includes.
 
-tmux declares `default-terminal = tmux-256color` plus an `RGB` terminal
-feature for `xterm-ghostty`, so truecolor survives inside tmux sessions.
+## Multiplexer
+
+Two of them, and that is deliberate. Both are ordinary checklist features, so
+a machine can have either or both.
+
+[herdr](https://herdr.dev) is the primary one. It is a multiplexer in the tmux
+sense — panes, tabs, detach and reattach — that additionally knows the thing in
+a pane is a coding agent and shows its state in a sidebar. It is also a 0.x
+project moving quickly, which is why tmux is not deleted: the context aliases
+keep a `-tmux` twin, so falling back costs nothing.
+
+```sh
+digi3        # distrobox enter digi3 -- herdr --session digi3
+digi3-tmux   # distrobox enter digi3 -- tmux -L digi3 new-session -A -s work
+```
+
+The aliases are generated from `contexts:` in `home/.chezmoidata.yaml`, so a
+new work context brings its own shortcuts along with everything else.
+
+The two session flags look alike and are not. tmux keeps its server socket in
+`/tmp`, which distrobox shares with every container, so `-L <name>` is what
+stops three contexts from sharing one server. herdr keeps its socket under
+`$HOME`, and every container has its own `home=~/homes/<name>`, so the
+separation is structural; `--session <name>` only makes `herdr session list`
+name the context instead of saying `default`.
+
+No herdr config is shipped. The defaults are good, including the `ctrl+b`
+prefix, which differs from this repository's tmux (`C-a`). tmux declares
+`default-terminal = tmux-256color` plus an `RGB` terminal feature for
+`xterm-ghostty`, so truecolor survives inside tmux sessions; herdr needs no
+equivalent.
+
+Two things that are not what they look like:
+
+- **Unticking `tmux` removes nothing.** The package installer only ever
+  installs, and `chezmoi apply` does not delete a file that has become
+  ignored. The binary stays, `~/.tmux.conf` stays where it was and simply
+  stops being managed. Removing tmux for real is `pacman -Rns tmux` by hand.
+- **The DankMaterialShell session panel only speaks tmux and zellij.** It
+  probes for the binary rather than reading the feature list, so it keeps
+  listing tmux sessions regardless of the checklist, and it will never see a
+  herdr session. `muxType` in its settings stays `tmux`.
 
 ## Keyboard layout
 
@@ -172,8 +225,8 @@ distrobox enter <name>
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/install.sh)"
 ```
 
-After that use the `.bashrc` aliases (`digi3`, `stellium`, `personal`); each
-gets its own tmux socket.
+After that use the `.bashrc` aliases (`digi3`, `stellium`, `personal`), which
+open that context in the primary multiplexer. See [Multiplexer](#multiplexer).
 
 ### `podman info` fails on overlay
 
