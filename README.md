@@ -190,9 +190,13 @@ work
 
 One command for the whole desk. It starts a headless herdr server if none is
 running, gives every context in `contexts:` a space of its own, types
-`distrobox enter --no-workdir <context>` into each space's root pane, and then
-attaches the TUI. Detach with `ctrl+b`, `q`: the server is headless and
-outlives the client, so the panes carry on.
+`env HERDR_AGENT=claude distrobox enter --no-workdir <context>` into each
+space's root pane, and then attaches the TUI. Detach with `ctrl+b`, `q`: the
+server is headless and outlives the client, so the panes carry on.
+
+The `HERDR_AGENT` part is the same label the context aliases carry, and for the
+same reason -- see [What you type inside a pane](#what-you-type-inside-a-pane).
+It is here so that a space opened by `work` behaves like one opened by hand.
 
 Why a script and not herdr's own session restore: herdr remembers the layout
 and the space names, but not the command a pane was running. A restored space
@@ -229,13 +233,15 @@ brings its own shortcuts along with everything else. They are typed inside a
 herdr pane; none of them starts herdr:
 
 ```sh
-digi3         # distrobox enter --no-workdir digi3
+digi3         # HERDR_AGENT=claude distrobox enter --no-workdir digi3
 digi3-claude  # HERDR_AGENT=claude distrobox enter --no-workdir digi3 -- claude
 digi3-tmux    # distrobox enter --no-workdir digi3 -- tmux -L digi3 new-session -A -s work
 ```
 
 The twins are conditional: `-claude` renders only while `herdr` is ticked,
-`-tmux` only while `tmux` is.
+`-tmux` only while `tmux` is. The `HERDR_AGENT=claude` on the bare name is
+conditional the same way -- without herdr there is nothing to label the pane
+for.
 
 `--no-workdir` is on every one of them, and it is not cosmetic. Without it
 distrobox carries the host's working directory into the container through
@@ -250,12 +256,47 @@ distrobox enter --no-workdir digi3 -- pwd  # /home/stsiapan/homes/digi3
 The tmux twin carried that fault already, so the flag is a fix and not only a
 rule for the new commands.
 
-`HERDR_AGENT=claude` is what puts the agent in herdr's sidebar. herdr
-identifies an agent by the foreground process group, and through `distrobox
-enter` that group is `distrobox` and `podman`, never `claude`: without the hint
-the pane is in no agent list at all and the sidebar stays empty, which is the
-whole reason herdr is here. It goes on the command and is never exported. A
-global `HERDR_AGENT` would label every pane as that agent.
+`HERDR_AGENT=claude` is what puts the agent in herdr's sidebar, and it is on the
+**entry** and not only on the `-claude` twin. herdr identifies the agent in a
+pane from the foreground process group on the host side. Through `distrobox
+enter` that group is `distrobox` and `podman`; the real claude runs on its own
+pty inside the container, where herdr cannot see it. So without the label a
+claude started by hand -- enter the shell first, type `claude` after, which is
+the ordinary way to work -- is in no agent list at all, and the sidebar stays
+empty. That is the whole reason herdr is here.
+
+Labelling the pane at entry is enough, because only the identification is
+missing: the screen itself does cross the container boundary, so herdr reads the
+state off it live rather than freezing at whatever was reported. Measured on
+0.7.5, real claude in a container pane, entered as a plain shell and launched by
+hand:
+
+| Pane holds | herdr says |
+|---|---|
+| the context shell, nothing else | `claude`, `idle`, no rule matched |
+| claude at its prompt | `claude`, `idle`, rule `live_prompt_box`, title `✳ Claude Code` |
+| claude answering | `working`, title `⠐ Claude Code`, then `idle` or `done` |
+
+The label has to be on that command and nowhere else. Exporting `HERDR_AGENT`
+inside the container does nothing at all -- verified, the pane stays unlabelled
+-- because herdr reads the environment of the process it spawned itself, which
+is the host-side `podman`. Exporting it from `.bashrc` instead would go the other
+way and label every pane on the machine, host panes included.
+
+The price is a row that arrives early: a pane holding nothing but a context
+shell, or tmux, or an editor, is listed as an idle `claude` agent. Nothing is
+claimed to be working, so the state is honest; the row is simply there before
+the agent is.
+
+The other route was rejected after measuring it. herdr also takes pushed state
+over its socket (`pane.report_agent`), and that works from inside a container --
+`HERDR_PANE_ID` and `HERDR_SOCKET_PATH` are passed in by distrobox, the socket
+path resolves, the binary is there. But a pushed state takes authority and
+freezes the sidebar: with `idle` reported, the screen read `working` and the row
+stayed `idle`. Releasing the authority drops the label with it, so there is no
+"identify only, let the screen drive it". That route therefore needs every
+transition reported from claude's own hooks, in every container's config, to
+replace what one word already does.
 
 `-L digi3` in the tmux twin is a different kind of flag and must not be
 dropped. tmux keeps its server socket in `/tmp`, which distrobox shares with

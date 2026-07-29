@@ -171,7 +171,18 @@ enter_context() {
     # `set -e` down with it: later contexts never opened and `exec herdr`
     # never ran. A failure here now means only that this one context is not
     # entered; herdr's own error stays on stderr instead of being thrown away.
-    herdr pane run "$pane" distrobox enter --no-workdir "$ctx" >/dev/null \
+    # HERDR_AGENT=claude on the entry, exactly as the context aliases carry it:
+    # herdr identifies the agent in a pane from the host-side foreground process
+    # group, which through `distrobox enter` is distrobox and podman, never the
+    # claude running on its own pty inside the container. Without the label a
+    # claude started by hand in this space is in no agent list at all. Written as
+    # `env VAR=...` rather than a shell assignment prefix because that is the
+    # form measured to survive `herdr pane run` on 0.7.5.
+    #
+    # Dropping it here while the aliases keep it would be the worst of the two:
+    # spaces opened by `work` would go unlabelled and spaces opened by hand would
+    # not, and nothing would say why.
+    herdr pane run "$pane" env HERDR_AGENT=claude distrobox enter --no-workdir "$ctx" >/dev/null \
         || echo "work: could not enter '$ctx', pane $pane may already be gone." >&2
 }
 

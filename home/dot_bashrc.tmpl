@@ -25,12 +25,32 @@ export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.dotnet/tools:$PATH"
 #     distrobox enter digi3 -- pwd               -> /run/host/home/stsiapan
 #     distrobox enter --no-workdir digi3 -- pwd  -> /home/stsiapan/homes/digi3
 #
-# HERDR_AGENT is what makes the agent visible in herdr's sidebar. On Unix herdr
-# identifies an agent by the foreground process group, and through
-# `distrobox enter` that group is podman, not claude: without the hint the
-# sidebar stays empty, which is the whole reason herdr is here. It is set ON
-# THE COMMAND and never exported -- herdr's own documentation warns that a
-# global HERDR_AGENT labels every pane as that agent.
+# HERDR_AGENT is what makes the agent visible in herdr's sidebar, and it rides
+# on the ENTRY, not only on the claude twin. herdr identifies the agent in a
+# pane from the foreground process group on the HOST side; through
+# `distrobox enter` that group is distrobox and podman, and the real claude sits
+# on a different pty inside the container where herdr cannot see it. So a claude
+# started by hand after entering the shell is in no agent list at all, which is
+# the whole reason herdr is here.
+#
+# Labelling the pane at entry fixes that case, and the state stays live rather
+# than frozen: herdr reads idle/working/blocked off the screen, and the screen
+# does cross the container boundary. Measured on 0.7.5 with a real claude in a
+# container pane, entered as a plain shell and launched by hand:
+#     shell only     agent=claude status=idle    (no rule matches a bare shell)
+#     claude running agent=claude status=idle    (rule live_prompt_box)
+#     a prompt       status=working, title "⠐ Claude Code", then idle or done
+#
+# The hint has to be HERE and nowhere else. Exporting HERDR_AGENT inside the
+# container does nothing at all -- verified, agent=None -- because herdr reads
+# the environment of the process it spawned itself, which is the host-side
+# podman. Exporting it globally in this file would go the other way and label
+# every pane on the machine, host panes included.
+#
+# The price, and it is real: a pane holding nothing but a context shell is
+# listed in the sidebar as an idle claude agent, and so is one running tmux or
+# an editor in that context. The state is honest (nothing is claimed to be
+# working), the row is simply there before the agent is.
 #
 # The two session flags of the tmux twin are NOT the same kind of thing as
 # herdr's. tmux keeps its server socket in /tmp, which distrobox shares with
@@ -40,7 +60,7 @@ export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.dotnet/tools:$PATH"
 # another's home and connect to whatever socket it finds there. The netns is
 # the boundary; the multiplexer socket is not.
 {{- range .contexts }}
-alias {{ .name }}='distrobox enter --no-workdir {{ .name }}'
+alias {{ .name }}='{{ if $herdr }}HERDR_AGENT=claude {{ end }}distrobox enter --no-workdir {{ .name }}'
 {{- if $herdr }}
 alias {{ .name }}-claude='HERDR_AGENT=claude distrobox enter --no-workdir {{ .name }} -- claude'
 {{- end }}
