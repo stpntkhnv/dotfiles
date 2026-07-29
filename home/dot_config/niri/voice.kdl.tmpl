@@ -17,14 +17,17 @@ spawn-at-startup "handy" "--start-hidden"
 {{- if has "voice-postprocess" .enabled }}
 // The plain key gets the mode wanted by default, so muscle memory does not
 // depend on which features are ticked; raw transcription stays one modifier
-// away as the road back. SIGUSR1 is transcribe-with-post-processing, SIGUSR2
-// is transcription alone.
+// away as the road back. Both bindings go through Handy's CLI rather than
+// the SIGUSR1/SIGUSR2 signals above: SIGUSR1 segfaults Handy 0.9.4 in
+// libjavascriptcoregtk before it can even log receiving the signal, and
+// --toggle-post-process / --toggle-transcription reach the same two actions
+// without touching the signal path.
 binds {
     Mod+Shift+D hotkey-overlay-title="Voice Input: Dictate (cleaned up)" {
-        spawn "pkill" "-USR1" "-x" "handy";
+        spawn "handy" "--toggle-post-process";
     }
     Mod+Ctrl+D hotkey-overlay-title="Voice Input: Dictate (raw)" {
-        spawn "pkill" "-USR2" "-x" "handy";
+        spawn "handy" "--toggle-transcription";
     }
 }
 {{- else }}
