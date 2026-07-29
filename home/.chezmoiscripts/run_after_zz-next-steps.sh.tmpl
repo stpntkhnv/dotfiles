@@ -46,6 +46,19 @@ if ! compgen -G "$HOME/.cache/huggingface/hub/models--*/snapshots/*/*.gguf" >/de
     steps+=("Handy: no model downloaded -- run 'handy' and pick one in Settings -> Model")
 fi
 {{- end }}
+{{- if has "voice-postprocess" .enabled }}
+# Handy writes settings_store.json on its first start, so on a fresh machine the
+# post-processing patch had nothing to patch and quietly did nothing.
+if [[ ! -f "$HOME/.local/share/com.pais.handy/settings_store.json" ]]; then
+    steps+=("Handy: never started, so LLM cleanup is unconfigured -- run 'handy', then 'chezmoi apply' again")
+fi
+if command -v ollama &>/dev/null && ! ollama list 2>/dev/null | awk '{print $1}' | grep -qx "gemma2:9b"; then
+    steps+=("Voice cleanup: no weights, dictation still arrives raw -- 'ollama pull gemma2:9b'")
+fi
+if ! systemctl is-active --quiet ollama.service; then
+    steps+=("Voice cleanup: model server down -- 'sudo systemctl start ollama.service'")
+fi
+{{- end }}
 {{- if has "bitwarden" .enabled }}
 if command -v rbw &>/dev/null; then
     [[ -s "$HOME/.config/rbw/config.json" ]] || \
