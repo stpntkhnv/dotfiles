@@ -154,34 +154,27 @@ overwrite each other forever, same story as the niri `dms/` includes.
 Two of them, and that is deliberate. Both are ordinary checklist features, so
 a machine can have either or both.
 
+herdr lives on the host, tmux lives in the container. Both stay `scope: both`
+in the catalogue, so a machine can install either in either place -- the
+division is the default use, not a restriction. herdr has to be outside the
+containers, because its job here is to hold one space per context and enter
+each container from the host. tmux is the way into a container and the way to
+keep a session running there when herdr is not available.
+
 On a machine that already had this repository before this change, neither
 key is there: `herdr` and `tmux` are new asked features, and a stored
 `data.enabled` never gains a new key by itself (see [Adding a
 program](#adding-a-program)). Left alone, the context aliases quietly degrade
-to a bare `distrobox enter <name>` with no multiplexer at all, and
-`~/.tmux.conf` stops being managed — nothing errors, so the `apply` looks
-successful. Add both keys to `data.enabled` by hand before applying.
+to `distrobox enter --no-workdir <name>` with none of the multiplexer twins,
+`work` is never deployed, and `~/.tmux.conf` stops being managed -- nothing
+errors, so the `apply` looks successful. Add both keys to `data.enabled` by
+hand before applying.
 
 [herdr](https://herdr.dev) is the primary one. It is a multiplexer in the tmux
-sense — panes, tabs, detach and reattach — that additionally knows the thing in
-a pane is a coding agent and shows its state in a sidebar. It is also a 0.x
+sense -- panes, tabs, detach and reattach -- that additionally knows the thing
+in a pane is a coding agent and shows its state in a sidebar. It is also a 0.x
 project moving quickly, which is why tmux is not deleted: the context aliases
 keep a `-tmux` twin, so falling back costs nothing.
-
-```sh
-digi3        # distrobox enter digi3 -- herdr --session digi3
-digi3-tmux   # distrobox enter digi3 -- tmux -L digi3 new-session -A -s work
-```
-
-The aliases are generated from `contexts:` in `home/.chezmoidata.yaml`, so a
-new work context brings its own shortcuts along with everything else.
-
-The two session flags look alike and are not. tmux keeps its server socket in
-`/tmp`, which distrobox shares with every container, so `-L <name>` is what
-stops three contexts from sharing one server. herdr keeps its socket under
-`$HOME`, and every container has its own `home=~/homes/<name>`, so the
-separation is structural; `--session <name>` only makes `herdr session list`
-name the context instead of saying `default`.
 
 No herdr config is shipped. The defaults are good, including the `ctrl+b`
 prefix, which differs from this repository's tmux (`C-a`). tmux declares
@@ -189,17 +182,135 @@ prefix, which differs from this repository's tmux (`C-a`). tmux declares
 `xterm-ghostty`, so truecolor survives inside tmux sessions; herdr needs no
 equivalent.
 
-Two things that are not what they look like:
+### `work`
+
+```sh
+work
+```
+
+One command for the whole desk. It starts a headless herdr server if none is
+running, gives every context in `contexts:` a space of its own, types
+`distrobox enter --no-workdir <context>` into each space's root pane, and then
+attaches the TUI. Detach with `ctrl+b`, `q`: the server is headless and
+outlives the client, so the panes carry on.
+
+Why a script and not herdr's own session restore: herdr remembers the layout
+and the space names, but not the command a pane was running. A restored space
+comes back holding a plain host shell, and the entry would have to be typed
+again every morning.
+
+The context list is baked in when the template renders, out of `contexts:` in
+`home/.chezmoidata.yaml` -- the same list that generates the aliases, the proxy
+bridges and the browser containers. A context whose container does not exist is
+skipped, with the `distrobox assemble create` line printed to fix it; if not
+one context is available, `work` says so and exits before any server is
+started.
+
+Running `work` a second time is safe. Spaces are looked up by label instead of
+being created again, and a pane is written to only when its single foreground
+process is that pane's own shell, by pid and by name. A pane holding an editor,
+a build, or a container that was entered already is left alone.
+
+That check has one hole nothing can close: a line you have typed and never
+submitted looks exactly like an idle prompt. So `work` sends `ctrl+c` first and
+types its own command after. Without that the two arrive at the shell as one
+line: on 0.7.5 a pending `echo DANGEROUS-PARTIAL` followed by `echo
+SAFE-MARKER` ran as `echo DANGEROUS-PARTIALecho SAFE-MARKER`. The pending line
+is discarded, and it is the one thing `work` destroys.
+
+`work` is deployed on the host and only when `herdr` is ticked. herdr itself is
+`scope: both`, so gating on the feature alone would put `work` inside every
+container, where `distrobox enter` does not exist.
+
+### What you type inside a pane
+
+Three aliases per context, generated from `contexts:`, so a new work context
+brings its own shortcuts along with everything else. They are typed inside a
+herdr pane; none of them starts herdr:
+
+```sh
+digi3         # distrobox enter --no-workdir digi3
+digi3-claude  # HERDR_AGENT=claude distrobox enter --no-workdir digi3 -- claude
+digi3-tmux    # distrobox enter --no-workdir digi3 -- tmux -L digi3 new-session -A -s work
+```
+
+The twins are conditional: `-claude` renders only while `herdr` is ticked,
+`-tmux` only while `tmux` is.
+
+`--no-workdir` is on every one of them, and it is not cosmetic. Without it
+distrobox carries the host's working directory into the container through
+`/run/host`, so the shell sits in the container's network namespace while
+working on the host's files -- the worst of both. Measured from `~`:
+
+```sh
+distrobox enter digi3 -- pwd               # /run/host/home/stsiapan
+distrobox enter --no-workdir digi3 -- pwd  # /home/stsiapan/homes/digi3
+```
+
+The tmux twin carried that fault already, so the flag is a fix and not only a
+rule for the new commands.
+
+`HERDR_AGENT=claude` is what puts the agent in herdr's sidebar. herdr
+identifies an agent by the foreground process group, and through `distrobox
+enter` that group is `distrobox` and `podman`, never `claude`: without the hint
+the pane is in no agent list at all and the sidebar stays empty, which is the
+whole reason herdr is here. It goes on the command and is never exported. A
+global `HERDR_AGENT` would label every pane as that agent.
+
+`-L digi3` in the tmux twin is a different kind of flag and must not be
+dropped. tmux keeps its server socket in `/tmp`, which distrobox shares with
+every container, so `-L <name>` is what stops three contexts from sharing one
+server.
+
+### Two faults with no fix
+
+**A closed pane does not kill the agent.** Closing a herdr pane, or the space
+holding it, ends the `distrobox enter` on the host and nothing else. What was
+running inside the container carries on, orphaned, with no pane left to show
+it. It is visible only through `podman top`, and it has to be killed from there
+by pid:
+
+```sh
+podman top digi3 -eo pid,ppid,user,tty,args
+podman exec digi3 kill <pid>
+```
+
+Measured: `sleep 600` started through a pane was still listed by `podman top
+digi3` after the space holding it had been closed, and `kill` cleared it. An
+interactive shell does not go as quietly: a `bash -l` left the same way
+ignored `kill` and stayed listed until `kill -9 <pid>`.
+
+**A container can drive the host's herdr.** distrobox mounts the whole host
+root into every container as `/run/host`, and the host home at its own path
+besides, so the herdr API socket is reachable from inside a container as an
+ordinary path:
+
+```sh
+distrobox enter --no-workdir digi3 -- \
+  env HERDR_SOCKET_PATH=/run/host/home/stsiapan/.config/herdr/herdr.sock \
+  herdr workspace list
+```
+
+It answers, and it is not read-only: a space created this way from inside
+`digi3` ran `readlink /proc/self/ns/net` and printed the host's namespace, not
+the container's. This cannot be closed while distrobox mounts the host root,
+and it is consistent with what
+[BROWSER-ISOLATION.md](BROWSER-ISOLATION.md) already concedes: the threat model
+is an employer reading their own logs, not hostile code inside a container.
+What separates the contexts is the network namespace; a multiplexer socket,
+herdr's or tmux's, separates nothing.
+
+### Two things that are not what they look like
 
 - **Unticking `tmux` removes the `-tmux` twin, not the package.** The package
   installer only ever installs, and `chezmoi apply` does not delete a file
-  that has become ignored: the binary stays, and `~/.tmux.conf` stays where
-  it was and simply stops being managed. What does go is `digi3-tmux` itself
-  — `dot_bashrc.tmpl` only renders the twin when both multiplexers are
-  selected, so the fallback this section advertises above stops existing as
-  an alias. Falling back then means typing `tmux -L digi3 new-session -A -s
-  work` by hand, or ticking `tmux` again. Removing tmux for real is still
-  `pacman -Rns tmux` by hand.
+  that has become ignored: the binary stays, and `~/.tmux.conf` stays where it
+  was and simply stops being managed. What does go is `digi3-tmux` itself --
+  `dot_bashrc.tmpl` renders the twin only while `tmux` is ticked, so the
+  fallback this section advertises above stops existing as an alias. Falling
+  back then means typing `tmux -L digi3 new-session -A -s work` by hand, or
+  ticking `tmux` again. Removing tmux for real is still `pacman -Rns tmux` by
+  hand.
 - **The DankMaterialShell session panel only speaks tmux and zellij.** It
   probes for the binary rather than reading the feature list, so it keeps
   listing tmux sessions regardless of the checklist, and it will never see a
@@ -250,8 +361,9 @@ distrobox enter <name>
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/install.sh)"
 ```
 
-After that use the `.bashrc` aliases (`digi3`, `stellium`, `personal`), which
-open that context in the primary multiplexer. See [Multiplexer](#multiplexer).
+After that use `work`, which opens one herdr space per context, or the
+`.bashrc` aliases (`digi3`, `stellium`, `personal`), which open a shell in that
+context. See [Multiplexer](#multiplexer).
 
 ### `podman info` fails on overlay
 
@@ -296,9 +408,22 @@ Zen container "digi3"
 
 A UNIX socket rather than a port because it is a filesystem object: it crosses
 the network-namespace boundary without weakening it. The host always dials in,
-the container never learns a route back. Each container sees only its own
-socket directory; a shared one would let any container reach a neighbour's
-proxy and leave through the wrong VPN.
+the container never learns a route back. Each container's own mount at
+`/var/lib/wsproxy/` holds nothing but its own socket -- verified: `ls` there
+from inside `digi3` prints `socks.sock` alone.
+
+That mount guards against picking the wrong path by accident; it is not a
+boundary against code already running inside a container. distrobox
+bind-mounts the whole host home into every container besides, so the
+directory holding all three sockets is reachable too: `ls -l
+~/.local/share/wsproxy/*/socks.sock` from inside `digi3` lists digi3, personal
+and stellium, mode `srw-------`, owned by the same uid the container runs as.
+Connecting to a neighbour's socket from there gets back a SOCKS5 greeting, the
+same as connecting to its own -- reaching a neighbour's proxy and leaving
+through its VPN is one command away. What separates the contexts is the
+network namespace at the end of the chain; the socket in the middle separates
+nothing. [BROWSER-ISOLATION.md](BROWSER-ISOLATION.md) documents the identical
+route with socat.
 
 The list of contexts and ports is `contexts:` in `home/.chezmoidata.yaml`.
 Adding a context means adding one entry there and running `chezmoi apply`.

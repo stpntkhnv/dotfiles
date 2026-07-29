@@ -1,0 +1,234 @@
+#!/bin/bash
+# Managed by chezmoi -- home/dot_local/bin/executable_work.tmpl
+#
+# Open herdr with one space per work context, each space already sitting inside
+# its own distrobox container.
+#
+# Why a script and not session restore: herdr persists the layout and the space
+# names in ~/.config/herdr/session.json, but not the command a pane was running.
+# A restored space therefore comes back with a plain host shell, and the entry
+# would have to be typed by hand every time.
+#
+# Why the contexts are baked in at render time: `contexts:` in .chezmoidata.yaml
+# is the single source of truth, the same one that generates the aliases, the
+# proxy bridges and the browser containers. A second list on disk would be a
+# second place to be wrong.
+set -euo pipefail
+
+contexts=({{ range .contexts }}{{ .name | quote }} {{ end }})
+
+# A space whose container does not exist would be a space named after a work
+# context holding a HOST shell: it looks ready and is not. That is the silent
+# failure this repository exists to avoid, so such a context is skipped whole.
+missing_container_hint() {
+    echo "work: no container '$1'. Create it with:" >&2
+    echo "  distrobox assemble create --name $1 --file ~/.config/distrobox/distrobox.ini" >&2
+}
+
+# The server is headless and outlives the client, which is the point: closing
+# the terminal leaves the panes running. `herdr` then attaches to it -- verified
+# on 0.7.5, no second server appears.
+ensure_server() {
+    if herdr workspace list >/dev/null 2>&1; then
+        return
+    fi
+    setsid herdr server >/dev/null 2>&1 &
+    for _ in $(seq 1 40); do
+        if herdr workspace list >/dev/null 2>&1; then
+            return
+        fi
+        sleep 0.25
+    done
+    echo "work: the herdr server did not come up." >&2
+    echo "work: see ~/.config/herdr/herdr-server.log" >&2
+    exit 1
+}
+
+# A herdr call further down can still fail if the server dies between
+# contexts, after ensure_server already found it up -- reproduced by killing
+# the server mid-run. Left unguarded the caller's `Error: Os { .. }` becomes
+# the script's last line, with no hint that this is the same situation
+# ensure_server already has words for. Aborting is still right; dying with a
+# Rust struct is not.
+server_gone_hint() {
+    echo "work: lost contact with the herdr server." >&2
+    echo "work: see ~/.config/herdr/herdr-server.log" >&2
+}
+
+# Space labels are NOT unique: `workspace create --label digi3` on a server that
+# already has digi3 happily makes a second one. Hence the lookup.
+#
+# first() inside jq rather than `| head -1`: head closes the pipe on the first
+# line, jq dies of SIGPIPE, and with `set -o pipefail` that failure propagates
+# out of the command substitution and kills the whole script -- precisely when
+# duplicates exist, which is the case this function is here to survive.
+workspace_for() {
+    herdr workspace list \
+        | jq -r --arg l "$1" \
+            'first(.result.workspaces[] | select(.label == $l) | .workspace_id) // empty'
+}
+
+# The root pane of the first tab, and only when that tab has exactly one pane.
+# A split tab is the user's arrangement and is left alone -- but this used to
+# return empty for three different situations and only ever explain one of
+# them:
+#   - the workspace has no tabs at all;
+#   - the workspace vanished between workspace_for and here (closed from
+#     elsewhere while the loop was still going);
+#   - the first tab exists and is split into more than one pane.
+# The first two are indistinguishable from here and genuinely nothing to say
+# about -- a gone workspace is not this context's fault. The third is not:
+# the space is real, the user split it on purpose, and silently doing nothing
+# left them with a `work` that appeared to skip that context for no reason.
+# That one now says so.
+#
+# Both herdr calls are `|| true`-guarded: `herdr tab list --workspace <gone>`
+# exits non-zero on a vanished workspace, and under `set -o pipefail` that
+# took the whole script down before this guard existed -- the remaining
+# contexts never opened and the TUI never attached.
+first_tab_pane() {
+    local ws=$1 ctx=$2 tab panes count
+    tab=$(herdr tab list --workspace "$ws" 2>/dev/null \
+        | jq -r '[.result.tabs[]] | sort_by(.number) | .[0].tab_id // empty' || true)
+    [ -n "$tab" ] || return 0
+    panes=$(herdr pane list --workspace "$ws" 2>/dev/null || true)
+    count=$(printf '%s' "$panes" | jq -r --arg t "$tab" \
+        '[.result.panes[] | select(.tab_id == $t)] | length' 2>/dev/null || true)
+    if [ "$count" = 1 ]; then
+        printf '%s' "$panes" | jq -r --arg t "$tab" \
+            '.result.panes[] | select(.tab_id == $t) | .pane_id'
+    elif [ -n "$count" ] && [ "$count" -gt 1 ] 2>/dev/null; then
+        echo "work: '$ctx' left alone, its first tab is split into $count panes." >&2
+    fi
+}
+
+# Positive rule, deliberately: "nothing but the pane's own shell is running".
+# The tempting version -- "skip if podman or distrobox is there" -- leaves the
+# whole rest of the world outside, so a pane holding vim, less, ssh or a build
+# would get the entry command typed on top of it.
+#
+# Two more holes, both found by testing rather than by reasoning about the
+# rule in the abstract:
+#
+# 1. `exec vim` leaves the process table looking exactly like an idle shell.
+#    herdr records `shell_pid` once, when the pane is created, and never
+#    updates it; a shell that execs into another program keeps that same pid,
+#    so `pid == shell_pid` alone cannot tell a live vim from a live bash.
+#    Reproduced live: `exec sleep 300` in an idle pane left `pid == shell_pid`
+#    true while the pane plainly was not idle. The `name` check below closes
+#    it -- only bash, sh, zsh, fish or dash count, because a real shell prompt
+#    is the only thing safe to type into.
+#
+# 2. A half-typed, never-submitted command line reads as one foreground
+#    process, right pid, right name -- indistinguishable from a truly idle
+#    prompt by anything this function can see. No predicate closes that hole,
+#    so it is not closed here: every call site sends ctrl+c immediately
+#    before writing to a pane (see enter_context below), which discards
+#    whatever is pending and forces a fresh prompt regardless of what this
+#    check found.
+#
+# It doubles as the readiness check. Straight after `workspace create` the pane
+# reports two foreground processes and only settles to one after ~0.12s, so a
+# single probe would race and `pane run` would type into a shell that is not
+# listening yet.
+pane_is_idle_shell() {
+    herdr pane process-info --pane "$1" 2>/dev/null \
+        | jq -e '.result.process_info as $p
+                 | ($p.foreground_processes | length) == 1
+                   and $p.foreground_processes[0].pid == $p.shell_pid
+                   and ($p.foreground_processes[0].name as $n
+                        | $n == "bash" or $n == "sh" or $n == "zsh"
+                          or $n == "fish" or $n == "dash")' >/dev/null 2>&1
+}
+
+wait_for_idle_shell() {
+    local pane=$1
+    for _ in $(seq 1 50); do
+        if pane_is_idle_shell "$pane"; then
+            return 0
+        fi
+        sleep 0.1
+    done
+    return 1
+}
+
+# A half-typed line beats pane_is_idle_shell (see the comment above it), so
+# every write is preceded by ctrl+c: the shell discards whatever is pending
+# and redraws a fresh prompt, and concatenation onto stale text becomes
+# impossible. Reproduced live on 0.7.5 without this guard: a pane holding
+# `rm -rf ~/importan` (typed, never submitted) plus a `pane run` of
+# `echo SAFE-MARKER` came back as one executed line,
+# `rm -rf ~/importanecho SAFE-MARKER`. `ctrl+c` is the accepted key spelling
+# for send-keys on this version (`herdr pane send-keys --help` documents
+# `ctrl+b`, `f12`, `esc` as the key-name grammar).
+enter_context() {
+    local pane=$1 ctx=$2
+    herdr pane send-keys "$pane" ctrl+c >/dev/null 2>&1 || true
+    sleep 0.2
+    # The pane found idle by the caller can still vanish before this write --
+    # closed from elsewhere in the gap between the check and here, the same
+    # race first_tab_pane above is guarded against. Unguarded this took
+    # `set -e` down with it: later contexts never opened and `exec herdr`
+    # never ran. A failure here now means only that this one context is not
+    # entered; herdr's own error stays on stderr instead of being thrown away.
+    herdr pane run "$pane" distrobox enter --no-workdir "$ctx" >/dev/null \
+        || echo "work: could not enter '$ctx', pane $pane may already be gone." >&2
+}
+
+# The container scan needs no server, so it runs before ensure_server can have
+# any side effect. Without this ordering, a machine with none of the work
+# containers built would still start a headless server just to find nothing
+# to open, and leave that server running behind a plain failure.
+usable=()
+for ctx in "${contexts[@]}"; do
+    if podman container exists "$ctx"; then
+        usable+=("$ctx")
+    else
+        missing_container_hint "$ctx"
+    fi
+done
+
+if [ "${#usable[@]}" -eq 0 ]; then
+    echo "work: not one work context is available, not attaching." >&2
+    exit 1
+fi
+
+ensure_server
+
+first_ws=""
+
+for ctx in "${usable[@]}"; do
+    ws=$(workspace_for "$ctx") || { server_gone_hint; exit 1; }
+    if [ -n "$ws" ]; then
+        pane=$(first_tab_pane "$ws" "$ctx")
+        # An existing space may hold real work. Only a pane that is nothing but
+        # an idle shell gets the entry typed into it.
+        if [ -n "$pane" ] && pane_is_idle_shell "$pane"; then
+            enter_context "$pane" "$ctx"
+        fi
+    else
+        created=$(herdr workspace create --label "$ctx" --no-focus) \
+            || { server_gone_hint; exit 1; }
+        ws=$(printf '%s' "$created" | jq -r '.result.workspace.workspace_id // empty')
+        pane=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
+        # An empty pane id is a real, if rare, shape of the response -- and
+        # wait_for_idle_shell does not know that; it would poll an id that
+        # was never a pane for the full 50 tries (5s) and then print "pane
+        # $pane never produced a shell" with nothing where the id should be.
+        # Caught here instead, immediately and honestly.
+        if [ -z "$pane" ]; then
+            echo "work: '$ctx' created a workspace but no pane id came back, leaving it empty" >&2
+        # Freshly created, so the only other thing to wait for is the shell.
+        elif wait_for_idle_shell "$pane"; then
+            enter_context "$pane" "$ctx"
+        else
+            echo "work: pane $pane never produced a shell, leaving it empty" >&2
+        fi
+    fi
+
+    [ -n "$first_ws" ] || first_ws=$ws
+done
+
+herdr workspace focus "$first_ws" >/dev/null 2>&1 || true
+
+exec herdr
