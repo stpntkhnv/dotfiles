@@ -166,4 +166,78 @@ if [[ -n "$drifted" ]]; then
         "$BASE/rest/config/options" >/dev/null || say "options: PATCH failed"
     NEEDS_RESTART=1
 fi
+
+# Folders. Only those whose `devices` list names this machine: the laptop is not
+# in `camera`, and an empty camera folder there would be a lie about what is
+# synchronised. Participants are resolved through the map, and a name with no ID
+# yet is skipped rather than invented -- next-steps reports the skip so it is
+# never silent.
+known_folders="$(api "$BASE/rest/config/folders" | jq -r '.[].id')" \
+    || bail "could not read the folder list"
+
+while IFS= read -r folder; do
+    fid="$(jq -r '.id' <<<"$folder")"
+    fpath="$HOME/$(jq -r '.path' <<<"$folder")"
+    flabel="$(jq -r '.label' <<<"$folder")"
+    ftype="$(jq -r '.type' <<<"$folder")"
+
+    members="$(jq -cn --argjson f "$folder" --argjson d "$DEVICES" \
+        '[$f.devices[] | select($d[.] != null) | {deviceID: $d[.].id}] | sort_by(.deviceID)')"
+
+    # A staggered version set is a bin, not a history: 31536000 is a year IN
+    # SECONDS, and the plain "365" this field also accepts would mean six minutes.
+    case "$(jq -r '.versioning' <<<"$folder")" in
+        staggered) versioning='{"type":"staggered","params":{"maxAge":"31536000"},"cleanupIntervalS":3600,"fsPath":"","fsType":"basic"}' ;;
+        *)         versioning='{"type":"","params":{},"cleanupIntervalS":3600,"fsPath":"","fsType":"basic"}' ;;
+    esac
+
+    desired="$(jq -cn --arg id "$fid" --arg label "$flabel" --arg path "$fpath" \
+                     --arg type "$ftype" --argjson devices "$members" --argjson v "$versioning" \
+        '{id: $id, label: $label, path: $path, type: $type, devices: $devices, versioning: $v}')"
+
+    if grep -qx "$fid" <<<"$known_folders"; then
+        current="$(api "$BASE/rest/config/folders/$fid")" || continue
+        same="$(jq -n --argjson cur "$current" --argjson des "$desired" \
+            '($cur | {label, path, type, versioning} + {devices: ([.devices[] | {deviceID}] | sort_by(.deviceID))})
+             == ($des | {label, path, type, versioning, devices})')"
+        if [[ "$same" != "true" ]]; then
+            say "folder $fid: drifted, fixing"
+            api -X PATCH -H "Content-Type: application/json" -d "$desired" \
+                "$BASE/rest/config/folders/$fid" >/dev/null || say "folder $fid: PATCH failed"
+            NEEDS_RESTART=1
+        fi
+    else
+        say "folder $fid: adding"
+        mkdir -p "$fpath"
+        api -X POST -H "Content-Type: application/json" \
+            -d "$(api "$BASE/rest/config/defaults/folder" | jq -c --argjson des "$desired" '. * $des')" \
+            "$BASE/rest/config/folders" >/dev/null || say "folder $fid: POST failed"
+        NEEDS_RESTART=1
+    fi
+
+    # Ignore patterns belong to the folder definition, so on a managed folder the
+    # list is ours entirely: a folder with no `ignore` key gets an empty one, and
+    # a pattern added by hand is taken back on the next apply. That is the same
+    # re-assertion this script is run_after_ for. Unmanaged folders are not read
+    # and not written.
+    want_ignores="$(jq -cn --argjson f "$folder" '$f.ignore // []')"
+    have_ignores="$(api "$BASE/rest/db/ignores?folder=$fid" | jq -c '.ignore // []')" || continue
+    if [[ "$want_ignores" != "$have_ignores" ]]; then
+        say "folder $fid: ignore patterns drifted, fixing"
+        # The folder goes in the query string and the body carries `ignore` only.
+        # The endpoint mirrors its GET, whose folder is a query parameter too.
+        api -X POST -H "Content-Type: application/json" \
+            -d "$(jq -cn --argjson i "$want_ignores" '{ignore: $i}')" \
+            "$BASE/rest/db/ignores?folder=$fid" >/dev/null || say "folder $fid: ignore POST failed"
+    fi
+done < <(jq -c --arg self "$SELF" '.[] | select(.devices | index($self))' <<<"$CATALOG")
+
+# Some accepted changes only take effect after a restart, and Syncthing says so
+# itself. Without this the apply would look successful while the settings sat
+# accepted and inert -- the same silent failure this repository keeps hunting.
+if [[ "$NEEDS_RESTART" == "1" ]] \
+   && [[ "$(api "$BASE/rest/config/restart-required" | jq -r '.requiresRestart // false')" == "true" ]]; then
+    say "restarting the daemon so the new configuration takes effect"
+    api -X POST "$BASE/rest/system/restart" >/dev/null || say "restart failed"
+fi
 {{- end }}
