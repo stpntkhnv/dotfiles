@@ -473,6 +473,16 @@ sentences. A 12B candidate scored better on quality but spilled onto the CPU;
 GPU, alongside the Whisper model, with room to spare. Running on the finished
 text means window boundaries stop mattering.
 
+The model server unloads an idle model after five minutes, so the first
+dictation after a pause pays for a full reload: one real dictation took about
+13 seconds end to end cold, against three consecutive warm calls at 4475 ms,
+649 ms and 673 ms. The knob is `OLLAMA_KEEP_ALIVE`, which controls how long a
+loaded model stays resident; it is unset here, so ollama's own default of
+five minutes is what ships. Lengthening it trades about 6 GB of graphics
+memory, held rather than freed between dictations, for avoiding that reload
+-- worth doing if the first-dictation delay bothers you more than the memory
+does.
+
 | Key | What it does |
 |---|---|
 | **Mod+Shift+D** | dictate, then clean up (`SIGUSR1`) |
