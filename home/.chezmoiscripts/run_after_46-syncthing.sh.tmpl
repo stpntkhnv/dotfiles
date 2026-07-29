@@ -100,4 +100,66 @@ if [[ -z "$SELF" ]]; then
 fi
 
 say "this machine is '$SELF'"
+
+NEEDS_RESTART=0
+
+# Devices first: a folder cannot list a participant the daemon has never heard
+# of. A device already known is PATCHed with our keys only, so anything the user
+# set in the GUI on that device entry survives. A device not known yet is built
+# from the daemon's own template, which is why no default has to be guessed here.
+known_devices="$(api "$BASE/rest/config/devices" | jq -r '.[].deviceID')" \
+    || bail "could not read the device list"
+
+while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    dev_id="$(jq -rn --argjson d "$DEVICES" --arg n "$name" '$d[$n].id')"
+    dev_addrs="$(jq -cn --argjson d "$DEVICES" --arg n "$name" '$d[$n].addresses')"
+
+    if grep -qx "$dev_id" <<<"$known_devices"; then
+        current="$(api "$BASE/rest/config/devices/$dev_id")" || continue
+        # Compared as a set. Which address Syncthing tries first is its business,
+        # and an exact-order comparison would rewrite the same entry on every
+        # apply if the daemon ever reorders it.
+        if [[ "$(jq -c --argjson a "$dev_addrs" --arg n "$name" \
+                 '(.addresses | sort) == ($a | sort) and .name == $n' <<<"$current")" != "true" ]]; then
+            say "device $name: addresses or name drifted, fixing"
+            api -X PATCH -H "Content-Type: application/json" \
+                -d "$(jq -cn --argjson a "$dev_addrs" --arg n "$name" '{name: $n, addresses: $a}')" \
+                "$BASE/rest/config/devices/$dev_id" >/dev/null || say "device $name: PATCH failed"
+        fi
+    else
+        say "device $name: adding"
+        api -X POST -H "Content-Type: application/json" \
+            -d "$(api "$BASE/rest/config/defaults/device" \
+                  | jq -c --arg id "$dev_id" --arg n "$name" --argjson a "$dev_addrs" \
+                         '.deviceID = $id | .name = $n | .addresses = $a')" \
+            "$BASE/rest/config/devices" >/dev/null || say "device $name: POST failed"
+    fi
+done < <(jq -rn --argjson d "$DEVICES" '$d | keys[]')
+
+# Options: PATCH touches only the keys named here, so everything else the daemon
+# or the user chose is left alone. urAccepted -1 is an explicit refusal of usage
+# reporting rather than the "ask me later" zero, and startBrowser false stops a
+# service start from opening a tab.
+desired_options='{
+  "localAnnounceEnabled": true,
+  "globalAnnounceEnabled": false,
+  "relaysEnabled": false,
+  "natEnabled": false,
+  "urAccepted": -1,
+  "crashReportingEnabled": false,
+  "startBrowser": false
+}'
+current_options="$(api "$BASE/rest/config/options")" || bail "could not read options"
+# -r, not just -n: without it jq prints an empty match list's joined string as
+# the two-character literal "", which is a non-empty bash string, so the drift
+# check would fire -- and PATCH -- on every single run forever.
+drifted="$(jq -rn --argjson cur "$current_options" --argjson des "$desired_options" \
+    '[$des | to_entries[] | select($cur[.key] != .value) | .key] | join(", ")')"
+if [[ -n "$drifted" ]]; then
+    say "options drifted ($drifted), fixing"
+    api -X PATCH -H "Content-Type: application/json" -d "$desired_options" \
+        "$BASE/rest/config/options" >/dev/null || say "options: PATCH failed"
+    NEEDS_RESTART=1
+fi
 {{- end }}
