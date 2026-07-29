@@ -154,8 +154,12 @@ current_options="$(api "$BASE/rest/config/options")" || bail "could not read opt
 # -r, not just -n: without it jq prints an empty match list's joined string as
 # the two-character literal "", which is a non-empty bash string, so the drift
 # check would fire -- and PATCH -- on every single run forever.
+# `|| true` for the same reason as everywhere else in this file: an unguarded
+# assignment from a failing command ends the script, and this one runs inside
+# chezmoi apply. Failing to work out WHAT drifted must mean "change nothing this
+# time", never "take the apply down".
 drifted="$(jq -rn --argjson cur "$current_options" --argjson des "$desired_options" \
-    '[$des | to_entries[] | select($cur[.key] != .value) | .key] | join(", ")')"
+    '[$des | to_entries[] | select($cur[.key] != .value) | .key] | join(", ")' || true)"
 if [[ -n "$drifted" ]]; then
     say "options drifted ($drifted), fixing"
     api -X PATCH -H "Content-Type: application/json" -d "$desired_options" \
