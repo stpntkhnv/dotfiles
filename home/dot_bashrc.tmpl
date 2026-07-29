@@ -1,0 +1,65 @@
+{{- $herdr := has "herdr" .enabled }}
+{{- $tmux := has "tmux" .enabled }}
+[[ $- != *i* ]] && return
+
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
+PS1='[\u@\h \W]\$ '
+
+# ~/.local/bin holds claude (native install) and distrobox-exported bins;
+# bash never reads ~/.profile (bash_profile shadows it), so add it here.
+export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.dotnet/tools:$PATH"
+
+{{ if eq .env "host" }}
+# distrobox container shortcuts, generated from `contexts:` so the list of work
+# contexts lives in one place, like every other consumer of it.
+#
+# The bare name always goes to the primary multiplexer, so muscle memory does
+# not depend on what is installed; the -tmux twin is the way back while herdr
+# is a 0.x project.
+#
+# The two session flags are NOT the same kind of thing. tmux keeps its server
+# socket in /tmp, which distrobox shares with every container, so `-L <name>`
+# is what stops three contexts from sharing one server -- it must not be
+# dropped. herdr keeps its socket under $HOME
+# (~/.config/herdr/sessions/<name>/herdr.sock) and every container has its own
+# home=~/homes/<name>, so the boundary is structural and `--session <name>`
+# only buys legibility: `herdr session list` names the context instead of
+# saying "default".
+{{- range .contexts }}
+{{- if $herdr }}
+alias {{ .name }}='distrobox enter {{ .name }} -- herdr --session {{ .name }}'
+{{- if $tmux }}
+alias {{ .name }}-tmux='distrobox enter {{ .name }} -- tmux -L {{ .name }} new-session -A -s work'
+{{- end }}
+{{- else if $tmux }}
+alias {{ .name }}='distrobox enter {{ .name }} -- tmux -L {{ .name }} new-session -A -s work'
+{{- else }}
+alias {{ .name }}='distrobox enter {{ .name }}'
+{{- end }}
+{{- end }}
+{{ end }}
+
+# --- modern shell tooling ---------------------------------------------------
+# The same file is deployed into the host and into every container, so it runs
+# in several environments. Each line is guarded with `command -v` so a missing
+# binary in one environment never breaks the shell in another.
+command -v starship >/dev/null && eval "$(starship init bash)"
+command -v zoxide   >/dev/null && eval "$(zoxide init bash)"   # adds: z <dir> / zi
+command -v fzf      >/dev/null && eval "$(fzf --bash)"         # Ctrl-R hist / Ctrl-T files / Alt-C cd
+
+if command -v eza >/dev/null; then
+    alias ls='eza --group-directories-first --icons=auto'
+    alias ll='eza -l  --group-directories-first --icons=auto --git'
+    alias la='eza -la --group-directories-first --icons=auto --git'
+    alias lt='eza --tree --level=2 --icons=auto'
+fi
+
+if command -v bat >/dev/null; then
+    export BAT_THEME="Nord"
+    export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+    # To make cat use bat, uncomment: alias cat='bat --plain --paging=never'
+fi
+
+# fzf: Nord colours + sensible defaults
+export FZF_DEFAULT_OPTS="--height 40% --layout=reverse --border=rounded --info=inline --color=bg+:#3b4252,bg:#2e3440,spinner:#81a1c1,hl:#616e88,fg:#d8dee9,header:#616e88,info:#81a1c1,pointer:#81a1c1,marker:#a3be8c,fg+:#d8dee9,prompt:#81a1c1,hl+:#81a1c1"
