@@ -2,3 +2,7 @@
 # contexts and describe the threat model, which is exactly what this
 # repository must not publish.
 docs/
+
+# SDD scratch: ledgers, briefs and review packages for plans under docs/.
+# Same reason docs/ is ignored -- these quote the plan, which names work contexts.
+.superpowers/
