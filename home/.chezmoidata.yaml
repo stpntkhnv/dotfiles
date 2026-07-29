@@ -58,6 +58,59 @@ contexts:
   - name: personal
     socks: 11083
 
+# What Syncthing keeps in step between machines. One entry is one Syncthing
+# folder; `id` is what has to be typed identically on the phone, so it is
+# spelled out here rather than left to the random generator.
+#
+# `devices` names participants by logical name; the ID behind each name lives in
+# ~/.config/chezmoi/chezmoi.toml, per machine, because this repository is public
+# and a device ID is a stable identifier of a box that exists.
+#
+# A folder is only created on the machines listed in its own `devices`: the
+# laptop is not in `camera`, so no empty camera folder appears there.
+#
+# `path` is relative to the home directory. `type` is Syncthing's own vocabulary:
+# sendreceive is a two-way folder, receiveonly accepts changes but never sends
+# its own -- which is what makes `camera` an inbox one can empty by hand without
+# the phone noticing.
+syncthing:
+  folders:
+    - id: kb
+      label: "Knowledge base"
+      path: Documents/Notes/kb
+      type: sendreceive
+      devices: [desktop, laptop]
+      versioning: staggered
+
+    - id: personal
+      label: "Personal vault"
+      path: Documents/Notes/personal
+      type: sendreceive
+      devices: [desktop, laptop, phone]
+      versioning: staggered
+      # Obsidian rewrites this file on every tab switch, which on two open
+      # machines is a conflict a day. The rest of .obsidian/ -- plugins, themes,
+      # settings -- is exactly why the vault is shared, so it stays.
+      ignore:
+        - ".obsidian/workspace*.json"
+
+    - id: kb-archive
+      label: "Knowledge base archive"
+      path: Documents/Notes/kb-archive
+      type: sendreceive
+      devices: [desktop, laptop]
+      versioning: none
+
+    # An inbox, not an archive. Photos are carried out of here into permanent
+    # storage by hand; receiveonly is what lets that happen without the deletion
+    # travelling back to the phone.
+    - id: camera
+      label: "Phone camera inbox"
+      path: Pictures/Camera
+      type: receiveonly
+      devices: [desktop, phone]
+      versioning: none
+
 features:
   # ---------------------------------------------------------------- base ---
   - key: core
@@ -456,6 +509,29 @@ features:
       - openblas
     aur:
       - handy-bin
+
+  # Syncthing keeps the note vaults identical across machines and pulls phone
+  # photos in. Host only: containers already see the host's home tree, so a
+  # daemon in each of them would move the same bytes a fourth time and need an
+  # identity and a port of its own.
+  #
+  # curl is listed explicitly even though git and pacman drag it in anyway: the
+  # configuration script talks to the daemon over REST, and a dependency that
+  # arrives by accident is a dependency that can leave by accident.
+  - key: syncthing
+    label: "Syncthing: notes and phone media sync"
+    scope: host
+    default: true
+    pacman:
+      - curl
+      - syncthing
+
+  - key: obsidian
+    label: "Obsidian (notes editor)"
+    scope: host
+    default: true
+    pacman:
+      - obsidian
 
   # No packages -- this feature only gates the images under home/Pictures/
   # wallpapers/ (see .chezmoiignore). Separate from `desktop` so a future
