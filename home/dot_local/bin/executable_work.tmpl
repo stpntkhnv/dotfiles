@@ -1,0 +1,142 @@
+#!/bin/bash
+# Managed by chezmoi -- home/dot_local/bin/executable_work.tmpl
+#
+# Open herdr with one space per work context, each space already sitting inside
+# its own distrobox container.
+#
+# Why a script and not session restore: herdr persists the layout and the space
+# names in ~/.config/herdr/session.json, but not the command a pane was running.
+# A restored space therefore comes back with a plain host shell, and the entry
+# would have to be typed by hand every time.
+#
+# Why the contexts are baked in at render time: `contexts:` in .chezmoidata.yaml
+# is the single source of truth, the same one that generates the aliases, the
+# proxy bridges and the browser containers. A second list on disk would be a
+# second place to be wrong.
+set -euo pipefail
+
+contexts=({{ range .contexts }}{{ .name | quote }} {{ end }})
+
+# A space whose container does not exist would be a space named after a work
+# context holding a HOST shell: it looks ready and is not. That is the silent
+# failure this repository exists to avoid, so such a context is skipped whole.
+missing_container_hint() {
+    echo "work: no container '$1'. Create it with:" >&2
+    echo "  distrobox assemble create --name $1 --file ~/.config/distrobox/distrobox.ini" >&2
+}
+
+# The server is headless and outlives the client, which is the point: closing
+# the terminal leaves the panes running. `herdr` then attaches to it -- verified
+# on 0.7.5, no second server appears.
+ensure_server() {
+    if herdr workspace list >/dev/null 2>&1; then
+        return
+    fi
+    setsid herdr server >/dev/null 2>&1 &
+    for _ in $(seq 1 40); do
+        if herdr workspace list >/dev/null 2>&1; then
+            return
+        fi
+        sleep 0.25
+    done
+    echo "work: the herdr server did not come up." >&2
+    echo "work: see ~/.config/herdr/herdr-server.log" >&2
+    exit 1
+}
+
+# Space labels are NOT unique: `workspace create --label digi3` on a server that
+# already has digi3 happily makes a second one. Hence the lookup.
+#
+# first() inside jq rather than `| head -1`: head closes the pipe on the first
+# line, jq dies of SIGPIPE, and with `set -o pipefail` that failure propagates
+# out of the command substitution and kills the whole script -- precisely when
+# duplicates exist, which is the case this function is here to survive.
+workspace_for() {
+    herdr workspace list \
+        | jq -r --arg l "$1" \
+            'first(.result.workspaces[] | select(.label == $l) | .workspace_id) // empty'
+}
+
+# The root pane of the first tab, and only when that tab has exactly one pane.
+# A split tab is the user's arrangement and is left alone.
+first_tab_pane() {
+    local ws=$1 tab
+    tab=$(herdr tab list --workspace "$ws" \
+        | jq -r '[.result.tabs[]] | sort_by(.number) | .[0].tab_id // empty')
+    [ -n "$tab" ] || return 0
+    herdr pane list --workspace "$ws" \
+        | jq -r --arg t "$tab" \
+            '[.result.panes[] | select(.tab_id == $t)]
+             | if length == 1 then .[0].pane_id else empty end'
+}
+
+# Positive rule, deliberately: "nothing but the pane's own shell is running".
+# The tempting version -- "skip if podman or distrobox is there" -- leaves the
+# whole rest of the world outside, so a pane holding vim, less, ssh or a build
+# would get the entry command typed on top of it.
+#
+# It doubles as the readiness check. Straight after `workspace create` the pane
+# reports two foreground processes and only settles to one after ~0.12s, so a
+# single probe would race and `pane run` would type into a shell that is not
+# listening yet.
+pane_is_idle_shell() {
+    herdr pane process-info --pane "$1" 2>/dev/null \
+        | jq -e '.result.process_info
+                 | (.foreground_processes | length) == 1
+                   and .foreground_processes[0].pid == .shell_pid' >/dev/null 2>&1
+}
+
+wait_for_idle_shell() {
+    local pane=$1
+    for _ in $(seq 1 50); do
+        if pane_is_idle_shell "$pane"; then
+            return 0
+        fi
+        sleep 0.1
+    done
+    return 1
+}
+
+ensure_server
+
+opened=0
+first_ws=""
+
+for ctx in "${contexts[@]}"; do
+    if ! podman container exists "$ctx"; then
+        missing_container_hint "$ctx"
+        continue
+    fi
+
+    ws=$(workspace_for "$ctx")
+    if [ -n "$ws" ]; then
+        pane=$(first_tab_pane "$ws")
+        # An existing space may hold real work. Only a pane that is nothing but
+        # an idle shell gets the entry typed into it.
+        if [ -n "$pane" ] && pane_is_idle_shell "$pane"; then
+            herdr pane run "$pane" distrobox enter --no-workdir "$ctx" >/dev/null
+        fi
+    else
+        created=$(herdr workspace create --label "$ctx" --no-focus)
+        ws=$(printf '%s' "$created" | jq -r '.result.workspace.workspace_id')
+        pane=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id')
+        # Freshly created, so the only thing to wait for is the shell.
+        if wait_for_idle_shell "$pane"; then
+            herdr pane run "$pane" distrobox enter --no-workdir "$ctx" >/dev/null
+        else
+            echo "work: pane $pane never produced a shell, leaving it empty" >&2
+        fi
+    fi
+
+    [ -n "$first_ws" ] || first_ws=$ws
+    opened=$((opened + 1))
+done
+
+if [ "$opened" -eq 0 ]; then
+    echo "work: not one work context is available, not attaching." >&2
+    exit 1
+fi
+
+herdr workspace focus "$first_ws" >/dev/null 2>&1 || true
+
+exec herdr

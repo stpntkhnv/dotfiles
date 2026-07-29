@@ -62,3 +62,12 @@ Pictures/**
 {{ if not (has "ziti" .enabled) }}
 bin/update-ziti-hosts.sh
 {{ end }}
+
+{{/* The one command that is host-only for a reason: it drives a herdr server
+     that runs here and enters containers from the outside. `herdr` itself is
+     scope: both, so gating on the feature alone would ship `work` into every
+     container, where `distrobox enter` does not exist and it would break on
+     the first run. */}}
+{{ if or (not (has "herdr" .enabled)) (ne .env "host") }}
+.local/bin/work
+{{ end }}
