@@ -780,20 +780,26 @@ turbo+seed, 403 on large-v3+seed.
 
 The model changed too, from turbo to large-v3, though not for punctuation --
 both scored the same on that axis. Handy's own catalogue puts them close on
-accuracy (89 against 87) and far apart on speed (23 against 35); neither
-number is why the switch happened. What large-v3 gives instead is
-Latin-script spelling: with the seed, turbo writes anglicisms like `Chizmoi`
-and `GEMA`, large-v3 writes `chezmoi` and `Gemma`. Over the same corpus,
-large-v3+seed produced 42 unique Latin-script tokens against turbo+seed's 34.
+accuracy (large-v3 89, turbo 87) and far apart on speed (large-v3 23, turbo
+35); neither number is why the switch happened. What large-v3 gives instead
+is Latin-script spelling: with the seed, turbo writes anglicisms like
+`Chizmoi` and `GEMA`, large-v3 writes `chezmoi` and `Gemma`. Over the same
+corpus, large-v3+seed produced 42 unique Latin-script tokens against
+turbo+seed's 34.
 
-The price is latency: turbo+seed transcribes at a median of 272 ms (RTF
+The price is latency, the deployed large-v3+seed against the seeded turbo
+configuration it replaced: turbo+seed transcribes at a median of 272 ms (RTF
 89.6), large-v3+seed at 622 ms (RTF 36.6).
 
 The seed does not fix very long, rambling dictation, because `initial_prompt`
-only pins the first 30-second window. On three recordings of 91, 137 and 106
-seconds, large-v3 scored 544, 443 and 432 characters unpunctuated against
-turbo's 500, 536 and 367 -- indistinguishable, which is the evidence that the
-decode-window limit, not the model, is the cause.
+only pins the first 30-second window. Three recordings of 91, 137 and 106
+seconds -- longer than anything in the original 39, added later when the
+acceptance run grew the corpus to 48 -- show large-v3 scoring 544, 443 and
+432 characters unpunctuated against turbo's 500, 536 and 367, indistinguishable,
+which is the evidence that the decode-window limit, not the model, is the
+cause. On that larger corpus the worst unpunctuated run is 544 and the
+median 122; on the original 34 it is still exactly 403 and 117, identical to
+the benchmark.
 
 | Key | What it does |
 |---|---|
