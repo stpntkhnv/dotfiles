@@ -23,6 +23,12 @@ set -euo pipefail
 # rewrites these files from memory when it exits, so nothing written now would
 # survive.
 #
+# Stage 2, the routing, writes zen-space-routing.jsonlz4, which is not ours
+# alone: rules made by hand and defaultRouteExternal are merged, never replaced.
+# Our rules carry a deterministic id so a second apply updates them in place
+# rather than appending a copy -- Zen takes the FIRST match in array order, so a
+# duplicate on one reference is a silent change of behaviour, not litter.
+#
 # containerTabId is a userContextId read from containers.json rather than
 # predicted. The Containers policy does number them 1..N in array order, but
 # reading beats predicting when a profile can also be older than the policy.
@@ -40,6 +46,11 @@ HOME = os.path.expanduser("~")
 # [{"name": ..., "bookmarks": [{"title": ..., "url": ...}]}]
 SEED = json.loads(r'''{{ $seed := list }}{{ range $c := .contexts }}{{ $own := list }}{{ if hasKey $c "bookmarks" }}{{ $own = $c.bookmarks }}{{ end }}{{ $seed = append $seed (dict "name" $c.name "bookmarks" (concat $.bookmarks $own)) }}{{ end }}{{ $seed | toJson }}''')
 CONTEXTS = [c["name"] for c in SEED]
+# The contexts carrying `route: true`. The VALUE is tested, not the presence of
+# the key: `route: false` has to mean off rather than on.
+ROUTED = json.loads(r'''{{ $r := list }}{{ range $c := .contexts }}{{ if and (hasKey $c "route") $c.route }}{{ $r = append $r $c.name }}{{ end }}{{ end }}{{ $r | toJson }}''')
+ROUTE_FILE = "zen-space-routing.jsonlz4"
+ROUTE_NS = "dotfiles:zen-space-routing:"
 
 
 def mozlz4_compress(data):
@@ -165,6 +176,79 @@ def seed_spaces(profile, ids, data):
     return True
 
 
+def route_id(name):
+    """A deterministic id where Zen itself calls crypto.randomUUID(). Braceless,
+    like Zen's own, and stable, which is what idempotence rests on: a random id
+    would have every apply append one more rule for the same context."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, ROUTE_NS + name))
+
+
+def write_routes(profile, spaces):
+    """Stage 2. The rule "the address contains a context name -> its space".
+
+    Zen takes the FIRST match in array order (ZenSpaceRoutingManager routeUri),
+    so a second rule on one reference is not litter but a silent change of
+    behaviour. Hence conflicts are resolved by meaning and not by id alone.
+
+    The file is not ours as a whole: rules added by hand and
+    defaultRouteExternal survive. External links are still sorted by Junction,
+    which asks, and that is strictly safer than any fixed default.
+    """
+    path = f"{profile}/{ROUTE_FILE}"
+    doc = {"routes": [], "defaultRouteExternal": "most-recent-space"}
+    if os.path.exists(path):
+        try:
+            doc = json.loads(mozlz4_decompress(open(path, "rb").read()))
+            # Shape, not just parsing: a file that decompresses into a list or a
+            # string would blow up on doc.get() outside the try, taking the
+            # whole apply with it.
+            if not isinstance(doc, dict):
+                raise ValueError(f"expected an object, got {type(doc).__name__}")
+        except Exception as exc:
+            # Nothing is written: the file holds the user's own rules, and
+            # rewriting it on a guess is worse than leaving routing unset up.
+            stage_note("routing", f"cannot read {ROUTE_FILE} ({exc}), leaving it alone")
+            return
+        if not isinstance(doc.get("routes"), list):
+            doc["routes"] = []
+        if not isinstance(doc.get("defaultRouteExternal"), str):
+            doc["defaultRouteExternal"] = "most-recent-space"
+        doc["routes"] = [r for r in doc["routes"] if isinstance(r, dict)]
+
+    before = json.dumps(doc, sort_keys=True)
+    for name in ROUTED:
+        if name not in spaces:
+            stage_note("routing", f"no space named {name} yet, its rule is not written")
+            continue
+        want = {
+            "id": route_id(name),
+            "reference": name,
+            "matchType": "contains",
+            "openIn": spaces[name],
+        }
+        mine = [i for i, r in enumerate(doc["routes"]) if r.get("id") == want["id"]]
+        if mine:
+            doc["routes"][mine[0]] = want
+            continue
+        foreign = [r for r in doc["routes"]
+                   if str(r.get("reference", "")).lower() == name.lower()]
+        if foreign:
+            stage_note("routing", f"a rule for {name} exists and was made by hand, not touching it")
+            continue
+        doc["routes"].append(want)
+
+    if json.dumps(doc, sort_keys=True) == before:
+        stage_note("routing", "rules already match the catalogue")
+        return
+
+    payload = json.dumps(doc, separators=(",", ":")).encode()
+    tmp = path + ".new"
+    with open(tmp, "wb") as fh:
+        fh.write(mozlz4_compress(payload))
+    os.replace(tmp, path)
+    print(f"==> Zen routing: {len(doc['routes'])} rules in {ROUTE_FILE}")
+
+
 if subprocess.run(["pgrep", "-x", "zen-bin"], capture_output=True).returncode == 0:
     # The one refusal that still ends everything: a running Zen rewrites both
     # files from memory when it exits, so anything written now is discarded.
@@ -215,9 +299,11 @@ for profile in profiles():
         print(f"==> Zen spaces seeded: {len(data['spaces'])} spaces, {len(data['tabs'])} essentials")
         touched = True
 
-    # Stage 2 lands in its own commit. The line stays so the order of the two
-    # stages is visible in the output of a real apply already today.
-    stage_note("routing", "not implemented yet")
+    # The space map comes from data rather than from the file on disk: when
+    # stage 1 has just seeded the spaces their uuids are already here, so the
+    # first seeding and its rules arrive in one apply.
+    write_routes(profile, {s.get("name"): s.get("uuid")
+                           for s in data.get("spaces", []) if s.get("name")})
 
 if not touched:
     stage_note("spaces", "no untouched profile to seed")

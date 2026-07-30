@@ -104,11 +104,24 @@ bookmarks_demo:
 #
 # The name "scratch" is reserved: it is the no-proxy Zen container for links
 # that belong to nobody.
+#
+# `route: true` включает штатный Space Routing браузера: правило "адрес содержит
+# имя контекста -> открыть в его спейсе". Спейс привязан к контейнеру, поэтому
+# вместе со спейсом приезжает и прокси.
+#
+# Схема верна ровно настолько, насколько имя контекста является редкой подстрокой
+# в адресах, и это не мелочь: правило не подсказывает, а ВЫТАСКИВАЕТ ссылку.
+# `personal` поэтому без флага -- слово встречается в обычных адресах
+# (github.com/settings/personal-access-tokens и подобных). Общие домены Microsoft
+# правилами не покрываются никогда, по той же причине, по которой на них нельзя
+# ставить правила Multi-Account Containers -- см. BROWSER-ISOLATION.md, раздел 10.
 contexts:
   - name: digi3
     socks: 11081
+    route: true
   - name: stellium
     socks: 11082
+    route: true
   - name: personal
     socks: 11083
 
