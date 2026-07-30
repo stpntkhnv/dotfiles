@@ -187,8 +187,17 @@ sync_needed() {
     # counts as stale too. Only the two files with fixed names are checked: the
     # wallpaper lands under a name taken from the source image, which is not
     # knowable from here.
-    [[ -e "$GREETER_CACHE/colors.json" ]] || return 0
-    [[ -e "$GREETER_CACHE/settings.json" ]] || return 0
+    #
+    # The cache is 0750 greeter:greeter, and group membership only lands at the
+    # next login, so for a while the user cannot even stat the copies. Treat
+    # "cannot look" as "trust the stamp": the alternative is re-syncing on every
+    # apply, with a password prompt each time, which is what the stamp exists to
+    # prevent. The trade-off: while the directory is unreadable, an emptied cache
+    # goes unnoticed, and the repair is a hand-run `dms greeter sync`.
+    if [[ -x "$GREETER_CACHE" ]]; then
+        [[ -e "$GREETER_CACHE/colors.json" ]] || return 0
+        [[ -e "$GREETER_CACHE/settings.json" ]] || return 0
+    fi
     [[ "$SETTINGS" -nt "$STAMP" ]] && return 0
     [[ "$COLORS" -nt "$STAMP" ]] && return 0
     return 1
