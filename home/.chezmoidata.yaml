@@ -379,6 +379,27 @@ features:
       - docker-compose
       - lazydocker
 
+  # The login screen. greetd runs the DMS greeter, which is the desktop shell
+  # itself rather than a theme that resembles it: same QML, same components,
+  # same settings.json, so there is nothing that can drift out of step.
+  #
+  # Not always: which login screen a machine has is a preference, the same way
+  # the multiplexer is, and always would drag a -git AUR package onto every
+  # machine. That package builds from source, and a failed build takes
+  # 20-packages down with the whole apply -- loudly, and before anything has
+  # been switched over, but down all the same.
+  #
+  # sddm stays in `desktop` and stays enabled by 30-system: it is the fallback
+  # this switch falls back TO, and `dms greeter uninstall` restores it.
+  - key: greeter
+    label: "Login screen: DMS greeter on greetd"
+    scope: host
+    default: true
+    pacman:
+      - greetd
+    aur:
+      - greetd-dms-greeter-git
+
   - key: go
     label: "Go"
     scope: both
