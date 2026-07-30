@@ -159,5 +159,49 @@ if [[ "$(cat "$OVERRIDES" 2>/dev/null || true)" != "$WANT_KDL" ]]; then
     write_overrides \
         || say "!! could not write $OVERRIDES; the greeter will come up on whatever layout niri defaults to"
 fi
+
+# ---- 2. hand the login screen to the greeter ----------------------------
+# greetd ships config.toml world readable, so plain grep is enough and an apply
+# that changes nothing asks for no password. If a future version tightened that,
+# the grep fails, `enable` runs again, and that is idempotent -- noisy, not
+# wrong.
+if ! greetd_configured; then
+    say "handing the login screen to the DMS greeter"
+    dms greeter enable -y \
+        || say "!! dms greeter enable failed; the check on exit says where that left this machine"
+fi
+
+# ---- 3. carry the theme across ------------------------------------------
+# sync copies settings, palette and wallpaper into the greeter cache; it does
+# not link them. So a wallpaper changed since the last apply reaches the login
+# screen only when this runs -- and, because the copy escalates privileges,
+# running it unconditionally would ask for a password on every single apply.
+# Hence the stamp.
+STAMP="{{ .chezmoi.homeDir }}/.cache/dms-greeter-sync.stamp"
+SETTINGS="{{ .chezmoi.homeDir }}/.config/DankMaterialShell/settings.json"
+COLORS="{{ .chezmoi.homeDir }}/.cache/DankMaterialShell/dms-colors.json"
+
+sync_needed() {
+    [[ -f "$STAMP" ]] || return 0
+    # The cache can be emptied without either source changing, so a missing copy
+    # counts as stale too. Only the two files with fixed names are checked: the
+    # wallpaper lands under a name taken from the source image, which is not
+    # knowable from here.
+    [[ -e "$GREETER_CACHE/colors.json" ]] || return 0
+    [[ -e "$GREETER_CACHE/settings.json" ]] || return 0
+    [[ "$SETTINGS" -nt "$STAMP" ]] && return 0
+    [[ "$COLORS" -nt "$STAMP" ]] && return 0
+    return 1
+}
+
+if sync_needed; then
+    say "syncing the theme to the greeter"
+    if dms greeter sync; then
+        { mkdir -p "$(dirname "$STAMP")" && touch "$STAMP"; } \
+            || say "!! could not write $STAMP; the theme will be re-synced on every apply"
+    else
+        say "!! dms greeter sync failed; the greeter keeps the theme it already had"
+    fi
+fi
 {{- end }}
 {{- end }}
