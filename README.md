@@ -436,8 +436,9 @@ both places. Wallpaper and matugen palette are whatever the desktop currently
 has, so the machine looks like one piece from the password field onwards.
 
 That costs a display manager swap: `greetd` runs `dms-greeter --command niri`
-instead of sddm. sddm stays installed and stays enabled by `30-system`;
-`run_after_45-greeter` is the only thing that switches over. What a failed AUR
+instead of sddm. sddm stays installed, and `30-system` seeds it enabled only
+when nothing already holds `display-manager.service`; `run_after_45-greeter`
+is the only thing that switches over. What a failed AUR
 build leaves behind depends on which kind of machine this is: `20-packages`
 runs before `30-system`, under `set -e`, so a build failure there aborts the
 whole apply before either script gets a turn. On a machine that already had a

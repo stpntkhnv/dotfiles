@@ -112,8 +112,10 @@ enable_unit() {
 # and `systemctl enable sddm` would try to recreate a symlink greetd already
 # owns -- it fails, and set -e above takes this whole before-stage script (and
 # the apply with it) down before 45-greeter gets a turn to reconcile anything.
-# The fallback guarantee already lives in that script's EXIT trap, which reruns
-# on every apply, so this line only needs to seed a machine that has nothing.
+# The fallback guarantee lives in that script's EXIT trap, which reruns on
+# every apply -- but only while the greeter feature is ticked; untick it and
+# 45-greeter renders down to two lines with no trap at all. This line only
+# needs to seed a machine that has nothing.
 systemctl is-enabled --quiet display-manager.service || enable_unit sddm.service   # desktop
 enable_unit NetworkManager.service      # host-base
 enable_unit bluetooth.service           # host-base
