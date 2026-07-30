@@ -882,9 +882,20 @@ Cyrillic: `wtype` builds a virtual keymap from the text's unique characters in
 order of first appearance, and this stack silently eats keycodes #14 and #15 of
 it -- across several dictations, exactly the 14th and 15th unique character
 vanished, every occurrence of them. The script types in chunks of 12, which
-keeps every keymap short enough that nothing lands on a dead keycode. It also
-strips leading and trailing whitespace, because the cleanup model likes to
-append newlines and those arrive as blank lines in the target window.
+keeps every keymap short enough that nothing lands on a dead keycode.
+
+The script also flattens every run of whitespace holding a newline, carriage
+return or tab into one space. `wtype` has no notion of text: it turns each
+character into a key press, and libxkbcommon maps U+000A to keysym `Linefeed`,
+which arrives as the byte Ctrl+J sends and which a terminal input line reads as
+Enter. Dictating into Claude Code, a transcript the cleanup model had broken
+into three paragraphs submitted itself twice on the way in, so the message went
+off in pieces with the tail left in the box. Measured in `history.db`: 2 of 18
+cleaned transcripts carried a newline inside the text, 0 of 18 raw ones did, so
+the model puts them there and Whisper does not. The prompt no longer asks for
+paragraph breaks, but it is the flattening and not the prompt that is the
+guarantee -- the model samples afresh every call and can always decide to add
+one anyway.
 
 Handy is a Tauri app whose paste path goes through a library that only speaks
 X11, so `config.kdl` sets `DISPLAY :12` for `xwayland-satellite`. Without it the

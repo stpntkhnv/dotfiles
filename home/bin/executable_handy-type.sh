@@ -20,14 +20,19 @@
 # has focus. (-d 0 is not the way to say zero: wtype 0.4 rejects it with
 # "Invalid sleep time". Zero is the flag left off.)
 exec python3 - "$1" <<'PY'
-import subprocess, sys
-# The cleanup model routinely appends trailing newlines to its output --
-# measured on a real dictation, a 58-character transcript came back as 64,
-# the extra 6 being trailing whitespace with content otherwise identical.
-# Left alone those land as blank lines in the target window. Strip only the
-# ends: the cleanup prompt asks for paragraph breaks between topics, and
-# those internal newlines are meant to be typed.
-text = sys.argv[1].strip()
+import re, subprocess, sys
+# No newline is ever typed, wherever it sits. wtype has no notion of text: it
+# turns every character into a key press, and libxkbcommon maps U+000A to
+# keysym Linefeed, which reaches the application as 0x0A -- the same byte
+# Ctrl+J sends, which a terminal input line reads as Enter. Dictating into
+# Claude Code, a transcript the cleanup model had broken into three paragraphs
+# submitted itself twice on the way in, the message arriving in pieces
+# (history.db rows 347 and 348: 2 of 18 cleaned transcripts carried an inner
+# newline, 0 of 18 raw ones did, so the model puts them there and Whisper does
+# not). Carriage return and tab are the same failure with a different key, so
+# they go the same way. Runs collapse to one space, with the whitespace either
+# side absorbed, so a blank line does not arrive as a double space.
+text = re.sub(r"\s*[\n\r\t]+\s*", " ", sys.argv[1]).strip()
 if not text:
     sys.exit(0)
 for i in range(0, len(text), 12):
