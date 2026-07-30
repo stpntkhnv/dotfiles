@@ -11,9 +11,9 @@ set -euo pipefail
 # question is malformed. So the default must be harmless rather than dangerous:
 # Junction asks, and every answer pins the container into the URL itself.
 #
-# zen-open lives in /usr/local/bin rather than ~/.local/bin because containers
-# call it through distrobox-host-exec, where the host HOME is not a value the
-# container can compute (its own HOME is ~/homes/<name>).
+# zen-open stays in /usr/local/bin: it is written with sudo like the rest of the
+# helpers there, and both of its callers reach it by absolute path -- the
+# picker's .desktop entries, and the per-context socket units further down.
 
 echo "==> Installing the link router..."
 
@@ -48,6 +48,129 @@ OPEN
 sudo sed -i 's|__HOME__|{{ .chezmoi.homeDir }}|' /usr/local/bin/zen-open
 
 sudo chmod 755 /usr/local/bin/zen-open
+
+# The host end of the route out of a work container. It used to be
+# `distrobox-host-exec`, which never worked here and failed without a word:
+# host-spawn calls org.freedesktop.Flatpak.Development.HostCommand on the
+# session bus, nothing on this host provides that name (flatpak is not
+# installed), and `init=true` makes distrobox skip the host /run/user/$UID bind
+# mount -- distrobox-create gates that mount on `init -eq 0` -- so the
+# DBUS_SESSION_BUS_ADDRESS inherited from the host resolves to the container's
+# own bus instead. Every command came back 127 with empty stdout and stderr.
+#
+# A UNIX socket replaces it: the same kind of channel, in the same per-context
+# directory, as the SOCKS bridge in 34-wsproxy-host. Two things get better
+# rather than merely restored:
+#   * the context stops being an argument the container hands over. There is no
+#     context field left to get wrong or to forge -- it is which socket the line
+#     arrived on, and the host owns that mapping;
+#   * what the container can ask for narrows from "run any command on the host",
+#     which is what HostCommand grants, to "open a URL in some context".
+#
+# "Some" and not "its own", because distrobox mounts the whole host root as
+# /run/host: a container can reach a neighbour's links.sock by absolute path and
+# open a link in that context. Measured from digi3 against personal's socket --
+# accepted, routed as personal. That is the same exposure BROWSER-ISOLATION.md
+# already records for socks.sock next to it, and the same answer applies: what
+# separates the contexts is the network namespace, not the socket. This route is
+# strictly narrower than the one it replaces either way.
+echo "==> Installing the container link receiver..."
+
+sudo tee /usr/local/bin/zen-open-recv >/dev/null <<'RECV'
+#!/bin/sh
+# Managed by chezmoi -- .chezmoiscripts/run_onchange_after_38-linkrouting.sh
+# zen-open-recv <context>: reads one URL on stdin, answers one word.
+set -eu
+
+ctx=${1:-}
+[ -n "$ctx" ] || { printf 'no-context\n'; exit 0; }
+
+# One line, and only the first one: `read` stops at the newline, so a payload
+# cannot smuggle a second URL -- or a second argument -- past this point. The
+# `|| true` is for the peer that closes without sending the newline: read reports
+# EOF but has already assigned what it got, so the emptiness check decides.
+IFS= read -r url || true
+[ -n "${url:-}" ] || { printf 'no-url\n'; exit 0; }
+
+# Every refusal answers the container AND lands in the journal through the
+# unit's stderr. A link that disappears without a word is the exact failure
+# mode this route is being rewritten to stop producing.
+reject() {
+    printf '%s\n' "$1"
+    echo "zen-open-recv: refused a link from $ctx: $1" >&2
+    exit 0
+}
+
+[ "${#url}" -le 2048 ] || reject too-long
+case "$url" in
+    http://*|https://*) ;;
+    *) reject bad-scheme ;;
+esac
+# A real URL percent-encodes its whitespace, so whatever is left holding a space
+# is either a mistake or an attempt at a second argv entry.
+case "$url" in
+    *[[:space:]]*) reject bad-url ;;
+esac
+
+if /usr/local/bin/zen-open "$ctx" "$url"; then
+    printf 'ok\n'
+else
+    printf 'failed\n'
+    echo "zen-open-recv: zen-open failed for $ctx" >&2
+fi
+RECV
+
+sudo chmod 755 /usr/local/bin/zen-open-recv
+
+UNITDIR="{{ .chezmoi.homeDir }}/.config/systemd/user"
+SOCKDIR="{{ .chezmoi.homeDir }}/.local/share/wsproxy"
+mkdir -p "$UNITDIR"
+
+# Prune first, for the reason the proxy units in 34 are pruned first: a renamed
+# context must not leave a listener sitting on a socket its container is gone
+# from, answering for a context that no longer exists.
+keep_units=" {{ range .contexts }}zenopen-{{ .name }}.service {{ end }}"
+for unit in "$UNITDIR"/zenopen-*.service; do
+    [[ -e "$unit" ]] || continue
+    base=$(basename "$unit")
+    case "$keep_units" in
+        *" $base "*) ;;
+        *)  echo "==> Removing stale $base"
+            systemctl --user disable --now "$base" 2>/dev/null || true
+            rm -f "$unit" ;;
+    esac
+done
+{{ range .contexts }}
+install -d -m 700 "$SOCKDIR/{{ .name }}"
+
+cat > "$UNITDIR/zenopen-{{ .name }}.service" <<'UNIT'
+[Unit]
+Description=Link hand-off from the {{ .name }} container to Zen
+
+[Service]
+# fork: one child per link, so a refused line cannot take the listener down
+# with it. unlink-early: without it socat refuses to bind over the socket the
+# previous start left behind. The quotes are load-bearing -- they keep
+# "EXEC:<path> <context>" as one argument to socat, and systemd would otherwise
+# split it and leave socat trying to exec the context name.
+#
+# -T10 is not decoration. The receiver blocks on `read`, so a peer that connects
+# and sends nothing would leave a child parked there forever, one per connection
+# -- and any container can open connections. The inactivity timeout reaps them.
+# Nothing legitimate is at risk: the writer sends its one line immediately, and
+# zen-open returns as soon as it has backgrounded the browser.
+ExecStart=/usr/bin/socat -T10 UNIX-LISTEN:{{ $.chezmoi.homeDir }}/.local/share/wsproxy/{{ .name }}/links.sock,fork,mode=600,unlink-early "EXEC:/usr/local/bin/zen-open-recv {{ .name }}"
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+UNIT
+{{ end }}
+systemctl --user daemon-reload
+{{- range .contexts }}
+systemctl --user enable --now zenopen-{{ .name }}.service
+{{- end }}
 
 APPS="{{ .chezmoi.homeDir }}/.local/share/applications"
 mkdir -p "$APPS"

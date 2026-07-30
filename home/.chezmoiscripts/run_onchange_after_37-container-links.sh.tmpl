@@ -5,14 +5,26 @@ exit 0
 set -euo pipefail
 
 # Everything clicked inside this container that is a web link goes to the host
-# browser AND carries this container's name in the URL, so it lands in the
-# matching Zen container no matter which workspace is focused.
+# browser AND lands in the matching Zen container, no matter which workspace is
+# focused.
 #
 # /usr/local/bin comes before /usr/bin on PATH, so this shadows xdg-utils.
 # Non-web arguments fall through to the real xdg-open: with init=true distrobox
 # does NOT replace xdg-open (see distrobox-init, the symlink is guarded by
 # `init -eq 0`), so a PDF still opens in this container's own viewer, which is
 # the behaviour that was there before.
+#
+# The link leaves through the UNIX socket in /var/lib/wsproxy -- this context's
+# own directory on the host, the same mount the SOCKS proxy uses, and the only
+# channel out of here. The host end is zenopen-<context>.service, written by
+# 38-linkrouting.
+#
+# What is deliberately NOT here any more: the container's name. It used to be
+# read from /run/.containerenv and passed to the host as an argument, which made
+# the container the authority on which context it belongs to. Now the host reads
+# it off the socket the line arrived on. The old route also used
+# distrobox-host-exec, which on this machine returned 127 for every command with
+# no output whatsoever -- see 38-linkrouting for why.
 
 echo "==> Installing the container link wrapper..."
 
@@ -24,10 +36,36 @@ case "${1:-}" in
     *) exec /usr/bin/xdg-open "$@" ;;
 esac
 
-ctx=$(. /run/.containerenv 2>/dev/null; printf '%s' "${name:-}")
-[ -n "$ctx" ] || exec /usr/bin/xdg-open "$@"
+SOCK=/var/lib/wsproxy/links.sock
 
-exec distrobox-host-exec /usr/local/bin/zen-open "$ctx" "$1"
+# No socket means the host is not listening for this context: Zen is not
+# installed there, or zenopen-<context>.service is down.
+#
+# This does NOT fall through to /usr/bin/xdg-open, and that is deliberate. No
+# container installs a browser -- `browsers` and `zen` are both scope: host --
+# so handing an http link to the container's own handler is guaranteed to fail,
+# and it fails badly: sixteen lines of "command not found" followed by "no
+# method available", which reads like noise rather than like a diagnosis. One
+# line naming the actual missing piece is worth more.
+if [ ! -S "$SOCK" ]; then
+    echo "xdg-open: no link socket at $SOCK -- is zenopen-<context>.service running on the host?" >&2
+    exit 1
+fi
+
+# socat is in container-base with always: true, so this should never fire. It is
+# here because without it a missing socat looks exactly like a host that did not
+# answer, and that message would send the reader to the wrong machine.
+if ! command -v socat >/dev/null 2>&1; then
+    echo "xdg-open: socat is missing in this container, cannot reach the host" >&2
+    exit 1
+fi
+
+reply=$(printf '%s\n' "$1" | socat -T5 - "UNIX-CONNECT:$SOCK" 2>/dev/null || true)
+case "$reply" in
+    ok) ;;
+    '') echo "xdg-open: the host did not answer on $SOCK" >&2; exit 1 ;;
+    *)  echo "xdg-open: the host refused the link ($reply)" >&2; exit 1 ;;
+esac
 WRAP
 
 sudo chmod 755 /usr/local/bin/xdg-open

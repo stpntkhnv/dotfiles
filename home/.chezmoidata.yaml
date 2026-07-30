@@ -44,9 +44,10 @@ bookmarks:
 
 # Work contexts. One name drags everything else along: the section in
 # distrobox.ini, the UNIX-socket directory, the host systemd bridge unit, the
-# Zen container, space and toolbar folder, and the .desktop entry in the link
-# picker. `socks` is what socat listens on at 127.0.0.1 on the host; the same
-# port is baked into the generated context-proxy extension.
+# host listener for links handed out of the container, the Zen container, space
+# and toolbar folder, and the .desktop entry in the link picker. `socks` is what
+# socat listens on at 127.0.0.1 on the host; the same port is baked into the
+# generated context-proxy extension.
 #
 # The name "scratch" is reserved: it is the no-proxy Zen container for links
 # that belong to nobody.
