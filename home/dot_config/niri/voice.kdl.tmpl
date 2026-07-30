@@ -6,41 +6,21 @@
 // on wlroots-style compositors -- they do not implement
 // zwp_keyboard_shortcuts_inhibit_manager_v1. So the compositor owns the keybind
 // and pokes the already-running process. Handy accepts two ways of being poked,
-// Unix signals (SIGUSR2 raw, SIGUSR1 with post-processing) and the CLI flags
-// below; the signals are unusable, because WebKit's garbage collector owns
-// SIGUSR1 inside the same process. The whole story is in the README, under
-// Voice input -> Signals.
+// Unix signals and the CLI flag below; the signals are unusable, because
+// WebKit's garbage collector owns SIGUSR1 inside the same process and a
+// pkill -USR1 segfaults Handy 0.9.4 in libjavascriptcoregtk before it can even
+// log receiving it. SIGUSR2 is not measured here the same way, but upstream
+// has a report of pkill -USR2 killing the app too (cjpais/Handy#512). The
+// whole story is in the README, under Voice input -> Signals.
 //
 // --start-hidden keeps the main window closed; Handy lives in the tray.
 spawn-at-startup "handy" "--start-hidden"
 
-{{- if has "voice-postprocess" .enabled }}
-// The plain key gets the mode wanted by default, so muscle memory does not
-// depend on which features are ticked; raw transcription stays one modifier
-// away as the road back. Both bindings go through Handy's CLI rather than
-// the signals above: pkill -USR1 segfaults Handy 0.9.4 in libjavascriptcoregtk
-// before it can even log receiving the signal, and --toggle-post-process /
-// --toggle-transcription reach the same two actions -- the same
-// send_transcription_input the signal handler itself calls -- without touching
-// the signal path.
-binds {
-    Mod+Shift+D hotkey-overlay-title="Voice Input: Dictate (cleaned up)" {
-        spawn "handy" "--toggle-post-process";
-    }
-    Mod+Ctrl+D hotkey-overlay-title="Voice Input: Dictate (raw)" {
-        spawn "handy" "--toggle-transcription";
-    }
-}
-{{- else }}
-// Same CLI flag rather than pkill -USR2, for the same reason: the signal path
-// is the one WebKit fights over, and upstream has a report of pkill -USR2
-// killing the app too (cjpais/Handy#512).
 binds {
     Mod+Shift+D hotkey-overlay-title="Voice Input: Toggle Dictation" {
         spawn "handy" "--toggle-transcription";
     }
 }
-{{- end }}
 {{ else }}
 // Voice input is disabled (the `voice` feature is not selected).
 {{ end }}

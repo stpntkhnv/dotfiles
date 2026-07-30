@@ -187,14 +187,4 @@ if ! id -nG "$USER" | grep -qw docker; then
     sudo usermod -aG docker "$USER"
 fi
 {{- end }}
-{{- if has "voice-postprocess" .enabled }}
-
-# Ollama serves the local model that cleans up dictated text. Started as well as
-# enabled, for the same reason as tailscaled: otherwise the feature does nothing
-# until the next reboot and looks broken.
-enable_unit ollama.service
-if ! systemctl is-active --quiet ollama.service; then
-    sudo systemctl start ollama.service
-fi
-{{- end }}
 {{- end }}
