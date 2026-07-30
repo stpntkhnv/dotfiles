@@ -9,13 +9,19 @@ set -euo pipefail
 # than run_onchange_: what it does depends on the state of the profile, not on
 # the state of this file, and it has to re-evaluate that on every apply.
 #
-# Deliberately conservative. All of this lives in zen-sessions.jsonlz4, which
-# also holds every open tab, and the format is Zen's internal one with no
-# compatibility promise. So this writes ONLY into an untouched profile and
-# refuses in every other case:
-#   * Zen running        -- it would overwrite the file on exit anyway
+# Every profile goes through stages that want opposite things: seeding wants an
+# untouched profile, routing wants a lived-in one. So a refusal ends its own
+# stage and the run carries on, and every line says which stage it came from.
+#
+# Stage 1, the seeding, is deliberately conservative. All of it lives in
+# zen-sessions.jsonlz4, which also holds every open tab, and the format is Zen's
+# internal one with no compatibility promise. So it writes ONLY into an
+# untouched profile and refuses in every other case:
 #   * any open tab       -- not an untouched profile
 #   * a space already named after a context -- already done, or done by hand
+# A running Zen is the single refusal that still ends the whole script: it
+# rewrites these files from memory when it exits, so nothing written now would
+# survive.
 #
 # containerTabId is a userContextId read from containers.json rather than
 # predicted. The Containers policy does number them 1..N in array order, but
@@ -96,35 +102,27 @@ def profiles():
                 yield path.rstrip("/")
 
 
-def skip(reason):
-    print(f"==> Zen spaces: {reason}")
-    sys.exit(0)
+def stage_note(stage, reason):
+    """Name the stage in every line, because a refusal now belongs to one of
+    them and not to the run as a whole."""
+    print(f"==> Zen {stage}: {reason}")
 
 
-if subprocess.run(["pgrep", "-x", "zen-bin"], capture_output=True).returncode == 0:
-    skip("Zen is running, not touching its session")
+def seed_spaces(profile, ids, data):
+    """Stage 1. True when the spaces were written into data, False on refusal.
 
-seeded = False
-for profile in profiles():
-    session = f"{profile}/zen-sessions.jsonlz4"
-    if not os.path.exists(session):
-        continue
-
-    ids = {}
-    with open(f"{profile}/containers.json") as fh:
-        for identity in json.load(fh).get("identities", []):
-            if identity.get("public", True) and identity.get("name"):
-                ids[identity["name"]] = identity["userContextId"]
-
-    missing = [name for name in CONTEXTS if name not in ids]
-    if missing:
-        skip(f"no container yet for {', '.join(missing)} -- launch Zen once first")
-
-    data = json.loads(mozlz4_decompress(open(session, "rb").read()))
+    The caution is not paranoia: zen-sessions.jsonlz4 also holds every open tab
+    and the format is Zen's internal one with no compatibility promise, so
+    writing is allowed only into an untouched profile. A refusal returns rather
+    than ending the process, because stage 2 wants exactly the lived-in profile
+    that this stage declines to touch.
+    """
     if data.get("tabs"):
-        skip("profile already has tabs, leaving the session alone")
+        stage_note("spaces", "profile already has tabs, leaving the session alone")
+        return False
     if any(s.get("name") in CONTEXTS for s in data.get("spaces", [])):
-        skip("spaces already exist")
+        stage_note("spaces", "spaces already exist")
+        return False
 
     spaces, tabs = [], []
     for entry in SEED:
@@ -164,16 +162,64 @@ for profile in profiles():
 
     data["spaces"] = spaces
     data["tabs"] = tabs
+    return True
 
-    payload = json.dumps(data, separators=(",", ":")).encode()
-    tmp = session + ".new"
-    with open(tmp, "wb") as fh:
-        fh.write(mozlz4_compress(payload))
-    os.replace(tmp, session)
-    print(f"==> Zen session seeded: {len(spaces)} spaces, {len(tabs)} essentials")
-    seeded = True
 
-if not seeded:
-    print("==> Zen session: no untouched profile to seed")
+if subprocess.run(["pgrep", "-x", "zen-bin"], capture_output=True).returncode == 0:
+    # The one refusal that still ends everything: a running Zen rewrites both
+    # files from memory when it exits, so anything written now is discarded.
+    stage_note("session", "Zen is running, not touching its session")
+    sys.exit(0)
+
+touched = False
+for profile in profiles():
+    session = f"{profile}/zen-sessions.jsonlz4"
+    if not os.path.exists(session):
+        continue
+
+    # Both files belong to the browser, both are internal formats, and both are
+    # read defensively. Without this a corrupt file, or one that merely changed
+    # shape, would throw a python traceback, the script would return non-zero,
+    # and `chezmoi apply` would fail as a whole -- over a browser profile the
+    # other thirty scripts have nothing to do with.
+    try:
+        with open(f"{profile}/containers.json") as fh:
+            identities = json.load(fh)["identities"]
+        ids = {i["name"]: i["userContextId"] for i in identities
+               if i.get("public", True) and i.get("name")}
+    except Exception as exc:
+        stage_note("session", f"cannot read containers.json ({exc}), skipping {profile}")
+        continue
+
+    try:
+        data = json.loads(mozlz4_decompress(open(session, "rb").read()))
+        # Shape, not just parsing: a session that decompresses into a list or a
+        # string would blow up on data.get() outside the try, which is the very
+        # failure this guard exists to prevent.
+        if not isinstance(data, dict):
+            raise ValueError("session is not an object")
+    except Exception as exc:
+        stage_note("session", f"cannot read the session ({exc}), leaving {profile} alone")
+        continue
+
+    missing = [name for name in CONTEXTS if name not in ids]
+
+    if missing:
+        stage_note("spaces", f"no container yet for {', '.join(missing)} -- launch Zen once first")
+    elif seed_spaces(profile, ids, data):
+        payload = json.dumps(data, separators=(",", ":")).encode()
+        tmp = session + ".new"
+        with open(tmp, "wb") as fh:
+            fh.write(mozlz4_compress(payload))
+        os.replace(tmp, session)
+        print(f"==> Zen spaces seeded: {len(data['spaces'])} spaces, {len(data['tabs'])} essentials")
+        touched = True
+
+    # Stage 2 lands in its own commit. The line stays so the order of the two
+    # stages is visible in the output of a real apply already today.
+    stage_note("routing", "not implemented yet")
+
+if not touched:
+    stage_note("spaces", "no untouched profile to seed")
 PY
 {{- end }}
