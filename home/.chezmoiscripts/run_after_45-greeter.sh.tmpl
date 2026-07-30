@@ -55,6 +55,16 @@ greetd_configured() {
     grep -qE '^[[:space:]]*command[[:space:]]*=.*dms-greeter' "$GREETD_CONF" 2>/dev/null
 }
 
+# For check_invariant only -- see the comment above greetd_ok below. A config
+# that exists but this user cannot read is a state a switched machine can
+# genuinely be in (permissions tightened by hand, or by a future greetd), and
+# it must not read the same as "not configured". Same principle already used
+# for the cache directory in sync_needed: trust what cannot be looked at
+# rather than assume the worst.
+greetd_conf_present_but_unreadable() {
+    [[ -e "$GREETD_CONF" && ! -r "$GREETD_CONF" ]]
+}
+
 check_invariant() {
     # set -e is still in force here: it is a shell-wide setting, not a
     # per-function one, and the trap that calls this runs this whole command
@@ -65,12 +75,21 @@ check_invariant() {
     set +e
     local greetd_ok=no sddm_on=no
 
-    # Three conditions, not one: the unit can be enabled, the binary present and
-    # the config still empty -- which is exactly what a `dms greeter enable`
-    # that died halfway leaves behind, and it boots to a black screen.
+    # Four conditions, not one, because greetd_ok has to mean "will actually
+    # start", not merely "was told to be enabled":
+    #   - the unit is enabled, or systemd never tries it at boot;
+    #   - dms-greeter is on PATH, or the AUR package never built;
+    #   - config.toml names it in a command line, or a `dms greeter enable`
+    #     that died halfway left the unit pointed at nothing;
+    #   - the cache directory exists, or the vendor wrapper itself refuses to
+    #     start -- see /usr/share/quickshell/dms/Modules/Greetd/assets/dms-greeter,
+    #     which exits 1 rather than run without one.
+    # An enabled unit that fails any single one of these is a black screen,
+    # not a login, and telling the two apart is the whole point of this check.
     if unit_enabled greetd.service \
        && command -v dms-greeter >/dev/null 2>&1 \
-       && greetd_configured; then
+       && { greetd_configured || greetd_conf_present_but_unreadable; } \
+       && [[ -d "$GREETER_CACHE" ]]; then
         greetd_ok=yes
     fi
     if unit_enabled sddm.service; then
@@ -162,9 +181,14 @@ fi
 
 # ---- 2. hand the login screen to the greeter ----------------------------
 # greetd ships config.toml world readable, so plain grep is enough and an apply
-# that changes nothing asks for no password. If a future version tightened that,
-# the grep fails, `enable` runs again, and that is idempotent -- noisy, not
-# wrong.
+# that changes nothing asks for no password. If a future version tightened
+# that, the grep fails here every time and `enable` runs again on every apply
+# -- idempotent, but not merely noisy: `dms greeter enable` escalates
+# privileges, so the real cost is a sudo password prompt on every single
+# apply. check_invariant does not share this gate: it treats the same
+# unreadable file as configured instead, because there the failure mode isn't
+# a repeated prompt, it's disabling a greeter that already works -- see
+# greetd_conf_present_but_unreadable above.
 if ! greetd_configured; then
     say "handing the login screen to the DMS greeter"
     dms greeter enable -y \
@@ -209,7 +233,7 @@ if sync_needed; then
         { mkdir -p "$(dirname "$STAMP")" && touch "$STAMP"; } \
             || say "!! could not write $STAMP; the theme will be re-synced on every apply"
     else
-        say "!! dms greeter sync failed; the greeter keeps the theme it already had"
+        say "!! dms greeter sync failed; on a first switch there is no previous theme to fall back to -- if the cache never got created, the invariant check below will catch that and put sddm back"
     fi
 fi
 {{- end }}
