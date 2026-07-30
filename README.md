@@ -736,16 +736,17 @@ reboot.
 
 Tauri cannot grab global shortcuts on wlroots-style compositors, so niri owns
 the keybind and pokes the already-running process instead. Handy documents two
-ways to do that, Unix signals and CLI flags; the bindings here use the flags,
-for reasons in [Signals](#signals) below. How many bindings there are depends on
-whether `voice-postprocess` is selected -- see the table under
-[Punctuation](#punctuation). Those bindings and `spawn-at-startup` live in
-`home/dot_config/niri/voice.kdl.tmpl`, which `config.kdl` includes
+ways to do that, Unix signals and CLI flags; the binding here uses the flag,
+for reasons in [Signals](#signals) below. That binding and `spawn-at-startup`
+live in `home/dot_config/niri/voice.kdl.tmpl`, which `config.kdl` includes
 unconditionally and which renders to a comment-only file when the feature is
 off.
 
 After installing, launch Handy once and download a model (Settings → Model).
-Whisper Large v3 Turbo (~1.6 GB) is the multilingual, GPU-accelerated one.
+The pinned model is Whisper Large v3 Q8_0 (~1.7 GB) -- see
+[Punctuation](#punctuation) for why. Pulling the weights is still a manual,
+one-time step through Handy's own UI; `44-handy-settings` only selects the
+model afterward, in the settings file, on every apply.
 
 ### Punctuation
 
@@ -756,78 +757,47 @@ carried no sentence-ending punctuation at all, and two more began unpunctuated
 and switched to clean prose partway through, at a decode-window boundary.
 
 Handy's only lever on that is the whisper `initial_prompt`, and its only
-source is the Custom Words list, which the UI restricts to single space-free
-words and which doubles as a fuzzy find-replace list. It also pins the first
-window only.
+source is the Custom Words list -- which the UI restricts to single
+space-free words, ruling out a prompt-shaped sentence outright. So
+`44-handy-settings` writes the seed straight into `custom_words` through
+`jq`, on every apply, bypassing that restriction rather than working inside
+it.
 
-So the `voice-postprocess` feature takes the other route: the finished
-transcript goes to `gemma2:9b`, served by `ollama-vulkan` on
-`127.0.0.1:11434`, which restores punctuation and joins fragments into
-sentences. A 12B candidate scored better on quality but spilled onto the CPU;
-`gemma2:9b` was chosen because it is the largest that runs entirely on the
-GPU, alongside the Whisper model, with room to spare. Running on the finished
-text means window boundaries stop mattering.
+The rule that matters most: the seed has to be **last** in the list, and it
+has to end with a full stop. Handy joins `custom_words` with `", "` before
+handing the result to Whisper as `initial_prompt`, so a seed that ends
+mid-list -- because some other word got appended after it -- comes back
+worse-punctuated than sending no prompt at all. This was measured, not
+theorised. Anyone adding a technical term to `custom_words` later has to add
+it *before* the seed, never after.
 
-The model server unloads an idle model after five minutes, so the first
-dictation after a pause pays for a full reload: one real dictation took about
-13 seconds end to end cold, against three consecutive warm calls at 4475 ms,
-649 ms and 673 ms. The knob is `OLLAMA_KEEP_ALIVE`, which controls how long a
-loaded model stays resident; it is unset here, so ollama's own default of
-five minutes is what ships. Lengthening it trades about 6 GB of graphics
-memory, held rather than freed between dictations, for avoiding that reload
--- worth doing if the first-dictation delay bothers you more than the memory
-does.
+A separate benchmark built to test the fix -- 39 recordings, 34 of them
+longer than 60 characters -- ran four conditions: turbo and large-v3, each
+with and without the seed. Without it, both models still left 2 transcripts
+with no sentence-ending punctuation at all, worst case 507 characters on
+turbo and 733 on large-v3. With it, both dropped to 0 -- worst case 342 on
+turbo+seed, 403 on large-v3+seed.
+
+The model changed too, from turbo to large-v3, though not for punctuation --
+both scored the same on that axis. Handy's own catalogue puts them close on
+accuracy (89 against 87) and far apart on speed (23 against 35); neither
+number is why the switch happened. What large-v3 gives instead is
+Latin-script spelling: with the seed, turbo writes anglicisms like `Chizmoi`
+and `GEMA`, large-v3 writes `chezmoi` and `Gemma`. Over the same corpus,
+large-v3+seed produced 42 unique Latin-script tokens against turbo+seed's 34.
+
+The price is latency: turbo+seed transcribes at a median of 272 ms (RTF
+89.6), large-v3+seed at 622 ms (RTF 36.6).
+
+The seed does not fix very long, rambling dictation, because `initial_prompt`
+only pins the first 30-second window. On three recordings of 91, 137 and 106
+seconds, large-v3 scored 544, 443 and 432 characters unpunctuated against
+turbo's 500, 536 and 367 -- indistinguishable, which is the evidence that the
+decode-window limit, not the model, is the cause.
 
 | Key | What it does |
 |---|---|
-| **Mod+Shift+D** | dictate, then clean up (`handy --toggle-post-process`) |
-| **Mod+Ctrl+D** | dictate raw, no LLM (`handy --toggle-transcription`) |
-
-Without the feature, **Mod+Shift+D** stays raw and the second binding does not
-exist.
-
-On a machine that already had this repository before this change,
-`voice-postprocess` is simply not there: it is a new asked feature, and a
-stored `data.enabled` never gains a new key by itself (see [Adding a
-program](#adding-a-program)). Left alone, dictation keeps working exactly as
-it did before -- Mod+Shift+D stays raw, no service is pulled in, no binding
-changes -- nothing errors, so the `apply` looks entirely successful. Add
-`voice-postprocess` to `data.enabled` by hand before applying, and add `voice`
-alongside it if that was not already ticked: `needs: [voice]` is only
-expanded into `data.enabled` when the checklist is prompted at `init`, and a
-hand edit does not expand it.
-
-Nothing leaves the machine: the endpoint is loopback and no cloud provider is
-configured. Nothing is lost either -- post-processing returns an `Option`, and
-a failure of any kind leaves the raw transcript in place. A stopped
-`ollama.service` costs punctuation, not the dictation.
-
-Cleanup is not deterministic. The application sends no `temperature` to the
-model server, so it samples afresh on every call and the same dictation can
-come back different each time. Five consecutive runs on one 15.6-second
-recording left the longest unpunctuated stretch at 80, 99, 98, 184, and 80
-characters -- roughly one run in five came back with no sentence-ending
-punctuation anywhere in it. Forcing `temperature 0` in the request makes that
-recording identical every time (106 characters, five times), but the
-application does not expose the parameter, and pinning it instead in an
-Ollama Modelfile does not work either: the OpenAI-compatible endpoint ignores
-a model's own parameter (verified: 106, 106, 129, 184, 184).
-
-So most dictations come back clean, and occasionally one comes back
-under-punctuated -- pressing the key again usually fixes it, because the
-retry is a fresh sample, not a repeat of the same one. The one case that is
-consistently bad rather than occasionally bad is very long, rambling
-dictation: one 162-second recording stayed over-long and unpunctuated in
-every run, and also, in one run, came back with the Russian "прыгни на"
-("jump to") rendered as the English "jumping on the" -- a mid-sentence
-language slip, the only one seen.
-
-That is part of why the raw transcript is never thrown away. Handy keeps both
-the raw and the cleaned text in its history database, and this work raised
-`history_limit` from 5 to 100 for that reason: so the original survives long
-enough to be found and recovered if a cleanup pass ever mangles something.
-The same setting also retains the matching audio recording for every entry,
-so this keeps around a hundred recordings on disk too, on the order of 60 MB.
+| **Mod+Shift+D** | dictate (`handy --toggle-transcription`) |
 
 ### Signals
 
@@ -863,11 +833,11 @@ fix, [#1267](https://github.com/cjpais/Handy/pull/1267), moves remote control to
 way to share the signal: filtering by sender was tried and hangs the app within
 the hour, because Handy's handler consumes a delivery WebKit needs to receive.
 
-So the bindings use `handy --toggle-post-process` and `handy --toggle-transcription`,
-which is also what #1267 itself tells signal users to migrate to. The flags
-reach the same `send_transcription_input` the signal handler calls, so nothing
-about the behaviour differs; the cost is spawning a process per keypress,
-measured at 60 ms.
+So the binding uses `handy --toggle-transcription`, which is also what #1267
+itself tells signal users to migrate to. The flag reaches the same
+`send_transcription_input` the signal handler calls, so nothing about the
+behaviour differs; the cost is spawning a process per keypress, measured at 60
+ms.
 
 This repository is not exposed to the phantom recordings either, and that is
 not luck twice over: `overlay_style` is pinned to `none` by the settings patch.
@@ -888,14 +858,13 @@ The script also flattens every run of whitespace holding a newline, carriage
 return or tab into one space. `wtype` has no notion of text: it turns each
 character into a key press, and libxkbcommon maps U+000A to keysym `Linefeed`,
 which arrives as the byte Ctrl+J sends and which a terminal input line reads as
-Enter. Dictating into Claude Code, a transcript the cleanup model had broken
-into three paragraphs submitted itself twice on the way in, so the message went
-off in pieces with the tail left in the box. Measured in `history.db`: 2 of 18
-cleaned transcripts carried a newline inside the text, 0 of 18 raw ones did, so
-the model puts them there and Whisper does not. The prompt no longer asks for
-paragraph breaks, but it is the flattening and not the prompt that is the
-guarantee -- the model samples afresh every call and can always decide to add
-one anyway.
+Enter. Dictating into Claude Code, a transcript an LLM cleanup pass had once
+broken into three paragraphs submitted itself twice on the way in, the tail
+left in the box (`history.db` rows 347 and 348). Measured at the time: 2 of 18
+cleaned transcripts carried a newline inside the text, 0 of 18 raw ones did,
+so Whisper was never the source. That cleanup pass is gone now, but the
+flattening stays anyway: it costs nothing and turns "Whisper does not emit
+newlines" from an observation into a guarantee.
 
 Handy is a Tauri app whose paste path goes through a library that only speaks
 X11, so `config.kdl` sets `DISPLAY :12` for `xwayland-satellite`. Without it the
@@ -904,16 +873,10 @@ typing fails with no visible error.
 ### Settings
 
 The settings live in `settings_store.json`, which Handy owns and rewrites from
-its own UI, so `run_after_44-handy-postprocess` patches the eleven keys we care
+its own UI, so `run_after_44-handy-settings` patches the ten keys we care
 about rather than the repository managing the file. Every one of them sits
 under the top-level `settings` object; writing to the root instead is silent,
 not an error.
-
-Three of the eleven -- `paste_method`, `external_script_path`, `overlay_style` --
-have nothing to do with post-processing, but the script is the only thing that
-touches Handy's settings, so they live there too. Note the gate: that script is
-skipped entirely unless `voice-postprocess` is selected, so a machine with plain
-`voice` gets the typing script deployed and never told to use it.
 
 On a fresh machine that file does not exist until Handy has started once, the
 same shape as the Zen profiles: `chezmoi apply`, launch Handy and download a
