@@ -30,9 +30,9 @@ set -euo pipefail
 say()  { echo "==> greeter: $*"; }
 bail() { say "$*"; exit 0; }
 
-OVERRIDES=/etc/greetd/niri_overrides.kdl
 GREETD_CONF=/etc/greetd/config.toml
 GREETER_CACHE=/var/cache/dms-greeter
+GREETER_NIRI_DIR=/etc/greetd/niri
 
 # ---- the rescue, armed before anything else -----------------------------
 # Exactly one display manager has to be able to start, and that must be checked
@@ -123,60 +123,30 @@ command -v dms >/dev/null 2>&1 || bail "dms is not installed, nothing to configu
 command -v dms-greeter >/dev/null 2>&1 \
     || bail "dms-greeter is missing (the AUR package did not build); leaving the login screen alone"
 
-# ---- 1. the keyboard on the login screen --------------------------------
-# The wrapper greetd runs (`dms-greeter --command niri`) includes this file into
-# the greeter's niri config whenever it exists -- see
-# /usr/share/quickshell/dms/Modules/Greetd/assets/dms-greeter. It is the seam
-# the vendor put there for local tweaks, and the layout is the only thing that
-# needs to travel through it.
+# ---- 1. remove the keyboard override this script used to write ----------
+# An earlier version of this script wrote /etc/greetd/niri_overrides.kdl with
+# its own copy of the layout, on the theory that the greeter had no other way
+# to learn it. That was wrong on two counts: DMS already carries the layout
+# out of the live ~/.config/niri/config.kdl by itself (see the check in step
+# 4), so the override was never needed; and the wrapper includes it AFTER the
+# generated config's own include, so the override's `input` block sat as a
+# second one in the greeter's niri config. `niri validate` accepts that
+# without complaint -- if niri's semantics for a duplicated section are
+# last-wins, that second block silently replaced the first one, dropping
+# numlock, the touchpad, mouse and trackpoint settings. A login screen with no
+# numlock is a password that cannot be typed on the numeric keypad.
 #
-# These two strings are the THIRD copy: niri/config.kdl and 30-system carry the
-# others, and 30-system already says its own are kept identical by hand.
-# Reading either of them instead would trade a duplicated line for a silent
-# failure mode, and a password field is the worst place to find out that the
-# layout is not the one being typed.
-WANT_KDL='// Managed by chezmoi -- .chezmoiscripts/run_after_45-greeter.sh
-input {
-    keyboard {
-        xkb {
-            layout "us,ru"
-            options "grp:alt_shift_toggle,ctrl:swapcaps"
-        }
-    }
-}'
-
-# Wrapped in a function so the caller can absorb a failure with ||. Left inline,
-# any one of these under set -e would fail the whole apply -- the trap would
-# still run, but the exit status would already be lost.
-write_overrides() {
-    local tmp
-    sudo mkdir -p "$(dirname "$OVERRIDES")"
-    # The temp file goes beside the target rather than under /tmp: /tmp is
-    # usually a filesystem of its own, which turns the replacement into a copy
-    # that can be interrupted half written. One filesystem means the last step
-    # is a rename, and the kernel makes that atomic.
-    tmp=$(sudo mktemp "$OVERRIDES.XXXXXX") || return 1
-    # A failed mktemp under a suspended set -e (this function runs as
-    # write_overrides || say ...) would otherwise leave tmp empty and let tee,
-    # chmod and mv each run against "" -- one clean failure turned into three.
-    [[ -n "$tmp" ]] || return 1
-
-    # Once the temp file exists, every failure path has to remove it: mktemp
-    # mints a fresh suffix on every run and nothing ever sweeps old ones, so a
-    # tee/chmod/mv that dies partway would otherwise leave a root-owned stray
-    # behind for good.
-    if ! printf '%s\n' "$WANT_KDL" | sudo tee "$tmp" >/dev/null \
-       || ! sudo chmod 0644 "$tmp" \
-       || ! sudo mv -f "$tmp" "$OVERRIDES"; then
-        sudo rm -f "$tmp"
-        return 1
-    fi
-}
-
-if [[ "$(cat "$OVERRIDES" 2>/dev/null || true)" != "$WANT_KDL" ]]; then
-    say "writing $OVERRIDES"
-    write_overrides \
-        || say "!! could not write $OVERRIDES; the greeter will come up on whatever layout niri defaults to"
+# Nothing else will ever remove this file -- scripts 34 and 38 already
+# establish the pattern of pruning what an earlier apply left behind -- so
+# this one does, once, for the copy it recognizes as its own by the same
+# marker every managed file in this repo carries. The check and the removal
+# are both guarded so a failure here can only be a message, never a reason to
+# stop applying.
+STALE_OVERRIDES=/etc/greetd/niri_overrides.kdl
+if [[ -f "$STALE_OVERRIDES" ]] \
+   && head -n1 "$STALE_OVERRIDES" 2>/dev/null | grep -q 'Managed by chezmoi'; then
+    say "removing stale $STALE_OVERRIDES"
+    sudo rm -f "$STALE_OVERRIDES" || say "!! could not remove $STALE_OVERRIDES"
 fi
 
 # ---- 2. hand the login screen to the greeter ----------------------------
@@ -189,9 +159,16 @@ fi
 # unreadable file as configured instead, because there the failure mode isn't
 # a repeated prompt, it's disabling a greeter that already works -- see
 # greetd_conf_present_but_unreadable above.
+#
+# DMS_PRIVESC=sudo: measured on this machine, both `dms greeter enable -y`
+# and `dms greeter sync` stop and wait on "Multiple privilege escalation
+# tools detected: [1] sudo [2] run0" the first time they run here -- `-y`
+# does not cover that prompt, only the ones that come after it. Left unset,
+# an unattended `chezmoi apply` hangs forever right here. sudo is what every
+# other script in this repository already uses.
 if ! greetd_configured; then
     say "handing the login screen to the DMS greeter"
-    dms greeter enable -y \
+    DMS_PRIVESC=sudo dms greeter enable -y \
         || say "!! dms greeter enable failed; the check on exit says where that left this machine"
 fi
 
@@ -200,7 +177,7 @@ fi
 # not link them. So a wallpaper changed since the last apply reaches the login
 # screen only when this runs -- and, because the copy escalates privileges,
 # running it unconditionally would ask for a password on every single apply.
-# Hence the stamp.
+# Hence the stamp. DMS_PRIVESC=sudo here for the same reason as step 2 above.
 STAMP="{{ .chezmoi.homeDir }}/.cache/dms-greeter-sync.stamp"
 SETTINGS="{{ .chezmoi.homeDir }}/.config/DankMaterialShell/settings.json"
 COLORS="{{ .chezmoi.homeDir }}/.cache/DankMaterialShell/dms-colors.json"
@@ -229,12 +206,26 @@ sync_needed() {
 
 if sync_needed; then
     say "syncing the theme to the greeter"
-    if dms greeter sync; then
+    if DMS_PRIVESC=sudo dms greeter sync; then
         { mkdir -p "$(dirname "$STAMP")" && touch "$STAMP"; } \
             || say "!! could not write $STAMP; the theme will be re-synced on every apply"
     else
         say "!! dms greeter sync failed; on a first switch there is no previous theme to fall back to -- if the cache never got created, the invariant check below will catch that and put sddm back"
     fi
+fi
+
+# ---- 4. verify the keyboard layout landed --------------------------------
+# The layout used to be a blind guarantee: this script wrote it and trusted
+# its own copy. Now it is a checked one instead -- `dms greeter sync` writes
+# the layout it read out of the live niri config into files under
+# $GREETER_NIRI_DIR, so look for it there rather than assert it. The
+# directory is checked rather than parsed out of greetd's -C argument on
+# purpose: if DMS ever moves where it writes the synced config, this should
+# come up empty and say so, not go on pretending to still look in the right
+# place. A missing layout here is discovered before the password field
+# instead of at it, which is the whole point of checking instead of writing.
+if ! grep -rq 'xkb' "$GREETER_NIRI_DIR" 2>/dev/null; then
+    say "!! no keyboard layout found under $GREETER_NIRI_DIR; the login screen will come up on whatever layout niri defaults to"
 fi
 {{- end }}
 {{- end }}
