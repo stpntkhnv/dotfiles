@@ -16,7 +16,7 @@ case "${1:-}" in
   *)       printf 'использование: %s [--check]\n' "${0##*/}" >&2; exit 2 ;;
 esac
 
-for tool in chezmoi jq git awk; do
+for tool in chezmoi jq git awk sed; do
   command -v "$tool" >/dev/null 2>&1 || { printf 'нет инструмента: %s\n' "$tool" >&2; exit 2; }
 done
 
@@ -97,21 +97,92 @@ headers() {
   done < <(doc_files)
 }
 
-# Битые внутренние ссылки. awk, а не grep: grep возвращает 1 на документе без
-# ссылок, и под `set -euo pipefail` это убило бы весь скрипт.
+# Слаг заголовка markdown — так же, как его вычисляет GitHub при рендере.
+# Бэктики, ссылки и *_-разметка выкидываются как разметка (не как символы:
+# одиночное подчёркивание внутри `run_onchange` — это текст, а не курсив, и
+# должно уцелеть), регистр приводится к нижнему (кириллица кириллицей и
+# остаётся), всё, что не буква/цифра/пробел/дефис/подчёркивание, выкидывается,
+# пробелы схлопываются в дефис.
+slugify_heading() {
+  local text="$1"
+  text="$(sed -E 's/^#{1,6}[[:space:]]+//' <<< "$text")"
+  text="${text//\`/}"
+  text="$(sed -E '
+    s/\[([^]]*)\]\([^)]*\)/\1/g
+    s/\*\*([^*]+)\*\*/\1/g
+    s/__([^_]+)__/\1/g
+    s/\*([^*]+)\*/\1/g
+    s/_([^_]+)_/\1/g
+  ' <<< "$text")"
+  text="${text,,}"
+  text="$(sed -E 's/[^[:alnum:][:space:]_-]//g' <<< "$text")"
+  sed -E 's/[[:space:]]+/-/g' <<< "$text"
+}
+
+# Все слаги заголовков файла, по одному на строку. Код-блоки пропускаются:
+# `# ` в начале строки внутри ```-фрагмента — это комментарий в скрипте, а не
+# заголовок.
+heading_slugs() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  local infence=0 line
+  while IFS= read -r line; do
+    if [[ "$line" == '```'* ]]; then
+      infence=$((1 - infence))
+      continue
+    fi
+    [[ "$infence" -eq 0 ]] || continue
+    [[ "$line" =~ ^#{1,6}[[:space:]] ]] && slugify_heading "$line"
+  done < "$file"
+  # без явного return 0 функция отдаёт код последнего `read` — 1 на EOF,
+  # а под `pipefail` это ложно валит `heading_slugs ... | grep ...` даже
+  # когда grep нашёл совпадение.
+  return 0
+}
+
+# Битые внутренние ссылки и якоря. awk, а не grep: grep возвращает 1 на
+# документе без ссылок, и под `set -euo pipefail` это убило бы весь скрипт.
+#
+# Якорь проверяется в двух формах: на другой файл (`glossary.md#сокет`) и
+# внутри самого документа (`](#почему-именно-так)`, target тогда начинается
+# с `#` и файл — сам doc). Если файл-цель не существует, якорь не проверяем:
+# BROKEN-LINK по нему уже достаточно сказал.
 broken_links() {
-  local doc target dir
+  local doc target dir file_part anchor_part anchor_file
   while IFS= read -r doc; do
     [[ -n "$doc" ]] || continue
     dir="$(dirname "$doc")"
     while IFS= read -r target; do
       [[ -n "$target" ]] || continue
       case "$target" in
-        http://*|https://*|mailto:*|'#'*) continue ;;
+        http://*|https://*|mailto:*) continue ;;
       esac
-      target="${target%%#*}"
-      [[ -n "$target" ]] || continue
-      [[ -e "$dir/$target" ]] || printf 'BROKEN-LINK\t%s\t%s\n' "$doc" "$target"
+
+      if [[ "$target" == '#'* ]]; then
+        file_part=""
+        anchor_part="${target#'#'}"
+        anchor_file="$doc"
+      else
+        file_part="${target%%#*}"
+        if [[ "$target" == *'#'* ]]; then
+          anchor_part="${target#*#}"
+        else
+          anchor_part=""
+        fi
+        anchor_file="$dir/$file_part"
+      fi
+
+      if [[ -n "$file_part" ]]; then
+        if [[ ! -e "$anchor_file" ]]; then
+          printf 'BROKEN-LINK\t%s\t%s\n' "$doc" "$file_part"
+          continue
+        fi
+      fi
+
+      if [[ -n "$anchor_part" ]]; then
+        heading_slugs "$anchor_file" | grep -qxF "$anchor_part" \
+          || printf 'BROKEN-ANCHOR\t%s\t%s\n' "$doc" "$target"
+      fi
     done < <(awk '
       {
         line = $0
@@ -180,6 +251,7 @@ while IFS= read -r file; do
 done <<< "$(covered_universe)"
 
 # --- 6: битая внутренняя ссылка ---
+# --- 7: битый якорь ссылки ---
 broken_links >> "$REPORT"
 
 cat "$REPORT"
