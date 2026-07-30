@@ -283,7 +283,10 @@ host requirement not documented?», открыт, автор `45mg`) описы�
 установленного на хосте `flatpak`, нигде не задокументированная и падающая
 без единого слова. Официальная страница
 `distrobox.it/usage/distrobox-host-exec/` называет единственной зависимостью
-сам `host-spawn` — про `flatpak` там ни слова.
+сам `host-spawn` и нигде не документирует зависимость от `flatpak` как
+требование на стороне хоста — `flatpak` там встречается только внутри
+примера использования (`distrobox-host-exec flatpak run
+org.mozilla.firefox`), а не в перечне того, что нужно поставить заранее.
 
 **Практическое следствие: вход 2 сейчас мёртв.** Ссылка, кликнутая изнутри
 `digi3`, `stellium` или `personal`, никуда не уходит и не даёт знать, что она
@@ -593,7 +596,9 @@ dbus-send --session --print-reply --dest=org.freedesktop.Flatpak.Development \
   `org.freedesktop.Flatpak.Development.HostCommand`, комментарий «talk with
   flatpak-session-helper process».
 - `distrobox.it/usage/distrobox-host-exec/` — официальная страница,
-  называющая единственной зависимостью `host-spawn`, без упоминания `flatpak`.
+  называющая единственной зависимостью `host-spawn`; `flatpak` встречается
+  там только в примере запуска приложения, не как задокументированная
+  зависимость на стороне хоста.
 - `glossary.md` — термины: [Контейнер Firefox](glossary.md#контейнер-firefox),
   [Контейнер distrobox](glossary.md#контейнер-distrobox),
   [systemd slice](glossary.md#systemd-slice).
