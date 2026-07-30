@@ -74,7 +74,7 @@ flowchart TD
     EXISTS -- да --> ENSURE["ensure_server:<br/>herdr server, если ещё не поднят"]
     ENSURE --> WS{"воркспейс с таким label уже есть?<br/>workspace_for"}
     WS -- нет --> CREATE["workspace create --label ctx"]
-    CREATE --> WAIT["ждать panel_is_idle_shell<br/>до 5 секунд"]
+    CREATE --> WAIT["wait_for_idle_shell:<br/>опрашивает pane_is_idle_shell<br/>до 5 секунд"]
     WS -- да --> PANE["панель первого таба,<br/>если он не разбит на несколько<br/>first_tab_pane"]
     PANE --> IDLE{"панель — только свой шелл?<br/>pane_is_idle_shell"}
     IDLE -- нет --> SKIP["панель не трогаем,<br/>в ней настоящая работа"]
@@ -387,8 +387,8 @@ is not visible to Herdr» — ровно измеренное здесь пов�
 **Панель DankMaterialShell не увидит herdr никогда, и это не баг, а
 нереализованная фича.** Исходник (`AvengeMedia/DankMaterialShell`,
 `quickshell/Services/MuxService.qml`) определяет доступность мультиплексора
-двумя процессами, которые проверяют `which tmux` и `which zellij` по коду
-возврата — herdr там не упомянут вовсе, панель физически не смотрит в его
+двумя процессами, которые проверяют `command -v tmux` и `command -v zellij`
+по коду возврата — herdr там не упомянут вовсе, панель физически не смотрит в его
 сторону. Апстрим-поиск тикета с запросом такой поддержки ничего не нашёл —
 записано как «upstream не найден, искали 2026-07-31». Запись —
 [workarounds.md](workarounds.md).
