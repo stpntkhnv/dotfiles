@@ -476,7 +476,7 @@ ss -ltnp | grep -E '1108[0-9]'                                   # bridges liste
 ls -l ~/.local/share/wsproxy/*/socks.sock                        # containers answer
 curl -s --socks5-hostname 127.0.0.1:11081 https://api.ipify.org  # end to end
 distrobox enter digi3 -- ls /var/lib/wsproxy                     # only its own socket
-ls ~/.config/zen/*/extensions/                                   # policy took
+jq -r '[.addons[]|select(.active)|.id]|sort|.[]' ~/.config/zen/*/extensions.json  # what is actually loaded
 ```
 
 Extensions arrive through a system policy file, and its directory is derived
@@ -484,6 +484,9 @@ from the application name: Zen reads `/etc/zen/policies/policies.json`, not
 `/etc/firefox/policies/policies.json`. A policy at the wrong path is silent --
 the browser starts normally and simply has no extensions, which means no
 container boundary. Hence the last check above, and `about:policies` -> Active.
+It reads `extensions.json` rather than the `extensions/` directory: an `.xpi`
+left there by an earlier install proves nothing, and a disabled add-on has a
+file too. `active` is the field that answers the question.
 
 ### Routing test
 
@@ -536,7 +539,10 @@ The parts that used to be twenty minutes of clicking now come out of
 |---|---|
 | Containers, with names, colours and icons | the `Containers` enterprise policy, which replaces the built-in set on a fresh profile |
 | A SOCKS proxy and remote DNS per container | a generated extension, `/usr/local/lib/zen-context-proxy.xpi`, installed `force_installed` from a `file://` URL |
-| One space per context, bound to its container | `run_after_43-zen-spaces.sh` writes `zen-sessions.jsonlz4` |
+| One space per context, bound to its container | `run_after_43-zen-session.sh` writes `zen-sessions.jsonlz4` |
+| Bookmarks in every context's toolbar folder | the `Bookmarks` policy, one flat folder level, matched by URL |
+| A read-only menu of nested link folders | the `ManagedBookmarks` policy, from `managed_bookmarks:` |
+| A rule per context: an address naming it opens in its space | `zen-space-routing.jsonlz4`, written by `run_after_43-zen-session.sh` |
 
 The extension exists because doing this in Multi-Account Containers by hand
 had two silent failure modes: `socks5://` parses to nothing there, and the
@@ -554,6 +560,28 @@ if the profile has any tab, or if a space is already named after a context.
 So on a fresh machine: `chezmoi apply`, launch Zen once so the profile and
 containers exist, quit, `chezmoi apply` again.
 
+### The bookmarks toolbar is hidden, and one of these lives only there
+
+Zen ships `browser.toolbars.bookmarks.visibility = "never"`
+(`browser/omni.ja -> defaults/preferences/firefox.js:1520`), overriding the
+`"newtab"` Firefox itself ships. Policy bookmarks were therefore invisible on
+this machine for as long as they have existed, and the managed menu is worse than
+invisible: it exists ONLY as a toolbar button (`browser-init.js:716-769`), so a
+hidden toolbar means there is no way to reach it at all. Hence
+`DisplayBookmarksToolbar: "always"` in the policy. It applies
+`runOncePerModification`, so hiding the toolbar again by hand sticks.
+
+Two bookmark mechanisms, because they are good at opposite things:
+
+| | `Bookmarks` | `ManagedBookmarks` |
+|---|---|---|
+| What it is | real bookmarks on the toolbar | a read-only menu built from the policy |
+| Folder depth | exactly one level | any |
+| Renaming, moving | survives: matching is by URL and there is no update step (`BookmarksPolicies.sys.mjs:101-185`) | impossible |
+| Deleting | comes back on the next start | impossible |
+| Removing the entry from the catalogue | removes it from the browser | removes it from the menu |
+| Your own bookmarks | untouched, ours carry the guid prefix `PolB-` | not in Places at all |
+
 ### Configured by hand
 
 What is left, once:
@@ -567,11 +595,13 @@ What is left, once:
    context. Never on shared ones such as `dev.azure.com`, `portal.azure.com`,
    `teams.microsoft.com` or `login.microsoftonline.com`: a domain rule *pulls*
    a link out of its current container.
-4. **Bookmarks** rewritten as `ext+container:name=<Context>&url=<encoded>`. The
-   container belongs in the link, not in the ambient context: otherwise a
-   bookmark for stellium clicked from the digi3 workspace lands in digi3.
-   `zen-open <context> <url>` builds the string; it is then visible in the
-   address bar of the tab it opens.
+4. **One-off bookmarks**, the ones not worth a line in the catalogue, rewritten
+   as `ext+container:name=<Context>&url=<encoded>`. The container belongs in the
+   link, not in the ambient context: otherwise a bookmark for stellium clicked
+   from the digi3 workspace lands in digi3. `zen-open <context> <url>` builds
+   the string; it is then visible in the address bar of the tab it opens.
+   Whatever is listed under `bookmarks:` or `managed_bookmarks:` arrives by
+   policy instead.
 5. **Pinned tabs and Essentials** per workspace, so reaching a frequent
    resource needs neither a typed address nor a bookmark.
 6. **Bitwarden**: auto-fill on page load off; URI match detection `Never` for
