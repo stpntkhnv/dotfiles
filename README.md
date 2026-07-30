@@ -470,6 +470,20 @@ sync` copies settings, palette and wallpaper into `/var/cache/dms-greeter`
 rather than linking them, so the login screen catches up at the next `chezmoi
 apply`, or when that command is run by hand.
 
+**Do not run the greeter inside a running session.** The vendor documents
+`DMS_RUN_GREETER=1 qs -p /usr/share/quickshell/dms` under manual usage, and it
+reads like a harmless way to look at the greeter before switching. It is not.
+The greeter raises a lock-screen-class surface: top layer, exclusive keyboard
+grab. Measured on this machine on 2026-07-30 -- it covered every output, took
+all input, would not release workspace switching, and could not be logged
+through either, because it talks to greetd over a socket and no greetd was
+running behind it. There is no key that gets out of it; the session ended at
+the power button. Under the real greeter this never happens, because the wrapper
+starts its own compositor on its own VT first and the grab is confined there.
+
+The way to see the greeter is to switch and reboot, with a TTY open on
+Ctrl+Alt+F2 and the rollback below in reach.
+
 Two things that are not what they look like:
 
 - **Unticking `greeter` does not put sddm back.** The script becomes a stub and
