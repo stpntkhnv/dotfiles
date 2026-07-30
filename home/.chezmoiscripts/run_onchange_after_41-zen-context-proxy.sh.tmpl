@@ -22,9 +22,15 @@ set -euo pipefail
 # reinstall" shortcut for file: URLs, so a rebuilt XPI is picked up on the next
 # start with no version juggling.
 #
-# Unsigned, which works because Zen ships MOZ_REQUIRE_SIGNING: false and
-# xpinstall.signatures.required = false. If a future build flips either, the
-# extension stops loading -- run_after_zz-next-steps.sh checks for it.
+# Unsigned, and that is only survivable because the policy turns the signature
+# check off: Zen's own application defaults set xpinstall.signatures.required to
+# true (browser/omni.ja defaults/preferences/firefox.js:27), which overrides the
+# false in toolkit's greprefs.js. MOZ_REQUIRE_SIGNING: false in this build does
+# not disable the check, it only makes that pref settable rather than constant
+# (AddonSettings.sys.mjs:32-48). Without the pref this file was built on every
+# apply and installed exactly never: "Download failed -
+# ERROR_SIGNEDSTATE_REQUIRED". See 32-browser-extensions for the policy, and
+# run_after_zz-next-steps.sh for the check that the add-on is actually loaded.
 
 XPI=/usr/local/lib/zen-context-proxy.xpi
 BUILD=$(mktemp -d)

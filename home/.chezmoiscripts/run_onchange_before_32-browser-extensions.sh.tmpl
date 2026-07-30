@@ -33,6 +33,29 @@ set -euo pipefail
 # GUIDs come from the AMO API (addons.mozilla.org/api/v5/addons/addon/<slug>/),
 # not from guessing: a wrong key installs nothing and says nothing.
 {{- $bitwarden := dict "guid" "{446900e4-71c2-419f-a6a7-df9c091e268b}" "slug" "bitwarden-password-manager" "mode" "normal_installed" }}
+{{/* Zen refuses our own extension without this, and the refusal is silent
+     unless the browser console is open: "Download failed -
+     ERROR_SIGNEDSTATE_REQUIRED - file:///usr/local/lib/zen-context-proxy.xpi".
+     MOZ_REQUIRE_SIGNING is false in this build, but that only makes the pref
+     settable rather than constant (AddonSettings.sys.mjs:32-48) -- and the
+     application default flips it back on:
+     browser/omni.ja defaults/preferences/firefox.js:27 says true, overriding
+     the false in toolkit's greprefs.js. So the extension has never once been
+     installed on this machine; measured on a throwaway profile, and measured
+     again with this pref in place, where it installs.
+
+     Through the policy rather than user.js because the policy is read before a
+     profile exists, so the extension arrives on the FIRST launch of Zen.
+     Locked so about:config cannot drift it and a Zen update cannot win. The
+     pref is only in the policy allowlist because MOZ_REQUIRE_SIGNING is off
+     (Policies.sys.mjs:2464-2466); a build that turns the flag on makes this
+     unsettable, and run_after_zz-next-steps.sh is what would notice.
+
+     Firefox gets none of this: it carries one extension, from AMO, signed. */}}
+{{- $zenPrefs := "" }}
+{{- if has "zen" .enabled }}
+{{-   $zenPrefs = `      "xpinstall.signatures.required": { "Value": false, "Status": "locked" }` }}
+{{- end }}
 {{- $zenExts := list }}
 {{- if has "zen" .enabled }}
 {{-   $zenExts = append $zenExts (dict "guid" "@testpilot-containers"                  "slug" "multi-account-containers" "mode" "force_installed") }}
@@ -58,9 +81,16 @@ set -euo pipefail
      the link, so a bookmark clicked from the wrong space still lands right --
      which is the whole point, and the reason these are not plain URLs.
 
-     The policy engine OWNS these: it diffs Places against the list on every
-     start (BookmarksPolicies.sys.mjs, guidPrefix), adding and removing to
-     match. Editing one in the browser is therefore pointless; edit the table. */}}
+     What the policy engine does with them is narrower than it looks. It matches
+     BY URL and builds two lists, add and remove; there is no update step at all
+     (BookmarksPolicies.sys.mjs:101-185). So renaming one or dragging it into
+     another folder survives, deleting one brings it back on the next start, and
+     dropping a line from the table above is what actually removes it. Bookmarks
+     of your own are never touched: ours carry the guid prefix PolB-, our folders
+     PolF-.
+
+     bookmarks_demo is a flat folder of plain URLs whose titles say what to try;
+     it exists to make the difference from ManagedBookmarks visible by hand. */}}
 {{- $marks := list }}
 {{- if has "zen" .enabled }}
 {{-   range $c := .contexts }}
@@ -71,32 +101,88 @@ set -euo pipefail
 {{-     end }}
 {{-   end }}
 {{- end }}
+{{- if and (has "zen" .enabled) (hasKey . "bookmarks_demo") }}
+{{-   range $b := .bookmarks_demo.items }}
+{{-     $marks = append $marks (dict "title" $b.title "folder" $.bookmarks_demo.folder "url" $b.url) }}
+{{-   end }}
+{{- end }}
 {{- $ffExts := list }}
 {{- if and (has "browsers" .enabled) (has "bitwarden" .enabled) }}
 {{-   $ffExts = append $ffExts $bitwarden }}
 {{- end }}
 
 # $1 is the /etc directory of one Gecko application, $2 the already-rendered
-# body of ExtensionSettings, $3 of Containers.Default, $4 of Bookmarks. Empty
-# for none.
+# body of ExtensionSettings, $3 of Containers.Default, $4 of Bookmarks, $5 the
+# whole ManagedBookmarks array, $6 the body of Preferences. Empty for none.
 write_gecko_policy() {
     local dir="$1" exts="$2" containers="${3:-}" marks="${4:-}"
-    local settings="" contblock="" markblock=""
+    local managed="${5:-}" prefs="${6:-}"
+    local settings="" contblock="" markblock="" managedblock="" prefblock="" toolbar=""
     [[ -n "$exts" ]] && settings=$(printf ',\n    "ExtensionSettings": {\n%s\n    }' "$exts")
     [[ -n "$containers" ]] && contblock=$(printf ',\n    "Containers": {\n      "Default": [\n%s\n      ]\n    }' "$containers")
     [[ -n "$marks" ]] && markblock=$(printf ',\n    "Bookmarks": [\n%s\n    ]' "$marks")
+    [[ -n "$managed" ]] && managedblock=$(printf ',\n    "ManagedBookmarks": %s' "$managed")
+    [[ -n "$prefs" ]] && prefblock=$(printf ',\n    "Preferences": {\n%s\n    }' "$prefs")
+    # Neither kind of bookmark is visible while the toolbar is hidden, and Zen
+    # hides it by default: browser/omni.ja defaults/preferences/firefox.js:1520
+    # sets browser.toolbars.bookmarks.visibility to "never", overriding the
+    # "newtab" that Firefox itself ships. The managed folder is worse than
+    # merely inconvenient there -- it exists ONLY as a toolbar button
+    # (browser-init.js:716-769), so a hidden toolbar means no way to reach it at
+    # all. The policy is runOncePerModification, so hiding the toolbar again by
+    # hand sticks.
+    if [[ -n "$marks" || -n "$managed" ]]; then
+        toolbar=$(printf ',\n    "DisplayBookmarksToolbar": "always"')
+    fi
     sudo install -d "$dir/policies"
     sudo tee "$dir/policies/policies.json" >/dev/null <<EOF
 {
   "policies": {
     "DisableAppUpdate": true,
-    "DefaultSerialGuardSetting": 3$settings$contblock$markblock
+    "DefaultSerialGuardSetting": 3$settings$contblock$markblock$managedblock$prefblock$toolbar
   }
 }
 EOF
     echo "==> Policy written: $dir/policies/policies.json"
 }
+{{ if and (has "zen" .enabled) (hasKey . "managed_bookmarks") }}
+# The tree arrives through a quoted heredoc rather than a single-quoted
+# assignment: an apostrophe in a bookmark title would otherwise close the string
+# and take the whole file with it -- the same trap the Syncthing labels hit.
+managed_raw="$(cat <<'MANAGED_EOF'
+{{ .managed_bookmarks | toJson }}
+MANAGED_EOF
+)"
+contexts_json="$(cat <<'CONTEXTS_EOF'
+{{ $ctx := list }}{{ range .contexts }}{{ $ctx = append $ctx .name }}{{ end }}{{ $ctx = append $ctx "scratch" }}{{ $ctx | toJson }}
+CONTEXTS_EOF
+)"
 
+# The one hard failure in this file. A context that matches nothing does not
+# degrade, it lies: the proxy extension creates any container name it cannot
+# find (see the comment in 41-zen-context-proxy), and a container it created has
+# no proxy, so the bookmark opens in something that looks like a work container
+# and leaves through the host. Better a failed apply than that.
+unknown=$(jq -r --argjson ok "$contexts_json" \
+    '[.. | objects | select(has("context")) | .context] - $ok | unique | join(", ")' \
+    <<<"$managed_raw") || unknown="jq failed"
+if [[ -n "$unknown" ]]; then
+    echo "!! managed_bookmarks names a context that does not exist: $unknown" >&2
+    echo "!! fix home/.chezmoidata.yaml; known contexts: $contexts_json" >&2
+    exit 1
+fi
+
+# walk() rather than recursion in the template: a recursive Go template needs a
+# named file in .chezmoitemplates, and jq is already here for zen-open. @uri
+# encodes the whole URL, including its own '&', which is what stops the hand-off
+# from being truncated.
+managed=$(jq -c 'walk(
+    if type=="object" and has("url") and has("context")
+    then .url = "ext+container:name=" + .context + "&url=" + (.url|@uri) | del(.context)
+    else . end)' <<<"$managed_raw")
+{{ else }}
+managed=""
+{{ end }}
 echo "==> Installing browser extension policies..."
 {{- if and (has "browsers" .enabled) (has "bitwarden" .enabled) }}
 
@@ -112,16 +198,48 @@ sudo tee /etc/chromium/policies/managed/bitwarden-extension.json >/dev/null <<'E
 }
 EOF
 {{- end }}
-{{- range $app := list (dict "dir" "/etc/firefox" "exts" $ffExts "containers" list "marks" list "on" (has "browsers" .enabled)) (dict "dir" "/etc/zen" "exts" $zenExts "containers" $containers "marks" $marks "on" (has "zen" .enabled)) }}
-{{- if $app.on }}
+{{- if has "browsers" .enabled }}
 
-write_gecko_policy {{ $app.dir }} '{{ range $i, $e := $app.exts }}{{ if $i }},
+ff_exts="$(cat <<'FF_EXTS_EOF'
+{{ range $i, $e := $ffExts }}{{ if $i }},
+{{ end }}      "{{ $e.guid }}": {
+        "installation_mode": "{{ $e.mode }}",
+        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/{{ $e.slug }}/latest.xpi"
+      }{{ end }}
+FF_EXTS_EOF
+)"
+write_gecko_policy /etc/firefox "$ff_exts" '' '' '' ''
+{{- end }}
+{{- if has "zen" .enabled }}
+
+# Two explicit calls instead of one loop over both applications, because the
+# arguments stopped being template values. Every block of catalogue data now
+# reaches the shell through a quoted heredoc rather than a single-quoted
+# argument: an apostrophe in a bookmark title would otherwise close the argument
+# and take the rest of the script with it, which is the trap the Syncthing folder
+# labels already hit. A template `range` cannot carry a shell variable.
+zen_exts="$(cat <<'ZEN_EXTS_EOF'
+{{ range $i, $e := $zenExts }}{{ if $i }},
 {{ end }}      "{{ $e.guid }}": {
         "installation_mode": "{{ $e.mode }}",
         "install_url": "{{ if hasKey $e "url" }}{{ $e.url }}{{ else }}https://addons.mozilla.org/firefox/downloads/latest/{{ $e.slug }}/latest.xpi{{ end }}"
-      }{{ end }}' '{{ range $i, $c := $app.containers }}{{ if $i }},
-{{ end }}        { "name": "{{ $c.name }}", "icon": "{{ $c.icon }}", "color": "{{ $c.color }}" }{{ end }}' '{{ range $i, $b := $app.marks }}{{ if $i }},
-{{ end }}      { "Title": {{ $b.title | toJson }}, "URL": {{ $b.url | toJson }}, "Folder": {{ $b.folder | toJson }}, "Placement": "toolbar" }{{ end }}'
-{{- end }}
+      }{{ end }}
+ZEN_EXTS_EOF
+)"
+zen_containers="$(cat <<'ZEN_CONT_EOF'
+{{ range $i, $c := $containers }}{{ if $i }},
+{{ end }}        { "name": "{{ $c.name }}", "icon": "{{ $c.icon }}", "color": "{{ $c.color }}" }{{ end }}
+ZEN_CONT_EOF
+)"
+zen_marks="$(cat <<'ZEN_MARKS_EOF'
+{{ range $i, $b := $marks }}{{ if $i }},
+{{ end }}      { "Title": {{ $b.title | toJson }}, "URL": {{ $b.url | toJson }}, "Folder": {{ $b.folder | toJson }}, "Placement": "toolbar" }{{ end }}
+ZEN_MARKS_EOF
+)"
+zen_prefs="$(cat <<'ZEN_PREFS_EOF'
+{{ $zenPrefs }}
+ZEN_PREFS_EOF
+)"
+write_gecko_policy /etc/zen "$zen_exts" "$zen_containers" "$zen_marks" "$managed" "$zen_prefs"
 {{- end }}
 {{- end }}
