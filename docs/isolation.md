@@ -111,12 +111,12 @@ flowchart TB
         PICKER["Пикер контекста<br/>(isolation-links.md)"]
         ZEN["Zen, один процесс<br/>вкладка открыта в Firefox-контейнере digi3"]
         PROXYEXT["Расширение context-proxy<br/>(isolation-browser.md)"]
-        SOCAT_H["socat<br/>слушает 127.0.0.1:11081"]
+        SOCAT_H["socat<br/>слушает 127.0.0.1:11081,<br/>пересылает в UNIX-сокет"]
         SOCKF[("UNIX-сокет<br/>~/.local/share/wsproxy/digi3/socks.sock")]
     end
 
     subgraph CTR["Контейнер digi3, свой network namespace<br/>(containers.md)"]
-        SOCAT_C["socat<br/>публикует сокет на 127.0.0.1:1080"]
+        SOCAT_C["socat<br/>слушает UNIX-сокет,<br/>пересылает на 127.0.0.1:1080"]
         SOCKS["microsocks<br/>127.0.0.1:1080"]
         KILL{{"killswitch, если у digi3 есть VPN<br/>(killswitch.md)"}}
         NET(("сеть digi3:<br/>маршруты, DNS, VPN"))
