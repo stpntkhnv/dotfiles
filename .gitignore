@@ -1,8 +1,7 @@
-# Working documents: specs and plans stay local. They name work
-# contexts and describe the threat model, which is exactly what this
-# repository must not publish.
-docs/
+# Specs and plans stay local: they work through the threat model in far more
+# detail than the code does, and none of that detail is needed to read the
+# repository. The rest of docs/ is published.
+docs/superpowers/
 
-# SDD scratch: ledgers, briefs and review packages for plans under docs/.
-# Same reason docs/ is ignored -- these quote the plan, which names work contexts.
+# SDD scratch: ledgers, briefs and review packages for the plans above.
 .superpowers/
