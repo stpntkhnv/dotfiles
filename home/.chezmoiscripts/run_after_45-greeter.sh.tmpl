@@ -136,10 +136,22 @@ write_overrides() {
     # usually a filesystem of its own, which turns the replacement into a copy
     # that can be interrupted half written. One filesystem means the last step
     # is a rename, and the kernel makes that atomic.
-    tmp=$(sudo mktemp "$OVERRIDES.XXXXXX")
-    printf '%s\n' "$WANT_KDL" | sudo tee "$tmp" >/dev/null
-    sudo chmod 0644 "$tmp"
-    sudo mv -f "$tmp" "$OVERRIDES"
+    tmp=$(sudo mktemp "$OVERRIDES.XXXXXX") || return 1
+    # A failed mktemp under a suspended set -e (this function runs as
+    # write_overrides || say ...) would otherwise leave tmp empty and let tee,
+    # chmod and mv each run against "" -- one clean failure turned into three.
+    [[ -n "$tmp" ]] || return 1
+
+    # Once the temp file exists, every failure path has to remove it: mktemp
+    # mints a fresh suffix on every run and nothing ever sweeps old ones, so a
+    # tee/chmod/mv that dies partway would otherwise leave a root-owned stray
+    # behind for good.
+    if ! printf '%s\n' "$WANT_KDL" | sudo tee "$tmp" >/dev/null \
+       || ! sudo chmod 0644 "$tmp" \
+       || ! sudo mv -f "$tmp" "$OVERRIDES"; then
+        sudo rm -f "$tmp"
+        return 1
+    fi
 }
 
 if [[ "$(cat "$OVERRIDES" 2>/dev/null || true)" != "$WANT_KDL" ]]; then
