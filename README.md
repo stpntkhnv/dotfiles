@@ -426,16 +426,28 @@ Versions disagree and the third line prints `0` -- reboot, nothing else.
 
 ## Login screen
 
-The greeter is the desktop shell itself. Not a theme that resembles it -- the
-same QML, the same components, the same
-`~/.config/DankMaterialShell/settings.json` the running session reads. Wallpaper
-and matugen palette are whatever the desktop currently has, so the machine looks
-like one piece from the password field onwards.
+The greeter is the desktop shell itself. Not a theme that resembles it -- it
+reads the same `~/.config/DankMaterialShell/settings.json` the running session
+does, which is what genuinely cannot drift between them. The QML itself is not
+literally shared: the greeter ships in its own package, `greetd-dms-greeter-git`,
+separate from the session's `dms-shell` and on its own update path (see below)
+-- the same upstream project installed twice, not one copy of the code running
+both places. Wallpaper and matugen palette are whatever the desktop currently
+has, so the machine looks like one piece from the password field onwards.
 
 That costs a display manager swap: `greetd` runs `dms-greeter --command niri`
 instead of sddm. sddm stays installed and stays enabled by `30-system`;
-`run_after_45-greeter` is the only thing that switches over, so a machine where
-the AUR package failed to build simply keeps the login screen it had.
+`run_after_45-greeter` is the only thing that switches over. What a failed AUR
+build leaves behind depends on which kind of machine this is: `20-packages`
+runs before `30-system`, under `set -e`, so a build failure there aborts the
+whole apply before either script gets a turn. On a machine that already had a
+working login screen from an earlier apply, that just means the apply stops
+short and the machine keeps the login screen it had. On a fresh machine with
+nothing enabled yet, it means `30-system` never gets to enable sddm either --
+the apply aborts before any display manager exists, and the machine boots to a
+TTY instead. This matters more for `greetd-dms-greeter-git` than for any other
+package in the catalogue: it is the only one built from HEAD rather than a
+release, and it is ticked by default.
 
 `greeter` is a new asked feature, and a stored `data.enabled` never gains a new
 key by itself (see [Adding a program](#adding-a-program)). Left alone, `chezmoi
@@ -462,7 +474,10 @@ Two things that are not what they look like:
 - **Unticking `greeter` does not put sddm back.** The script becomes a stub and
   reverts nothing, because which display manager is enabled is systemd state and
   lives outside chezmoi. Going back is `dms greeter uninstall`, or from a TTY:
-  `sudo systemctl disable greetd && sudo systemctl enable --now sddm`.
+  `sudo systemctl disable --now greetd && sudo systemctl enable --now sddm`.
+  The `--now` on `disable` matters: without it greetd keeps running on the VT,
+  and `enable --now sddm` then starts sddm into a seat greetd is still holding.
+  Reboot instead if `--now` on a login manager makes you uneasy.
 - **The AUR package never updates itself.** `20-packages` runs `yay -S
   --needed`, which skips what is already installed however far the sources have
   moved. For a login screen that is a feature rather than a fault; pulling a
