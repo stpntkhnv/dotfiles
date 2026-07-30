@@ -9,8 +9,9 @@
 // Unix signals and the CLI flag below; the signals are unusable, because
 // WebKit's garbage collector owns SIGUSR1 inside the same process and a
 // pkill -USR1 segfaults Handy 0.9.4 in libjavascriptcoregtk before it can even
-// log receiving it. The whole story is in the README, under Voice input ->
-// Signals.
+// log receiving it. SIGUSR2 is not measured here the same way, but upstream
+// has a report of pkill -USR2 killing the app too (cjpais/Handy#512). The
+// whole story is in the README, under Voice input -> Signals.
 //
 // --start-hidden keeps the main window closed; Handy lives in the tray.
 spawn-at-startup "handy" "--start-hidden"

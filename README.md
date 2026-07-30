@@ -726,6 +726,20 @@ hand, in the app:
 The `voice` feature installs [Handy](https://handy.computer), an offline
 speech-to-text app.
 
+On a machine that already had this repository before local post-processing was
+removed, `voice-postprocess` is still sitting in `data.enabled` -- harmless,
+because nothing tests for that key any more. What is not harmless is that the
+package installer here only ever installs: `ollama-vulkan` is still on disk
+and `ollama.service` is still enabled and running, serving a model nothing
+asks it for any more. Clean it up in this order -- the daemon has to still be
+running to answer the first command:
+
+```sh
+ollama rm gemma2:9b
+sudo systemctl disable --now ollama.service
+sudo pacman -Rns ollama-vulkan
+```
+
 Handy runs Whisper through whisper.cpp, whose Linux GPU backend is **Vulkan,
 not CUDA**. A card only needs its normal driver and Vulkan ICD; the `cuda`
 package does nothing for it. `chezmoi init` probes for an NVIDIA card by
@@ -768,8 +782,10 @@ has to end with a full stop. Handy joins `custom_words` with `", "` before
 handing the result to Whisper as `initial_prompt`, so a seed that ends
 mid-list -- because some other word got appended after it -- comes back
 worse-punctuated than sending no prompt at all. This was measured, not
-theorised. Anyone adding a technical term to `custom_words` later has to add
-it *before* the seed, never after.
+theorised. `custom_words` also doubles as a fuzzy find-replace list Handy
+applies to the finished transcript, so anyone adding a technical term later
+has to add it *before* the seed, never after, and should know that whatever
+goes in also rewrites matching text in every transcript from then on.
 
 A separate benchmark built to test the fix -- 39 recordings, 34 of them
 longer than 60 characters -- ran four conditions: turbo and large-v3, each
@@ -810,7 +826,11 @@ the benchmark.
 Handy's own README offers two ways to drive it from a compositor keybind:
 `pkill -USR2` to toggle transcription, `pkill -USR1` to toggle it with
 post-processing. Both are unusable here, and the reason is worth writing down
-because the surface symptom points at the wrong culprit.
+because the surface symptom points at the wrong culprit. What follows is
+measured on SIGUSR1; SIGUSR2 is not repeated here the same way, but upstream
+has its own report of `pkill -USR2` killing the app too
+([#512](https://github.com/cjpais/Handy/issues/512)), so it is not the safe
+fallback it might look like once SIGUSR1's fault is understood.
 
 WebKitGTK, the webview engine Tauri embeds on Linux, uses `SIGUSR1` internally:
 JavaScriptCore suspends its own threads with it so the garbage collector can
@@ -879,10 +899,16 @@ typing fails with no visible error.
 ### Settings
 
 The settings live in `settings_store.json`, which Handy owns and rewrites from
-its own UI, so `run_after_44-handy-settings` patches the ten keys we care
+its own UI, so `run_after_44-handy-settings` patches the thirteen keys we care
 about rather than the repository managing the file. Every one of them sits
 under the top-level `settings` object; writing to the root instead is silent,
 not an error.
+
+`history_limit` is held at 100, which keeps roughly a hundred past recordings
+on disk -- measured at 70 MB for the 76 currently kept. That retention is not
+incidental: it is the corpus every number in [Punctuation](#punctuation) was
+measured against, and the only way to re-measure after the model, the seed or
+these settings change again.
 
 On a fresh machine that file does not exist until Handy has started once, the
 same shape as the Zen profiles: `chezmoi apply`, launch Handy and download a
