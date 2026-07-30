@@ -1,0 +1,100 @@
+#!/bin/bash
+{{- if ne .env "host" }}
+exit 0
+{{- else }}
+{{- if not (has "greeter" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# The login screen is the desktop shell itself, run under greetd instead of
+# sddm. Everything it draws comes out of ~/.config/DankMaterialShell/
+# settings.json -- the same file the running session reads -- so there is no
+# second implementation of the look to keep in step with the first.
+#
+# What this script owns is only what the vendor cannot know about this machine:
+# the keyboard layout on the greeter, when the theme is carried across, and a
+# rescue for a switch that half succeeded.
+#
+# run_after_ rather than run_onchange_: the theme moves independently of this
+# script's own text -- a new wallpaper changes nothing here -- so an onchange
+# script would never re-run and the login screen would stay at whatever it was
+# first seeded with.
+#
+# NOTHING HERE MAY FAIL THE APPLY. There is a working session on screen while
+# this runs; a half-configured login screen is worth a message, never a broken
+# apply. That is enforced by the EXIT trap below, which exits zero whatever
+# happened -- an unguarded sudo under set -e would otherwise take the apply
+# down even though the rescue itself ran.
+
+say()  { echo "==> greeter: $*"; }
+bail() { say "$*"; exit 0; }
+
+OVERRIDES=/etc/greetd/niri_overrides.kdl
+GREETD_CONF=/etc/greetd/config.toml
+GREETER_CACHE=/var/cache/dms-greeter
+
+# ---- the rescue, armed before anything else -----------------------------
+# Exactly one display manager has to be able to start, and that must be checked
+# on every way out of this script. A check at the bottom would be jumped over
+# twice: by set -e when any step below fails, and by the `command -v` bail just
+# after this -- which is precisely the case where a machine already living on
+# greetd has lost the binary greetd runs.
+#
+# Anything other than a literal "enabled" -- masked, static, linked, absent --
+# counts as off. A masked unit does not start, and taking it for a working way
+# in would defeat the whole check.
+unit_enabled() {
+    [[ "$(systemctl is-enabled "$1" 2>/dev/null || true)" == "enabled" ]]
+}
+
+# Only the command line counts. Reading the file as a whole would accept a
+# comment, or a dead line left over from an earlier layout, and call a machine
+# configured when greetd would come up with nothing to run.
+greetd_configured() {
+    grep -qE '^[[:space:]]*command[[:space:]]*=.*dms-greeter' "$GREETD_CONF" 2>/dev/null
+}
+
+check_invariant() {
+    local greetd_ok=no sddm_on=no
+
+    # Three conditions, not one: the unit can be enabled, the binary present and
+    # the config still empty -- which is exactly what a `dms greeter enable`
+    # that died halfway leaves behind, and it boots to a black screen.
+    if unit_enabled greetd.service \
+       && command -v dms-greeter >/dev/null 2>&1 \
+       && greetd_configured; then
+        greetd_ok=yes
+    fi
+    if unit_enabled sddm.service; then
+        sddm_on=yes
+    fi
+
+    if [[ "$greetd_ok" == yes && "$sddm_on" == yes ]]; then
+        say "both greetd and sddm are enabled; switching sddm off"
+        sudo systemctl disable sddm.service || say "!! could not disable sddm"
+    elif [[ "$greetd_ok" == no && "$sddm_on" == no ]]; then
+        say "!! no usable display manager is enabled -- putting sddm back so this machine can still be logged into"
+        # greetd goes first: both units claim the display-manager.service alias,
+        # and enabling sddm while a dead greetd still holds it leaves neither in
+        # charge.
+        if unit_enabled greetd.service; then
+            say "!! greetd is enabled but cannot start; disabling it"
+            sudo systemctl disable greetd.service || say "!! could not disable greetd"
+        fi
+        sudo systemctl enable sddm.service \
+            || say "!! could not enable sddm either; log in from a TTY (Ctrl+Alt+F2) and fix this by hand"
+    elif [[ "$greetd_ok" == no ]]; then
+        say "the greeter is not in charge; this machine still logs in through sddm"
+    fi
+
+    say "display-manager -> $(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || echo none)"
+}
+
+trap 'check_invariant; exit 0' EXIT
+
+command -v dms >/dev/null 2>&1 || bail "dms is not installed, nothing to configure"
+command -v dms-greeter >/dev/null 2>&1 \
+    || bail "dms-greeter is missing (the AUR package did not build); leaving the login screen alone"
+{{- end }}
+{{- end }}
