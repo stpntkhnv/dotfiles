@@ -56,6 +56,13 @@ greetd_configured() {
 }
 
 check_invariant() {
+    # set -e is still in force here: it is a shell-wide setting, not a
+    # per-function one, and the trap that calls this runs this whole command
+    # as one command list. Without turning it off, a non-zero return from any
+    # line below -- or from this function itself -- aborts the trap before it
+    # reaches the forced `exit 0`, which is the one thing this script promises
+    # never to skip.
+    set +e
     local greetd_ok=no sddm_on=no
 
     # Three conditions, not one: the unit can be enabled, the binary present and
@@ -88,7 +95,7 @@ check_invariant() {
         say "the greeter is not in charge; this machine still logs in through sddm"
     fi
 
-    say "display-manager -> $(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || echo none)"
+    say "display-manager -> $(readlink -e /etc/systemd/system/display-manager.service 2>/dev/null || echo none)"
 }
 
 trap 'check_invariant; exit 0' EXIT
