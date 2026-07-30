@@ -424,6 +424,54 @@ grep -c overlay /proc/filesystems
 
 Versions disagree and the third line prints `0` -- reboot, nothing else.
 
+## Login screen
+
+The greeter is the desktop shell itself. Not a theme that resembles it -- the
+same QML, the same components, the same
+`~/.config/DankMaterialShell/settings.json` the running session reads. Wallpaper
+and matugen palette are whatever the desktop currently has, so the machine looks
+like one piece from the password field onwards.
+
+That costs a display manager swap: `greetd` runs `dms-greeter --command niri`
+instead of sddm. sddm stays installed and stays enabled by `30-system`;
+`run_after_45-greeter` is the only thing that switches over, so a machine where
+the AUR package failed to build simply keeps the login screen it had.
+
+`greeter` is a new asked feature, and a stored `data.enabled` never gains a new
+key by itself (see [Adding a program](#adding-a-program)). Left alone, `chezmoi
+apply` installs nothing and says nothing. Add the key by hand first:
+
+```sh
+$EDITOR ~/.config/chezmoi/chezmoi.toml   # add "greeter" to data.enabled
+chezmoi apply
+```
+
+The keyboard is the one thing the greeter cannot work out on its own. The
+wrapper includes `/etc/greetd/niri_overrides.kdl` into the greeter's niri
+config, and the script writes `us,ru` with `ctrl:swapcaps` there -- the third
+copy of the pair `niri/config.kdl` and `30-system` already carry, kept identical
+by hand for the same reason theirs are.
+
+Changing the wallpaper does not reach the login screen on its own. `dms greeter
+sync` copies settings, palette and wallpaper into `/var/cache/dms-greeter`
+rather than linking them, so the login screen catches up at the next `chezmoi
+apply`, or when that command is run by hand.
+
+Two things that are not what they look like:
+
+- **Unticking `greeter` does not put sddm back.** The script becomes a stub and
+  reverts nothing, because which display manager is enabled is systemd state and
+  lives outside chezmoi. Going back is `dms greeter uninstall`, or from a TTY:
+  `sudo systemctl disable greetd && sudo systemctl enable --now sddm`.
+- **The AUR package never updates itself.** `20-packages` runs `yay -S
+  --needed`, which skips what is already installed however far the sources have
+  moved. For a login screen that is a feature rather than a fault; pulling a
+  newer one is `yay -S greetd-dms-greeter-git` by hand.
+
+If the login screen ever fails to come up, the TTY on Ctrl+Alt+F2 is set up for
+exactly this -- `us` with Control under the little finger, see [Keyboard
+layout](#keyboard-layout).
+
 ## Work context isolation
 
 One browser, on the host. Each of its containers routes its egress back into
