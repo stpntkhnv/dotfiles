@@ -282,6 +282,17 @@ for profile in profiles():
         # failure this guard exists to prevent.
         if not isinstance(data, dict):
             raise ValueError("session is not an object")
+        # The two keys both stages reach for. `tabs: null` is enough to raise
+        # inside seed_spaces, and a spaces list holding anything but objects
+        # raises on s.get() -- both outside every try, both fatal to the apply.
+        # Declining the profile rather than filtering the odd entries out: an
+        # unreadable spaces list means the seeding check "is a context already
+        # here" cannot be answered, and answering it wrong overwrites a session.
+        tabs, spaces = data.get("tabs", []), data.get("spaces", [])
+        if not isinstance(tabs, list) or not isinstance(spaces, list):
+            raise ValueError("tabs or spaces is not a list")
+        if any(not isinstance(space, dict) for space in spaces):
+            raise ValueError("spaces holds something other than objects")
     except Exception as exc:
         stage_note("session", f"cannot read the session ({exc}), leaving {profile} alone")
         continue
