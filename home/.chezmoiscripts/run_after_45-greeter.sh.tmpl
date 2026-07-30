@@ -103,5 +103,49 @@ trap 'check_invariant; exit 0' EXIT
 command -v dms >/dev/null 2>&1 || bail "dms is not installed, nothing to configure"
 command -v dms-greeter >/dev/null 2>&1 \
     || bail "dms-greeter is missing (the AUR package did not build); leaving the login screen alone"
+
+# ---- 1. the keyboard on the login screen --------------------------------
+# The wrapper greetd runs (`dms-greeter --command niri`) includes this file into
+# the greeter's niri config whenever it exists -- see
+# /usr/share/quickshell/dms/Modules/Greetd/assets/dms-greeter. It is the seam
+# the vendor put there for local tweaks, and the layout is the only thing that
+# needs to travel through it.
+#
+# These two strings are the THIRD copy: niri/config.kdl and 30-system carry the
+# others, and 30-system already says its own are kept identical by hand.
+# Reading either of them instead would trade a duplicated line for a silent
+# failure mode, and a password field is the worst place to find out that the
+# layout is not the one being typed.
+WANT_KDL='// Managed by chezmoi -- .chezmoiscripts/run_after_45-greeter.sh
+input {
+    keyboard {
+        xkb {
+            layout "us,ru"
+            options "grp:alt_shift_toggle,ctrl:swapcaps"
+        }
+    }
+}'
+
+# Wrapped in a function so the caller can absorb a failure with ||. Left inline,
+# any one of these under set -e would fail the whole apply -- the trap would
+# still run, but the exit status would already be lost.
+write_overrides() {
+    local tmp
+    sudo mkdir -p "$(dirname "$OVERRIDES")"
+    # The temp file goes beside the target rather than under /tmp: /tmp is
+    # usually a filesystem of its own, which turns the replacement into a copy
+    # that can be interrupted half written. One filesystem means the last step
+    # is a rename, and the kernel makes that atomic.
+    tmp=$(sudo mktemp "$OVERRIDES.XXXXXX")
+    printf '%s\n' "$WANT_KDL" | sudo tee "$tmp" >/dev/null
+    sudo chmod 0644 "$tmp"
+    sudo mv -f "$tmp" "$OVERRIDES"
+}
+
+if [[ "$(cat "$OVERRIDES" 2>/dev/null || true)" != "$WANT_KDL" ]]; then
+    say "writing $OVERRIDES"
+    write_overrides \
+        || say "!! could not write $OVERRIDES; the greeter will come up on whatever layout niri defaults to"
+fi
 {{- end }}
 {{- end }}
