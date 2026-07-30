@@ -95,11 +95,26 @@ else
 
     # The three extensions that carry the container boundary. Policies install
     # them, but a policy that never took (wrong path, a GUID that matches no
-    # add-on) fails silently, and a silent failure here means every context
-    # shares one cookie jar.
+    # add-on, an unsigned XPI on a build that wants a signature) fails silently,
+    # and a silent failure here means every context shares one cookie jar.
+    #
+    # extensions.json rather than the presence of the .xpi file: a file left over
+    # from an earlier install says nothing about whether the add-on loaded, and
+    # an appDisabled add-on has a file too. `active` is the field that answers
+    # the actual question. jq is present on any host that has a browser feature.
     for ext in "@testpilot-containers" "{f069aec0-43c5-4bbf-b6b4-df95c4326b98}" "context-proxy@dotfiles.local"; do
-        compgen -G "$zen_root/*/extensions/$ext.xpi" >/dev/null 2>&1 || \
-            steps+=("Zen: extension $ext is missing -- check about:policies, install from addons.mozilla.org if the policy did not take")
+        live=""
+        for db in "$zen_root"/*/extensions.json; do
+            [[ -f "$db" ]] || continue
+            if [[ "$(jq -r --arg id "$ext" \
+                     '[.addons[]? | select(.id == $id and .active == true)] | length' \
+                     "$db" 2>/dev/null || echo 0)" != "0" ]]; then
+                live=1
+                break
+            fi
+        done
+        [[ -n "$live" ]] || \
+            steps+=("Zen: extension $ext is not loaded -- check about:policies and about:addons; 'chezmoi apply' rebuilds the policy and the XPI")
     done
 fi
 
