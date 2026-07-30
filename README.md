@@ -459,11 +459,22 @@ $EDITOR ~/.config/chezmoi/chezmoi.toml   # add "greeter" to data.enabled
 chezmoi apply
 ```
 
-The keyboard is the one thing the greeter cannot work out on its own. The
-wrapper includes `/etc/greetd/niri_overrides.kdl` into the greeter's niri
-config, and the script writes `us,ru` with `ctrl:swapcaps` there -- the third
-copy of the pair `niri/config.kdl` and `30-system` already carry, kept identical
-by hand for the same reason theirs are.
+The keyboard used to be the one thing the greeter could not work out on its
+own, and the script carried a third copy of the layout into
+`/etc/greetd/niri_overrides.kdl` to cover for it -- alongside the copies
+`niri/config.kdl` and `30-system` already carry. Measured on the real machine,
+that turned out to be both unnecessary and actively risky: `dms greeter sync`
+already reads the layout straight out of the live `~/.config/niri/config.kdl`
+and writes it into `/etc/greetd/niri/dms.kdl`, so there is no third copy to
+keep in step at all. Worse, the wrapper includes the override file after that
+generated one, so a stray copy left two `input` blocks in the greeter's niri
+config -- `niri validate` accepts that without complaint, and if its
+last-wins semantics apply to a duplicated section, the second block silently
+dropped `numlock` along with everything else DMS carried across. The script no
+longer writes that file (and removes the stale one it finds, by its own
+`Managed by chezmoi` marker); instead it checks `/etc/greetd/niri/` for an
+`xkb` block after every sync and says so loudly if it finds none, because a
+wrong layout is otherwise only discovered at the password field.
 
 Changing the wallpaper does not reach the login screen on its own. `dms greeter
 sync` copies settings, palette and wallpaper into `/var/cache/dms-greeter`
