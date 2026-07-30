@@ -41,22 +41,20 @@ fi
 {{- if has "voice" .enabled }}
 # Handy pulls models through the HuggingFace hub cache, not into its own
 # models/ directory -- that one stays empty even with a model installed, so
-# checking it would warn on every apply. Look for the downloaded weights.
-if ! compgen -G "$HOME/.cache/huggingface/hub/models--*/snapshots/*/*.gguf" >/dev/null 2>&1; then
-    steps+=("Handy: no model downloaded -- run 'handy' and pick one in Settings -> Model")
+# checking it would warn on every apply.
+#
+# The pinned model is matched by name and not by a glob over any .gguf: a
+# machine still holding only the old turbo weights is exactly the case that
+# used to read as "a model is present" while dictation refused to start.
+# Handy fails loudly there -- load_model(...) failed: Model not downloaded --
+# so the cost of missing this is one dead dictation, not silent drift.
+if ! compgen -G "$HOME/.cache/huggingface/hub/models--handy-computer--whisper-large-v3-gguf/snapshots/*/whisper-large-v3-Q8_0.gguf" >/dev/null 2>&1; then
+    steps+=("Handy: the pinned model is missing -- run 'handy' and download Whisper Large v3 under Settings -> Model")
 fi
-{{- end }}
-{{- if has "voice-postprocess" .enabled }}
-# Handy writes settings_store.json on its first start, so on a fresh machine the
-# post-processing patch had nothing to patch and quietly did nothing.
+# Handy writes settings_store.json on its first start, so on a fresh machine
+# 44-handy-settings had nothing to patch and quietly did nothing.
 if [[ ! -f "$HOME/.local/share/com.pais.handy/settings_store.json" ]]; then
-    steps+=("Handy: never started, so LLM cleanup is unconfigured -- run 'handy', then 'chezmoi apply' again")
-fi
-if command -v ollama &>/dev/null && ! ollama list 2>/dev/null | awk '{print $1}' | grep -qx "gemma2:9b"; then
-    steps+=("Voice cleanup: no weights, dictation still arrives raw -- 'ollama pull gemma2:9b'")
-fi
-if ! systemctl is-active --quiet ollama.service; then
-    steps+=("Voice cleanup: model server down -- 'sudo systemctl start ollama.service'")
+    steps+=("Handy: never started, so its settings are unconfigured -- run 'handy', then 'chezmoi apply' again")
 fi
 {{- end }}
 {{- if has "bitwarden" .enabled }}

@@ -1,0 +1,181 @@
+#!/bin/bash
+{{- if not (has "voice" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Handy's settings file belongs to the application: it is read at startup and
+# rewritten whole whenever anything changes in its own UI. So chezmoi must not
+# own it as a target -- the two would overwrite each other forever, the same
+# mistake the README documents for the DMS-generated niri includes. What happens
+# here instead is a jq patch of the keys we care about.
+#
+# run_after_ rather than run_onchange_: an onchange script only re-runs when its
+# own rendered text changes, so a setting clobbered from Handy's UI would never
+# be restored. This one re-asserts on every apply, and no-ops when nothing
+# drifted, so the restart below stays rare.
+#
+# The gate is `voice`, not a post-processing feature. Three of these keys
+# (paste_method, external_script_path, overlay_style) have nothing to do with
+# any model, and while they sat behind a narrower gate a machine with plain
+# `voice` got bin/handy-type.sh deployed and was never told to use it -- which
+# is to say it silently dropped characters on Cyrillic.
+
+STORE="{{ .chezmoi.homeDir }}/.local/share/com.pais.handy/settings_store.json"
+MODEL="handy-computer/whisper-large-v3-gguf/whisper-large-v3-Q8_0.gguf"
+
+# The file does not exist until Handy has been launched once, which on a fresh
+# machine has not happened yet. Nothing to do then; run_after_zz-next-steps says
+# what is missing. Failing here would take the whole apply down with set -e.
+if [[ ! -f "$STORE" ]]; then
+    echo "Handy has not run yet, so there is no settings file to configure."
+    exit 0
+fi
+
+# Whisper decides at the first token of every 30-second decode window whether it
+# is writing punctuated prose, and holds that choice to the end of the window.
+# The only lever Handy exposes is whisper's initial_prompt, and its only source
+# is this list, joined with ", ". Two consequences, both measured:
+#
+#   the seed must READ like the wanted output -- capitals, commas, a final full
+#   stop, and Latin terms inside Russian, because the register being pinned is
+#   Russian-with-English and not Russian;
+#
+#   the seed must come LAST. A prompt that ends mid-list came back lowercase and
+#   almost unpunctuated, worse than sending no prompt at all.
+SEED="Смотри, я поправил конфиг chezmoi и перезапустил distrobox: теперь Zen ходит через свой SOCKS-прокси, а Claude Code его не видит."
+
+# custom_words is not overwritten. The same list is where rare technical terms
+# get taught to Handy, and assigning a one-element list would wipe them on the
+# next apply -- the script would be revoking its own rule. The filter below
+# drops anything containing a space rather than matching $seed's exact text:
+# Handy's own UI rejects a custom_words entry with a space in it
+# (CustomWords.tsx:22-28), so a multi-word entry in this list can only be one
+# we wrote. Matching on shape instead of on today's SEED string means editing
+# SEED does not leave the old wording behind as a second, permanent entry --
+# every seed this script has ever written is swept out the same way, not just
+# the one that happens to match the current text.
+#
+# post_process_enabled is turned off explicitly rather than left alone: the
+# server it points at is gone, and Handy would go on paying a connection timeout
+# on every single dictation. The selected prompt id is cleared only when it
+# names the prompt being removed, so re-enabling post-processing from the UI
+# later does not start from a dangling reference. post_process_provider_id,
+# post_process_models and the "custom" provider's base_url get the same
+# treatment below: these three are this repository's leftovers from the
+# removed server, not Handy's own defaults, so each is cleared only while it
+# still holds the exact value this script wrote -- a user who has since
+# pointed any of them at something real keeps it.
+patch() {
+    jq --arg model "$MODEL" --arg seed "$SEED" '
+        .settings.selected_model = $model
+        | .settings.custom_words =
+            [(.settings.custom_words // [])[] | select(test(" ") | not)] + [$seed]
+        | .settings.history_limit = 100
+        | .settings.experimental_enabled = true
+        | .settings.post_process_enabled = false
+        | .settings.post_process_prompts =
+            [(.settings.post_process_prompts // [])[] | select(.id != "dotfiles_ru_cleanup")]
+        | .settings.post_process_selected_prompt_id =
+            (if .settings.post_process_selected_prompt_id == "dotfiles_ru_cleanup"
+             then null
+             else .settings.post_process_selected_prompt_id
+             end)
+        | .settings.post_process_provider_id =
+            (if .settings.post_process_provider_id == "custom"
+             then null
+             else .settings.post_process_provider_id
+             end)
+        | .settings.post_process_models =
+            (if (.settings.post_process_models.custom // null) == "gemma2:9b"
+             then (.settings.post_process_models | del(.custom))
+             else .settings.post_process_models
+             end)
+        | .settings.post_process_providers =
+            [(.settings.post_process_providers // [])[] |
+                if .id == "custom" and .base_url == "http://127.0.0.1:11434/v1"
+                then .base_url = ""
+                else .
+                end]
+        | .settings.paste_method = "external_script"
+        | .settings.external_script_path = "{{ .chezmoi.homeDir }}/bin/handy-type.sh"
+        | .settings.overlay_style = "none"
+    ' "$1"
+}
+
+# Whether Handy has been stopped for the swap, so cleanup knows whether it owes
+# a relaunch. Defined and trapped before `mktemp` runs, not after: `mktemp`
+# already creates the temp file on disk, and a failure in `chmod --reference`
+# (or a signal) between that and installing the trap would leak a zero-byte
+# `.settings_store.XXXXXX` in Handy's data directory with nothing left to clean
+# it up.
+HANDY_STOPPED=0
+cleanup() {
+    rm -f "${NEW:-}"
+    if [[ "$HANDY_STOPPED" -eq 1 ]]; then
+        # The relaunch inherits this script's own environment. Over SSH against
+        # a live desktop session that has no WAYLAND_DISPLAY/DISPLAY of its own,
+        # a blind relaunch would spawn a Handy that cannot reach the compositor
+        # and fail with nothing on screen. Saying so beats trying anyway.
+        if [[ -n "${WAYLAND_DISPLAY:-}" || -n "${DISPLAY:-}" ]]; then
+            (setsid handy --start-hidden >/dev/null 2>&1 &) || true
+        else
+            echo "No graphical session in this shell (WAYLAND_DISPLAY/DISPLAY unset); not relaunching Handy -- start it by hand."
+        fi
+    fi
+}
+trap cleanup EXIT
+
+# Build the whole result BEFORE touching anything. A malformed settings file has
+# to fail here, with Handy still running and the file untouched -- not after the
+# process has been killed. `set -e` does not fire inside an `if` condition, so a
+# jq failure there would masquerade as "settings differ" and lead straight into
+# the destructive branch.
+#
+# The temp file has to live beside $STORE, not under the default /tmp: /tmp is
+# typically its own filesystem (tmpfs on most installs), and replacing a file
+# with one from a different filesystem means a copy, not a rename. A copy can
+# be interrupted mid-write and leave a truncated settings_store.json behind --
+# every later run then dies at `patch "$STORE"` on invalid JSON, and Handy's
+# settings are gone. Same directory means the final step is a rename on one
+# filesystem, which the kernel makes atomic: it lands whole or not at all.
+NEW="$(mktemp "$(dirname "$STORE")/.settings_store.XXXXXX")"
+# mktemp creates the file 0600; carry $STORE's actual mode forward instead so
+# Handy sees the same permissions it wrote itself.
+chmod --reference="$STORE" "$NEW"
+
+patch "$STORE" > "$NEW"
+
+if diff -q <(jq -S . "$NEW") <(jq -S . "$STORE") >/dev/null 2>&1; then
+    exit 0
+fi
+
+echo "Configuring Handy (model: $MODEL)."
+
+# Stop Handy only if it is actually running, and only then promise cleanup a
+# relaunch: `pkill || true` alone cannot tell "no such process" from "killed
+# it", so a user who had quit Handy on purpose got it started behind their
+# back by the trap. Then wait for it to actually be gone -- Handy links
+# tauri's single-instance plugin, so relaunching while the old process is
+# still dying gets the new one rejected by it, and the apply would end with
+# no Handy running at all.
+if pgrep -x handy >/dev/null; then
+    HANDY_STOPPED=1
+    pkill -x handy || true
+    for _ in $(seq 1 20); do
+        pgrep -x handy >/dev/null || break
+        sleep 0.5
+    done
+    if pgrep -x handy >/dev/null; then
+        # A stubborn Handy must not fail the whole `chezmoi apply`: leave
+        # settings_store.json exactly as Handy last wrote it and let the next
+        # apply retry, rather than exiting non-zero over a process that
+        # simply will not die in time.
+        echo "Handy did not stop within 10s; leaving settings_store.json untouched. The next apply will retry."
+        HANDY_STOPPED=0
+        exit 0
+    fi
+fi
+
+mv -f "$NEW" "$STORE"
+{{- end }}
