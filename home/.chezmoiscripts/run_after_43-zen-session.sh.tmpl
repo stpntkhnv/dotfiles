@@ -9,16 +9,16 @@ set -euo pipefail
 # than run_onchange_: what it does depends on the state of the profile, not on
 # the state of this file, and it has to re-evaluate that on every apply.
 #
-# Every profile goes through stages that want opposite things: seeding wants an
-# untouched profile, routing wants a lived-in one. So a refusal ends its own
-# stage and the run carries on, and every line says which stage it came from.
+# Every profile goes through two stages, and a refusal ends its own stage while
+# the run carries on, so every line says which stage it came from.
 #
-# Stage 1, the seeding, is deliberately conservative. All of it lives in
-# zen-sessions.jsonlz4, which also holds every open tab, and the format is Zen's
-# internal one with no compatibility promise. So it writes ONLY into an
-# untouched profile and refuses in every other case:
-#   * any open tab       -- not an untouched profile
-#   * a space already named after a context -- already done, or done by hand
+# Stage 1, the seeding, appends and never replaces. It used to write only into a
+# profile with no tabs at all, which sounded careful and was in fact dead code:
+# measured on 2026-07-30, the first launch of Zen -- the very step that creates
+# the containers this stage needs -- leaves four tabs and a default space behind,
+# so the guard fired on every real machine and the seeding had never run once.
+# Appending removes the reason for the guard, and what is left is the honest
+# check: a context whose space already exists is skipped by name.
 # A running Zen is the single refusal that still ends the whole script: it
 # rewrites these files from memory when it exits, so nothing written now would
 # survive.
@@ -120,23 +120,32 @@ def stage_note(stage, reason):
 
 
 def seed_spaces(profile, ids, data):
-    """Stage 1. True when the spaces were written into data, False on refusal.
+    """Stage 1. True when spaces were added to data, False when there was
+    nothing to add.
 
-    The caution is not paranoia: zen-sessions.jsonlz4 also holds every open tab
-    and the format is Zen's internal one with no compatibility promise, so
-    writing is allowed only into an untouched profile. A refusal returns rather
-    than ending the process, because stage 2 wants exactly the lived-in profile
-    that this stage declines to touch.
+    This appends and never replaces, which is a correction of the original
+    design rather than a relaxation of it. The old rule was "write only into an
+    untouched profile, because this file also holds every open tab", and it was
+    measured on 2026-07-30 to be unreachable: launching Zen once, which is the
+    step that creates the containers this stage needs, leaves four tabs behind
+    (about:blank, the options page of an extension, and two zen-browser.app
+    pages) plus a default space called "Space". So the guard fired every time
+    and the seeding had never once run on a real machine.
+
+    Appending removes the reason for the guard. Nothing existing is rewritten:
+    our spaces go after whatever is there, our essentials are added to the tab
+    list, and a context whose space already exists is skipped by name. That also
+    makes the stage idempotent and useful on a lived-in profile, which is where
+    stage 2 lives anyway.
     """
-    if data.get("tabs"):
-        stage_note("spaces", "profile already has tabs, leaving the session alone")
-        return False
-    if any(s.get("name") in CONTEXTS for s in data.get("spaces", [])):
-        stage_note("spaces", "spaces already exist")
+    have = {s.get("name") for s in data.get("spaces", [])}
+    todo = [entry for entry in SEED if entry["name"] not in have]
+    if not todo:
+        stage_note("spaces", "every context already has a space")
         return False
 
-    spaces, tabs = [], []
-    for entry in SEED:
+    spaces, tabs = list(data.get("spaces", [])), list(data.get("tabs", []))
+    for entry in todo:
         name = entry["name"]
         space_uuid = "{%s}" % uuid.uuid4()
         context_id = ids[name]
@@ -171,8 +180,11 @@ def seed_spaces(profile, ids, data):
                 "requestedIndex": 0,
             })
 
+    added_spaces = len(todo)
+    added_tabs = len(tabs) - len(data.get("tabs", []))
     data["spaces"] = spaces
     data["tabs"] = tabs
+    stage_note("spaces", f"added {added_spaces} spaces and {added_tabs} essentials")
     return True
 
 
@@ -307,7 +319,6 @@ for profile in profiles():
         with open(tmp, "wb") as fh:
             fh.write(mozlz4_compress(payload))
         os.replace(tmp, session)
-        print(f"==> Zen spaces seeded: {len(data['spaces'])} spaces, {len(data['tabs'])} essentials")
         touched = True
 
     # The space map comes from data rather than from the file on disk: when
@@ -317,6 +328,6 @@ for profile in profiles():
                            for s in data.get("spaces", []) if s.get("name")})
 
 if not touched:
-    stage_note("spaces", "no untouched profile to seed")
+    stage_note("spaces", "nothing to add, every profile already has its spaces")
 PY
 {{- end }}
