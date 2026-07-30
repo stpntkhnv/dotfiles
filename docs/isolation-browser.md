@@ -105,12 +105,22 @@ sequenceDiagram
 браузер читает при старте и исполняет сам, без диалогов и подтверждений.
 
 Файл называется `policies.json`, и первое, что здесь легко сделать неправильно:
-каталог, куда его класть, не литеральный `/etc/firefox/`. Он выводится из
-внутреннего имени приложения — `/etc/<MOZ_APP_NAME>/policies/`. У Zen оно
-`zen` (проверено на этой машине: `grep RemotingName /opt/zen-browser-bin/application.ini`
-→ `RemotingName=zen` — именно это поле пишется в `application.ini` из
-собранного `MOZ_APP_NAME`), значит каталог `/etc/zen/policies/policies.json`,
-а `/etc/firefox/policies/` браузер Zen вообще не открывает. Ошибка здесь
+каталог, куда его класть, не литеральный `/etc/firefox/`. Путь строится в две
+ступени движком Gecko, а не берётся откуда-то литералом: `_getLocalConfigurationFile`
+(searchfox, `toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs`)
+берёт каталог по ключу `SysConfD` (`Services.dirsvc.get("SysConfD", ...)`) и
+дописывает к нему `policies/policies.json`; сам ключ `SysConfD` разворачивает в
+реальный путь функция `GetUnixSystemConfigDir` (searchfox,
+`xpcom/io/SpecialSystemDirectory.cpp`) — она берёт `/etc`, приписывает к нему
+**имя приложения в нижнем регистре**, а имя приложения — это `nsIXULAppInfo.name`,
+то есть поле `Name` из `application.ini` (`XREAppData.name`), а не `RemotingName`,
+как можно было бы подумать по аналогии с ключом реестра на Windows. У Zen оба
+поля совпадают после приведения к нижнему регистру (проверено на этой машине:
+`grep -E '^(Name|RemotingName)=' /opt/zen-browser-bin/application.ini` →
+`Name=Zen` и `RemotingName=zen`), поэтому практического расхождения нет, но
+причина каталога `/etc/zen/policies/policies.json` — именно `Name`, лишь
+случайно совпадающий с `RemotingName` в этой сборке. `/etc/firefox/policies/`
+браузер Zen вообще не открывает. Ошибка здесь
 **молчаливая**: положи файл не в тот каталог — браузер стартует как ни в чём
 не бывало, не пишет ни строки в лог, и просто не имеет ни одного из
 перечисленных в политике расширений. На этой машине оба каталога существуют
@@ -190,11 +200,14 @@ cat /etc/firefox/policies/policies.json
 (searchfox: `toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs`),
 читает `Containers.Default` из активной политики и присваивает `userContextId`
 последовательно, 1..N, в порядке массива — но **только если у профиля ещё
-нет своего `containers.json`**: чтение файла (метод `load()`) в случае ошибки
-`NotFoundError` откатывается на `resetDefault()`, который и берёт список из
-политики; если файл уже существует и читается, политика для контейнеров не
-делает ничего. Отсюда: новая машина получает контейнеры сама, а работающая
-машина не переписывается на каждый `apply`.
+нет своего `containers.json`**: чтение файла (метод `load()`) при любой ошибке
+чтения откатывается на `resetDefault()`, который и берёт список из политики
+(`loadError` отдельно проверяет, что ошибка — именно `NotFoundError`, только
+чтобы решить, писать ли её в консоль; на откат к `resetDefault()` это не
+влияет — он срабатывает при любой ошибке чтения, включая `NotFoundError` для
+ещё не созданного файла); если файл уже существует и читается, политика для
+контейнеров не делает ничего. Отсюда: новая машина получает контейнеры сама, а
+работающая машина не переписывается на каждый `apply`.
 
 На практике это значит, что реальные `userContextId` на работающем профиле
 почти никогда не идут 1, 2, 3, 4 подряд — они текут вместе с историей профиля
@@ -219,8 +232,8 @@ cat /etc/firefox/policies/policies.json
 ### Расширение context-proxy: сборка и подмена прокси — скрипт 41
 
 Назначение прокси конкретному контейнеру Multi-Account Containers умеет
-делать сама, руками, через «Advanced proxy settings» — но там два тихих
-отказа, ни один из которых ничего не говорит при ошибке:
+делать сама, руками, через «Advanced proxy settings» — но там два отказа,
+и ни один не называет настоящую причину:
 
 1. Строка `socks5://…` не парсится вообще. Разбор происходит в
    `src/js/proxified-containers.js` (репозиторий `mozilla/multi-account-containers`,
@@ -228,7 +241,19 @@ cat /etc/firefox/policies/policies.json
    `/(?<type>(https?)|(socks4?)):\/\/…/` — группа `type` допускает только
    `http`, `https`, `socks` и `socks4`. `socks5` не совпадает ни с одной
    альтернативой, `exec` возвращает `null`, `parseProxy` — `false`, и поле
-   просто не сохраняется, без единого сообщения об ошибке.
+   не сохраняется. Сообщение при этом действительно показывается —
+   `.proxy-validity`/`invalidProxyAlert`, «Please enter a valid proxy URL»
+   (`src/css/popup.css`, правило `.invalid .proxy-validity`; текст —
+   `mozilla-l10n/multi-account-containers-l10n`, `en/messages.json`) — но оно
+   универсальное и не говорит, что дело в цифре «5»: то же сообщение
+   выскочит и на опечатку, и на пустой хост, и на схему `socks5`. Кто не
+   знает регулярку заранее, тот не узнает и после ошибки, что `socks://`
+   без цифры — уже SOCKS5 в терминах этого API, и достаточно её убрать.
+   Ровно эту путаницу поймал `mozilla/multi-account-containers#2669` —
+   репортёр закрыт с ответом мейнтейнера `bakulf`: «This bug is invalid.
+   The right scheme for Socks5 URLs is `socks` and not `socks5`» — то есть
+   для проекта это не баг, а название схемы, совпадающее с ожиданием только
+   у тех, кто уже читал код или этот тикет.
 2. Поле прокси в интерфейсе не появляется вовсе, пока не выдано отдельное
    **необязательное** право `proxy` (оно в `optional_permissions`, а не в
    `permissions`, манифест расширения). Пока право не выдано, панель
@@ -333,10 +358,11 @@ zen-browser-bin 1.21.9b-1), и это снимает *обязательност
 
 Конфиг зашит внутрь XPI, а не приходит отдельной политикой `3rdparty` через
 `storage.managed`: на одну движущуюся часть меньше, а файл и так пересобирается
-заново при каждом `apply`. Это работает потому, что `Policies.sys.mjs`
-(searchfox, `browser/components/enterprisepolicies/Policies.sys.mjs`,
-функция `installAddonFromURL`) специально исключает адреса `file:` из
-проверки «тот же аддон — не переустанавливать»:
+заново при каждом `apply`. Это работает потому, что функция
+`installAddonFromURL` специально исключает адреса `file:` из проверки «тот же
+аддон — не переустанавливать»; функция вызывается из `Policies.sys.mjs`, а
+находится в отдельном модуле-помощнике (searchfox,
+`toolkit/components/enterprisepolicies/PoliciesHelpers.sys.mjs`):
 
 ```js
 if (
@@ -617,18 +643,23 @@ for a in d['addons']:
 ## Почему именно так
 
 **Каталог политики выводится из имени приложения, а не берётся литералом** —
-потому что так устроен сам движок Gecko: у каждой форк-сборки Firefox своё
-`MOZ_APP_NAME`, и всё, что рассчитывает на буквальный `/etc/firefox/`, тихо
-промахивается мимо любого форка, включая Zen. Официальная документация
-Mozilla (`firefox-admin-docs.mozilla.org`) при этом сама называет только
+потому что так устроен сам движок Gecko: `GetUnixSystemConfigDir` берёт `/etc`
+и приписывает к нему поле `Name` из `application.ini` конкретной сборки, в
+нижнем регистре, а у каждой форк-сборки Firefox это поле своё — и всё, что
+рассчитывает на буквальный `/etc/firefox/`, тихо промахивается мимо любого
+форка, включая Zen. Официальная документация Mozilla
+(`firefox-admin-docs.mozilla.org`) при этом сама называет только
 `/etc/firefox/policies` — про форки в ней ни слова, и в этом ровно источник
 путаницы: за чужой браузер это можно узнать только чтением его
-`application.ini` или экспериментом. Запись — [workarounds.md](workarounds.md).
+`application.ini`, чтением исходника Gecko или экспериментом. Запись —
+[workarounds.md](workarounds.md).
 
 **Почему не поручить прокси Multi-Account Containers, раз оно само это
-умеет** — потому что там ровно два тихих отказа без единого сообщения об
-ошибке (строка не того протокола, поле спрятано без права) — разобрано выше.
-Запись — [workarounds.md](workarounds.md).
+умеет** — потому что там ровно два отказа, ни один из которых не называет
+настоящую причину (строка не того протокола гасится общим «invalid proxy
+URL» без намёка, что дело в `5`; поле спрятано без права, и об этом праве
+ничего не сказано, пока не дойдёшь до панели) — разобрано выше. Запись —
+[workarounds.md](workarounds.md).
 
 **Почему конфиг зашит в XPI, а не идёт отдельной политикой `storage.managed`** —
 одной движущейся частью меньше. Это решение опирается на то, что
@@ -684,9 +715,14 @@ Mozilla (`firefox-admin-docs.mozilla.org`) при этом сама называ
   этим документом.
 - `firefox-admin-docs.mozilla.org/reference/policies/extensionsettings/` —
   официальное описание `force_installed`/`normal_installed`.
-- `searchfox.org/mozilla-central/source/browser/components/enterprisepolicies/Policies.sys.mjs` —
+- `searchfox.org/mozilla-central/source/toolkit/components/enterprisepolicies/EnterprisePoliciesParent.sys.mjs` —
+  метод `_getLocalConfigurationFile`, каталог `SysConfD` плюс `policies/policies.json`.
+- `searchfox.org/mozilla-central/source/xpcom/io/SpecialSystemDirectory.cpp` —
+  функция `GetUnixSystemConfigDir`, откуда `SysConfD` реально становится
+  `/etc/<имя приложения в нижнем регистре>`.
+- `searchfox.org/mozilla-central/source/toolkit/components/enterprisepolicies/PoliciesHelpers.sys.mjs` —
   функция `installAddonFromURL`, исключение `file:` из «тот же аддон — не
-  переустанавливать».
+  переустанавливать» (вызывается из `browser/components/enterprisepolicies/Policies.sys.mjs`).
 - `searchfox.org/mozilla-central/source/toolkit/components/contextualidentity/ContextualIdentityService.sys.mjs` —
   метод `init()`, назначение `userContextId` из политики на чистом профиле.
 - `searchfox.org/mozilla-central/source/browser/components/enterprisepolicies/helpers/BookmarksPolicies.sys.mjs` —
@@ -694,7 +730,14 @@ Mozilla (`firefox-admin-docs.mozilla.org`) при этом сама называ
 - `github.com/mozilla/multi-account-containers` — `src/js/proxified-containers.js`
   (`parseProxy`, версия на 2026-07-30), `src/js/popup.js` (панель
   `advanced-proxy-settings-panel`), `src/manifest.json` (`proxy` в
-  `optional_permissions`), wiki `Permissions`.
+  `optional_permissions`), `src/css/popup.css` (правило `.invalid .proxy-validity`),
+  wiki `Permissions`.
+- `github.com/mozilla/multi-account-containers/issues/2669` — «Cannot use
+  socks5:// URIs», закрыт мейнтейнером `bakulf` как invalid: правильная схема
+  — `socks`, не `socks5`.
+- `github.com/mozilla-l10n/multi-account-containers-l10n`, `en/messages.json` —
+  тексты `invalidProxyAlert` («Please enter a valid proxy URL») и
+  `additionalPermissionNeeded`, реально показываемые в панели прокси.
 - `github.com/honsiorovskyi/open-url-in-container`, тег `1.0.3` — исходники
   `opener.js`/`parser.js` без проверки подписи, `manifest.json` без
   `options_ui`; ветка `2.0.0alpha10` того же репозитория — README про
