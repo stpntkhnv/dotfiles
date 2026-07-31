@@ -116,10 +116,9 @@ bookmarks_demo:
 # правилами не покрываются никогда, по той же причине, по которой на них нельзя
 # ставить правила Multi-Account Containers -- см. docs/isolation-links.md,
 # раздел «Правило "Always Open This Site in…"».
-# Два адреса ещё без организации, потому что она пока не названа: DevOps у
-# digi3 и Teams у stellium (нужен tenantId, как digi3.de ниже). Заменить url --
-# и всё: политика сверяет закладки по адресу, старая уйдёт, новая придёт сама
-# на следующем старте браузера.
+# Один адрес ещё без организации: Teams у stellium (нужен tenantId, как
+# digi3.de ниже). Заменить url -- и всё: политика сверяет закладки по адресу,
+# старая уйдёт, новая придёт сама на следующем старте браузера.
 contexts:
   - name: digi3
     socks: 11081
@@ -128,7 +127,7 @@ contexts:
       - title: Teams
         url: https://teams.microsoft.com/v2/?tenantId=digi3.de
       - title: Azure DevOps
-        url: https://dev.azure.com
+        url: https://dev.azure.com/digi3
       - title: Azure Portal
         url: https://portal.azure.com/#home
   - name: stellium
