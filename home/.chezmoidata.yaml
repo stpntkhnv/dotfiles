@@ -153,6 +153,8 @@ contexts:
     bookmarks:
       - title: GitHub
         url: https://github.com
+      - title: Linear
+        url: https://linear.app
 
 # Контекст без работы: единственный контейнер Zen, у которого нет ни прокси, ни
 # distrobox-контейнера, ни моста на порт. Трафик уходит прямо с хоста. Сюда же
