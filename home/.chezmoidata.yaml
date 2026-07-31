@@ -137,10 +137,14 @@ contexts:
     bookmarks:
       - title: Teams
         url: https://teams.microsoft.com/v2/?tenantId=stellium.consulting
+# Две ссылки DevOps -- это две ДИРЕКТОРИИ (тенанта), а не две организации:
+# внутри тенанта организации переключаются в один клик, между тенантами --
+# только новым входом. OCDIO живёт в том же тенанте, что AI-Factory, поэтому
+# отдельной ссылки не несёт.
       - title: DevOps AI-Factory
         url: https://dev.azure.com/tsacc-msfwex53-01-AI-Factory/
-      - title: DevOps OCDIO
-        url: https://dev.azure.com/tsacc-msfwex01-76-OCDIO/
+      - title: DevOps Stellium
+        url: https://dev.azure.com/stelliumsarl/jti
       - title: Azure Portal
         url: https://portal.azure.com/#home
       - title: Harvest
