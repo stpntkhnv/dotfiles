@@ -491,11 +491,14 @@ stop-the-world GC. Handy регистрирует свой обработчик 
   (`sasha01zuev`, 2026-07-28) насчитало **10 уничтоженных диктовок из 26 за
   одно рабочее утро** — 38% — каждая обрывалась через 122–123 секунды после
   начала записи, что совпадает с формулой задержки GC JSC, которую тот же
-  тред цитирует из предложенного фикса. Фикс —
+  тред цитирует из предложенного фикса. Фикс изначально шёл через
   [cjpais/Handy#1267](https://github.com/cjpais/Handy/pull/1267), «fix(linux):
   replace SIGUSR1/SIGUSR2 with SIGRTMIN+1/+2 to avoid WebKit GC conflict» —
-  открыт с 2026-04-10, на дату проверки (2026-07-31) всё ещё не смёржен и не
-  входит в `0.9.4`.
+  открыт с 2026-04-10, закрыт 2026-07-31 без слияния (`merged: false`), в
+  пользу нового [cjpais/Handy#1824](https://github.com/cjpais/Handy/pull/1824),
+  «remove sigusr1 on linux», открытого тем же днём с телом «closing #1267 in
+  favor of this pr» — на дату проверки (2026-07-31) ни одна из двух версий
+  фикса ещё не входит в `0.9.4`.
 
 **`SIGUSR2` падает отдельно, по другой причине.** Независимо от истории с
 `SIGUSR1`, апстрим держит отдельный открытый баг именно на `pkill -USR2`:
@@ -648,7 +651,8 @@ Depends On      : alsa-lib  cairo  gcc-libs  gdk-pixbuf2  glib2  glibc  gtk3  gt
   модели после него), `66d3ecd` (ожидание смерти Handy и чистка следов
   ollama).
 - Апстрим Handy: [issues/1660](https://github.com/cjpais/Handy/issues/1660),
-  [pull/1267](https://github.com/cjpais/Handy/pull/1267),
+  [pull/1267](https://github.com/cjpais/Handy/pull/1267) (закрыт без слияния,
+  заменён на [pull/1824](https://github.com/cjpais/Handy/pull/1824)),
   [issues/512](https://github.com/cjpais/Handy/issues/512),
   [issues/949](https://github.com/cjpais/Handy/issues/949),
   [issues/1611](https://github.com/cjpais/Handy/issues/1611),
