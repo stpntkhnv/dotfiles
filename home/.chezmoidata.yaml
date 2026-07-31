@@ -27,20 +27,20 @@
 #
 # The order of features here is the order of lines in the checklist.
 
-# Bookmarks placed in every context's toolbar folder, with that context baked
-# into the link. Shared addresses belong here rather than in an "Always Open in
-# Container" rule: a domain rule PULLS a link into one container, so a rule on
-# teams.microsoft.com for one job would swallow the sign-in for another. A
-# bookmark carries its container and pulls nothing.
+# Закладки, которые кладутся в папку КАЖДОГО пространства, включая home, с
+# контейнером, вшитым в ссылку. Здесь только то, что нужно везде: адрес один,
+# контейнеров четыре, логинов четыре -- переключает не человек, а контейнер в
+# ссылке. Правило "Always Open in Container" для такого не годится: правило на
+# домен ВЫТАСКИВАЕТ ссылку в один контейнер, то есть calendar.google.com одной
+# работы съел бы календарь другой. Закладка несёт свой контейнер и не тащит
+# ничего.
 #
-# Per-context additions go under `bookmarks` on the context itself.
+# Рабочие адреса живут не здесь, а в `bookmarks` на самом контексте.
 bookmarks:
-  - title: Teams
-    url: https://teams.microsoft.com
-  - title: Azure DevOps
-    url: https://dev.azure.com
-  - title: GitHub
-    url: https://github.com
+  - title: Gmail
+    url: https://mail.google.com
+  - title: Calendar
+    url: https://calendar.google.com
 
 # Второй механизм закладок, отдельный от `bookmarks:` выше, и разница между ними
 # не косметическая.
@@ -116,15 +116,44 @@ bookmarks_demo:
 # правилами не покрываются никогда, по той же причине, по которой на них нельзя
 # ставить правила Multi-Account Containers -- см. docs/isolation-links.md,
 # раздел «Правило "Always Open This Site in…"».
+# Адреса Teams, DevOps и Portal пока базовые: после входа сервис сам уводит в
+# свою организацию. Когда появятся ссылки с организацией в адресе -- заменить
+# url здесь; политика сверяет закладки по адресу, старая уйдёт, новая придёт
+# сама на следующем старте браузера.
 contexts:
   - name: digi3
     socks: 11081
     route: true
+    bookmarks:
+      - title: Teams
+        url: https://teams.microsoft.com
+      - title: Azure DevOps
+        url: https://dev.azure.com
+      - title: Azure Portal
+        url: https://portal.azure.com
+      - title: GitHub
+        url: https://github.com
   - name: stellium
     socks: 11082
     route: true
+    bookmarks:
+      - title: Teams
+        url: https://teams.microsoft.com
+      - title: Azure DevOps
+        url: https://dev.azure.com
+      - title: Azure Portal
+        url: https://portal.azure.com
+      - title: GitHub
+        url: https://github.com
+      - title: Google Chat
+        url: https://chat.google.com
+      - title: Harvest
+        url: https://id.getharvest.com
   - name: personal
     socks: 11083
+    bookmarks:
+      - title: GitHub
+        url: https://github.com
 
 # Контекст без работы: единственный контейнер Zen, у которого нет ни прокси, ни
 # distrobox-контейнера, ни моста на порт. Трафик уходит прямо с хоста. Сюда же
@@ -138,8 +167,10 @@ contexts:
 # Цвет `cyan` намеренно вынут из ротации цветов рабочих контекстов (скрипты 32 и
 # 41), поэтому он не совпадёт с ними, сколько бы работ ни завелось.
 #
-# `bookmarks` только свои: общий список `bookmarks:` в начале файла сюда не
-# приезжает, ему тут нечего делать.
+# В папку закладок home приезжает общий список `bookmarks:` плюс то, что ниже.
+# А вот плитки-Essentials собираются ТОЛЬКО из списка ниже -- по прямому
+# решению владельца: в плитках home один YouTube, почта и календарь живут в
+# папке на панели.
 plain_context:
   name: home
   icon: chill

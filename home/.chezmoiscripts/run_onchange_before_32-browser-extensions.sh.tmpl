@@ -20,19 +20,34 @@ set -euo pipefail
 #
 # The two browsers get different extension sets. Zen is the one carrying work
 # contexts, so it gets the container stack; Firefox is the everything-else
-# browser and only wants the password manager.
+# browser and only wants the password manager and the ad blocker.
 #
 # installation_mode is not uniform, and the split is the point:
-#   force_installed  -- Multi-Account Containers and Open external links. These
+#   force_installed  -- Multi-Account Containers and Open external links: these
 #                       are not preferences, they ARE the container boundary.
 #                       Removing one silently collapses every work context into
 #                       one cookie jar, and nothing in the UI would say so.
-#   normal_installed -- Temporary Containers and Bitwarden: enabled on arrival,
-#                       still removable. Personal machine, not a fleet.
+#                       uBlock Origin is here too, by explicit decision:
+#                       everywhere, always.
+#   normal_installed -- Temporary Containers, Bitwarden, the Markdown clipper
+#                       and the tab discarder: enabled on arrival, still
+#                       removable. Personal machine, not a fleet.
 #
 # GUIDs come from the AMO API (addons.mozilla.org/api/v5/addons/addon/<slug>/),
 # not from guessing: a wrong key installs nothing and says nothing.
+#
+# Auto Tab Discard exists beside browser.tabs.unloadOnLowMemory (user.js,
+# script 40) because the built-in unloader is an emergency brake, not a habit:
+# AvailableMemoryWatcherLinux.cpp fires only when MemAvailable drops under 5%
+# or 200MB, one tab at a time. The extension discards by idle timer, which is
+# what actually keeps a pile of background tabs out of RAM.
+#
+# Obsidian Web Clipper is the page-to-Markdown button; its one manual setting
+# (Save behavior -> Copy to clipboard) is listed in docs/isolation-browser.md
+# under "Настроенное руками". Chosen over MarkDownload, whose AMO build has
+# been frozen since 2022.
 {{- $bitwarden := dict "guid" "{446900e4-71c2-419f-a6a7-df9c091e268b}" "slug" "bitwarden-password-manager" "mode" "normal_installed" }}
+{{- $ublock := dict "guid" "uBlock0@raymondhill.net" "slug" "ublock-origin" "mode" "force_installed" }}
 {{/* Zen refuses our own extension without this, and the refusal is silent
      unless the browser console is open: "Download failed -
      ERROR_SIGNEDSTATE_REQUIRED - file:///usr/local/lib/zen-context-proxy.xpi".
@@ -51,7 +66,7 @@ set -euo pipefail
      (Policies.sys.mjs:2464-2466); a build that turns the flag on makes this
      unsettable, and run_after_zz-next-steps.sh is what would notice.
 
-     Firefox gets none of this: it carries one extension, from AMO, signed. */}}
+     Firefox gets none of this: its extensions all come from AMO, signed. */}}
 {{- $zenPrefs := "" }}
 {{- if has "zen" .enabled }}
 {{-   $zenPrefs = `      "xpinstall.signatures.required": { "Value": false, "Status": "locked" }` }}
@@ -62,6 +77,9 @@ set -euo pipefail
 {{-   $zenExts = append $zenExts (dict "guid" "{f069aec0-43c5-4bbf-b6b4-df95c4326b98}" "slug" "open-url-in-container"    "mode" "force_installed") }}
 {{-   $zenExts = append $zenExts (dict "guid" "{c607c8df-14a7-4f28-894f-29e8722976af}" "slug" "temporary-containers"     "mode" "normal_installed") }}
 {{-   if has "bitwarden" .enabled }}{{ $zenExts = append $zenExts $bitwarden }}{{ end }}
+{{-   $zenExts = append $zenExts $ublock }}
+{{-   $zenExts = append $zenExts (dict "guid" "clipper@obsidian.md"                    "slug" "web-clipper-obsidian"     "mode" "normal_installed") }}
+{{-   $zenExts = append $zenExts (dict "guid" "{c2c003ee-bd69-42a2-b0e9-6f34222cb046}" "slug" "auto-tab-discard"         "mode" "normal_installed") }}
 {{-   $zenExts = append $zenExts (dict "guid" "context-proxy@dotfiles.local" "url" "file:///usr/local/lib/zen-context-proxy.xpi" "mode" "force_installed") }}
 {{- end }}
 {{/* Containers.Default replaces the built-in set on a FRESH profile and
@@ -96,8 +114,10 @@ set -euo pipefail
      bookmarks_demo is a flat folder of plain URLs whose titles say what to try;
      it exists to make the difference from ManagedBookmarks visible by hand.
 
-     plain_context gets a folder of the same shape, but only from its own list:
-     the shared bookmarks are work addresses and have no business there. */}}
+     plain_context gets a folder of the same shape, from the shared list plus
+     its own: the shared list is not work anymore, it is what belongs in every
+     space (Google mail and calendar). One address, four containers, four
+     different logins -- the container in the link does the switching. */}}
 {{- $marks := list }}
 {{- if has "zen" .enabled }}
 {{-   range $c := .contexts }}
@@ -107,10 +127,10 @@ set -euo pipefail
 {{-       $marks = append $marks (dict "title" $b.title "folder" $c.name "url" (printf "ext+container:name=%s&url=%s" $c.name (urlquery $b.url))) }}
 {{-     end }}
 {{-   end }}
-{{-   if hasKey .plain_context "bookmarks" }}
-{{-     range $b := .plain_context.bookmarks }}
-{{-       $marks = append $marks (dict "title" $b.title "folder" $.plain_context.name "url" (printf "ext+container:name=%s&url=%s" $.plain_context.name (urlquery $b.url))) }}
-{{-     end }}
+{{-   $pown := list }}
+{{-   if hasKey .plain_context "bookmarks" }}{{ $pown = .plain_context.bookmarks }}{{ end }}
+{{-   range $b := concat $.bookmarks $pown }}
+{{-     $marks = append $marks (dict "title" $b.title "folder" $.plain_context.name "url" (printf "ext+container:name=%s&url=%s" $.plain_context.name (urlquery $b.url))) }}
 {{-   end }}
 {{- end }}
 {{- if and (has "zen" .enabled) (hasKey . "bookmarks_demo") }}
@@ -119,8 +139,9 @@ set -euo pipefail
 {{-   end }}
 {{- end }}
 {{- $ffExts := list }}
-{{- if and (has "browsers" .enabled) (has "bitwarden" .enabled) }}
-{{-   $ffExts = append $ffExts $bitwarden }}
+{{- if has "browsers" .enabled }}
+{{-   if has "bitwarden" .enabled }}{{ $ffExts = append $ffExts $bitwarden }}{{ end }}
+{{-   $ffExts = append $ffExts $ublock }}
 {{- end }}
 
 # $1 is the /etc directory of one Gecko application, $2 the already-rendered
