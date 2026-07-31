@@ -80,48 +80,62 @@ flowchart TD
 ### Ручные шаги после установки
 
 Ниже — построчный разбор того, что содержит скрипт, в порядке появления в
-файле. Столбец «Сообщение» — то, что дословно печатает `zz-next-steps`
-(с точностью до переменных вида `$ext`, которые скрипт подставляет сам).
+файле. Столбец «Сообщение и что сделать» — то, что дословно печатает
+`zz-next-steps` (английский язык, ровно та пунктуация, что в скрипте —
+двойной дефис `--` как разделитель, одинарные кавычки вокруг команд), с
+единственной поправкой: переменные вида `$ext`, `$st_name` заменены на то,
+что они означают.
 
 **Проверки без привязки к окружению** (выполняются что на хосте, что в
 контейнере, если фича включена):
 
 | Фича | Проверяет | Сообщение и что сделать |
 |---|---|---|
-| — (всегда) | `ssh -T git@github.com` отвечает «successfully authenticated» | «GitHub SSH: key not registered — `cat ~/.ssh/id_ed25519.pub`, paste at https://github.com/settings/keys» |
-| `claude` | `~/.claude/.credentials.json` существует | «Claude Code: not logged in — run `claude`, pick 'Log in' (браузер откроет claude.ai; `/login`, если пропустил)» |
-| `codex` | `~/.codex/auth.json` существует | «Codex: not logged in — `codex login` (OAuth через chatgpt.com) или `codex login --api-key <key>`» |
-| `gh` | `gh auth status` завершается успешно | «GitHub CLI: not logged in — `gh auth login` (device code на https://github.com/login/device)» |
-| `azure` | `az account show` завершается успешно | «Azure CLI: no active session — `az login`» |
-| `ziti` | `/opt/openziti/etc/identities/` не пуст | «OpenZiti: no identity — скопировать JSON в `/opt/openziti/etc/identities/` и `sudo systemctl start ziti-edge-tunnel`» |
-| `voice` | Закреплённый файл модели (`whisper-large-v3-Q8_0.gguf` в снапшоте `handy-computer/whisper-large-v3-gguf` кеша HuggingFace) на месте | «Handy: the pinned model is missing — запустить `handy`, скачать Whisper Large v3 в Settings → Model» ([voice.md](voice.md)) |
-| `voice` | `~/.local/share/com.pais.handy/settings_store.json` существует | «Handy: never started — запустить `handy`, затем `chezmoi apply` ещё раз» |
-| `bitwarden` | `~/.config/rbw/config.json` не пуст (если `rbw` установлен) | «Bitwarden: завести аккаунт на vault.bitwarden.com, `rbw config set email <email>`, `rbw login`» |
-| `bitwarden` | `~/.config/bws/access-token` не пуст (если `bws` установлен) | «Bitwarden agents: создать machine account в Secrets Manager, положить токен в файл, `chmod 600`» |
-| `tailscale` | `tailscale status` завершается успешно | «Tailscale: not connected — `sudo tailscale up` (авторизация в браузере)» |
-| `docker` | Текущий пользователь состоит в группе `docker` | «Docker: you are not in the docker group yet — разлогиниться и войти заново» |
+| — (всегда) | `ssh -T git@github.com` отвечает «successfully authenticated» | «GitHub SSH: key not registered -- 'cat ~/.ssh/id_ed25519.pub', paste at https://github.com/settings/keys» |
+| `claude` | `~/.claude/.credentials.json` существует | «Claude Code: not logged in -- run 'claude', pick 'Log in' (browser opens claude.ai; /login if you skipped it)» |
+| `codex` | `~/.codex/auth.json` существует | «Codex: not logged in -- 'codex login' (browser OAuth via chatgpt.com) or 'codex login --api-key <key>'» |
+| `gh` | `gh auth status` завершается успешно | «GitHub CLI: not logged in -- 'gh auth login' (device code at https://github.com/login/device)» |
+| `azure` | `az account show` завершается успешно | «Azure CLI: no active session -- 'az login'» |
+| `ziti` | `/opt/openziti/etc/identities/` не пуст | «OpenZiti: no identity -- copy the JSON to /opt/openziti/etc/identities/ and 'sudo systemctl start ziti-edge-tunnel'» |
+| `voice` | Закреплённый файл модели (`whisper-large-v3-Q8_0.gguf` в снапшоте `handy-computer/whisper-large-v3-gguf` кеша HuggingFace) на месте | «Handy: the pinned model is missing -- run 'handy' and download Whisper Large v3 under Settings -> Model» ([voice.md](voice.md)) |
+| `voice` | `~/.local/share/com.pais.handy/settings_store.json` существует | «Handy: never started, so its settings are unconfigured -- run 'handy', then 'chezmoi apply' again» |
+| `bitwarden` | `~/.config/rbw/config.json` не пуст (если `rbw` установлен) | «Bitwarden: account at https://vault.bitwarden.com (register if new), then 'rbw config set email <email>' and 'rbw login'» |
+| `bitwarden` | `~/.config/bws/access-token` не пуст (если `bws` установлен) | «Bitwarden agents: create a Secrets Manager machine account at https://vault.bitwarden.com -> Secrets Manager -> Machine accounts, put its token in ~/.config/bws/access-token (chmod 600)» |
+| `tailscale` | `tailscale status` завершается успешно | «Tailscale: not connected -- 'sudo tailscale up' (browser auth)» |
+| `docker` | Текущий пользователь состоит в группе `docker` | «Docker: you are not in the docker group yet -- log out and back in to use it without sudo» |
 
 **Только на хосте** (`.env == "host"`; в контейнере блок целиком отсутствует
 в отрендеренном тексте):
 
 | Фича | Проверяет | Сообщение и что сделать |
 |---|---|---|
-| `zen` | Каталог профиля Zen (`~/.zen` или `~/.config/zen`) вообще существует | «Zen: never launched — запустить `zen-browser` один раз, затем `chezmoi apply`, чтобы записать `user.js`» |
-| `zen` | В профиле есть `user.js` | «Zen: prefs not applied — `chezmoi apply` с закрытым Zen» |
-| `zen` | Все три расширения на месте: `@testpilot-containers`, `{f069aec0-43c5-4bbf-b6b4-df95c4326b98}`, `context-proxy@dotfiles.local` | По одной строке на каждое отсутствующее: «Zen: extension `$ext` is missing — проверить about:policies» ([isolation-browser.md](isolation-browser.md)) |
-| `zen` | `/usr/local/lib/zen-context-proxy.xpi` существует | «Zen: the context proxy extension was never built — `chezmoi apply`» |
-| `zen` | Обработчик `x-scheme-handler/https` — Junction | Если не Junction, но пакет `junction` есть — скрипт молча переустанавливает обработчик сам и печатает «Link handler reclaimed from the browser: …»; если пакета нет — «Links: Junction is not the default https handler and the package is missing» ([isolation-links.md](isolation-links.md)) |
-| `syncthing` | Конфиг демона существует (`syncthing paths`) | «Syncthing: no configuration yet — `chezmoi apply` once the service has started» |
-| `syncthing` | `syncthing.service` активен | «Syncthing: the user service is not running — `systemctl --user enable --now syncthing.service`» |
-| `syncthing` | Эта машина есть в `[data.syncthing.devices]` | «Syncthing: this machine is not in the device map — дописать запись с ID» |
-| `syncthing` | Каждое устройство из каталога папок имеет ID в карте | «Syncthing: device '…' is named in the catalogue but has no ID in the map» |
-| `syncthing` | Каждая папка, где участвует эта машина, реально настроена в демоне | «Syncthing: folder '…' is not configured — `chezmoi apply`» |
-| `syncthing` | Каждое чужое устройство хоть раз было на связи (`lastSeen`) | «Syncthing: device '…' has never been seen — paired from one side only» |
-| `syncthing` | У каждого устройства в карте есть рабочий `tcp://` адрес без плейсхолдеров | «Syncthing: device '…' has no usable static address» |
-| `syncthing` | Входящие `22000/tcp`, `22000/udp`, `21027/udp` открыты в ufw (только если есть root без пароля) | «Syncthing: incoming …/tcp is closed — `sudo ufw allow …`» |
-| `syncthing` | Нет файлов `*.sync-conflict-*` в папках, где участвует машина | «Syncthing: conflict file … — resolve with the kb-curate skill» |
-| `syncthing` | Путь хранилища `kb` совпадает с тем, что видит `claudefiles` (`~/.config/claudefiles/secrets.json`) | «Syncthing: claudefiles syncs the vault at … but the catalogue syncs … — make them the same» |
-| — (все включённые контексты) | Сокет `~/.local/share/wsproxy/<контекст>/socks.sock` существует, по одному на каждую запись `contexts:` | «Proxy <контекст>: no socket — `distrobox enter <контекст> -- true`, проверить `wsproxy-bridge.service`» ([isolation-network.md](isolation-network.md)) |
+| `zen` | Каталог профиля Zen (`~/.zen` или `~/.config/zen`) вообще существует | «Zen: never launched -- run 'zen-browser' once, then 'chezmoi apply' to write user.js» |
+| `zen` | В профиле есть `user.js` | «Zen: prefs not applied -- run 'chezmoi apply' with Zen closed» |
+| `zen` | Все три расширения на месте: `@testpilot-containers`, `{f069aec0-43c5-4bbf-b6b4-df95c4326b98}`, `context-proxy@dotfiles.local` | По одной строке на каждое отсутствующее: «Zen: extension $ext is missing -- check about:policies, install from addons.mozilla.org if the policy did not take» ([isolation-browser.md](isolation-browser.md)) |
+| `zen` | `/usr/local/lib/zen-context-proxy.xpi` существует | «Zen: the context proxy extension was never built -- run 'chezmoi apply'» |
+| `zen` | Обработчик `x-scheme-handler/https` — Junction | Если не Junction, но пакет `junction` есть — скрипт сам, без вопроса, выполняет `xdg-mime default $junction_id x-scheme-handler/http x-scheme-handler/https` (единственная строка во всём файле, которая что-то меняет, а не только читает — см. вступление раздела «Что ставится и что меняется» ниже) и печатает «Link handler reclaimed from the browser: $junction_id»; если пакета `junction` нет — «Links: Junction is not the default https handler and the package is missing» ([isolation-links.md](isolation-links.md)) |
+| `syncthing` | Конфиг демона существует (`syncthing paths`) | «Syncthing: no configuration yet -- run 'chezmoi apply' once the service has started» |
+| `syncthing` | `syncthing.service` активен | «Syncthing: the user service is not running -- 'systemctl --user enable --now syncthing.service'» |
+| `syncthing` | Эта машина есть в `[data.syncthing.devices]` | Полный текст, с готовым фрагментом TOML — сноска (†) под таблицей |
+| `syncthing` | Каждое устройство из каталога папок имеет ID в карте | «Syncthing: device '…' is named in the catalogue but has no ID in the map -- run 'chezmoi apply' on it and copy the ID it prints» |
+| `syncthing` | Каждая папка, где участвует эта машина, реально настроена в демоне | «Syncthing: folder '…' is not configured -- run 'chezmoi apply'» |
+| `syncthing` | Каждое чужое устройство хоть раз было на связи (`lastSeen`) | «Syncthing: device '…' has never been seen -- it has to add this machine's ID too (paired from one side only)» |
+| `syncthing` | У каждого устройства в карте есть рабочий `tcp://` адрес без плейсхолдеров | Полный текст — сноска (‡) под таблицей |
+| `syncthing` | Входящие `22000/tcp`, `22000/udp`, `21027/udp` открыты в ufw (только если есть root без пароля) | «Syncthing: incoming …/tcp is closed -- 'sudo ufw allow …' (30-system only adds these once, when its own text changes, so a later apply will not put them back)» |
+| `syncthing` | Нет файлов `*.sync-conflict-*` в папках, где участвует машина | «Syncthing: conflict file … -- resolve with the kb-curate skill, do not delete blindly» |
+| `syncthing` | Путь хранилища `kb` совпадает с тем, что видит `claudefiles` (`~/.config/claudefiles/secrets.json`) | «Syncthing: claudefiles syncs the vault at … but the catalogue syncs … -- make them the same» |
+| — (все включённые контексты) | Сокет `~/.local/share/wsproxy/<контекст>/socks.sock` существует, по одному на каждую запись `contexts:` | «Proxy <контекст>: no socket -- start the container ('distrobox enter <контекст> -- true') and check wsproxy-bridge.service inside it» ([isolation-network.md](isolation-network.md)) |
+
+(†) «Syncthing: this machine is not in the device map -- add to
+~/.config/chezmoi/chezmoi.toml under [data.syncthing.devices]: thismachine =
+{ id = "<ID>", addresses = ["dynamic", "tcp://<name>.<tailnet>.ts.net:22000"] },
+then add the same line on every other machine and run 'chezmoi apply' there
+too»
+
+(‡) «Syncthing: device '…' has no usable static address -- put
+"tcp://<name>.<tailnet>.ts.net:22000" beside "dynamic" in
+~/.config/chezmoi/chezmoi.toml with the real tailnet name from 'tailscale
+status', or the device is only reachable on the local network»
 
 Полное объяснение причин каждой из строк про Zen — в
 [isolation-browser.md](isolation-browser.md), про Syncthing — в
@@ -130,10 +144,20 @@ flowchart TD
 
 ## Что ставится и что меняется
 
-Сам `zz-next-steps` ничего не ставит и не включает — он только читает.
-Меняющая часть эксплуатации — то, что делают **другие** скрипты волны за
-пределами `~`, вперемешку из тринадцати разных `.tmpl`-файлов. Сводка ниже
-собрана по коду `home/.chezmoiscripts/*.tmpl`, а не по старой документации.
+Сам `zz-next-steps` почти целиком читает и ничего не решает сам — но не
+целиком: строки 113-115 того же файла, разобранные выше в таблице про Zen,
+делают ровно одно исключение — `xdg-mime default $junction_id
+x-scheme-handler/http x-scheme-handler/https`, когда обработчик ссылок
+рассинхронизировался, а пакет `junction` уже стоит. Это единственная строка
+во всём файле, которая что-то меняет, а не только смотрит; она уже учтена в
+таблице «Изменения состояния» ниже, в строке про `xdg-mime`.
+
+Остальная меняющая часть эксплуатации — то, что делают **другие** скрипты
+волны за пределами `~`. Ниже их двенадцать, плюс сам `zz-next-steps` со
+своим единственным исключением — тринадцать `.tmpl`-файлов в сумме, все
+перечислены в таблицах ниже по одному разу как минимум. Сводка собрана по
+коду `home/.chezmoiscripts/*.tmpl` и `home/bin/*.tmpl`, а не по старой
+документации.
 
 **`/etc`**
 
@@ -150,8 +174,9 @@ flowchart TD
 | `/etc/systemd/system/wsproxy-socks.service`, `wsproxy-bridge.service` | Мост SOCKS5 внутри distrobox-контейнера | `run_onchange_after_36-wsproxy-container.sh.tmpl` | [isolation-network.md](isolation-network.md) |
 | `/etc/killswitch.conf`, `/etc/systemd/system/killswitch.service` | Конфиг и юнит килсвитча (внутри контейнера) | `run_onchange_after_39-killswitch.sh.tmpl` | [killswitch.md](killswitch.md) |
 | `/etc/greetd/config.toml`, `/etc/greetd/niri/config.kdl`, `/etc/greetd/niri/dms.kdl` | Экран входа greetd | `run_after_45-greeter.sh.tmpl` | [greeter.md](greeter.md) |
+| `/etc/greetd/niri_overrides.kdl` (удаляется, не пишется) | Разовая миграционная уборка: более ранняя версия скрипта писала этот файл сама, но он дублировал раскладку клавиатуры вторым `include` и на нынешней версии не нужен вовсе — скрипт узнаёт свой же файл по строке `Managed by chezmoi` в его первой строке и удаляет один раз | `run_after_45-greeter.sh.tmpl` | [greeter.md](greeter.md) |
 | `/etc/systemd/system/ziti-edge-tunnel.service` | Перекрывает одноимённый юнит из `/usr/lib`, чтобы задать `ZITI_IDENTITY_DIR` | `run_onchange_before_60-ziti.sh.tmpl` | [network.md](network.md) |
-| `/etc/hosts`, блок `BEGIN/END ziti-dns-entries` | Только когда `~/bin/update-ziti-hosts.sh` запущен руками с `sudo` | там же | [network.md](network.md) |
+| `/etc/hosts`, блок `BEGIN/END ziti-dns-entries` | Только когда `~/bin/update-ziti-hosts.sh` запущен руками с `sudo`. Пишет не `run_onchange_before_60-ziti.sh.tmpl` (у него нет ни строки про `/etc/hosts`), а отдельный обычный управляемый файл — `home/bin/executable_update-ziti-hosts.sh.tmpl` (`HOSTS_FILE="/etc/hosts"`). Оба зависят от одной фичи `ziti`, но раскладываются chezmoi независимо друг от друга: файл в `~/bin` — на этапе «Файлы», `60-ziti` — на этапе `before` | `home/bin/executable_update-ziti-hosts.sh.tmpl` | [network.md](network.md) |
 
 **`/usr/local`**
 
@@ -181,7 +206,11 @@ flowchart TD
 | `systemctl enable` **и** `start` юнита `tailscaled.service` | Фича `tailscale`, `always: true` | там же | [network.md](network.md) |
 | `usermod -aG docker $USER` | Фича `docker`; действует со следующего входа в систему | там же | [dev-tools.md](dev-tools.md) |
 | `localectl --no-convert set-x11-keymap` | Системная смена X11-раскладки (побочно пишет файл из таблицы `/etc` выше) | там же | [keyboard.md](keyboard.md) |
-| `xdg-mime default <junction>.desktop x-scheme-handler/http(s)` | Только если текущий обработчик ещё не Junction | `run_onchange_after_38-linkrouting.sh.tmpl`; переустанавливает при необходимости и `zz-next-steps` на каждом `apply` | [isolation-links.md](isolation-links.md) |
+| `sudo systemctl restart systemd-vconsole-setup.service` | После записи `KEYMAP=` в `/etc/vconsole.conf`, только если консольная карта клавиш только что прошла проверку `loadkeys --mktable` | там же | [keyboard.md](keyboard.md) |
+| `sudo systemctl enable ziti-edge-tunnel` | Фича `ziti`, каждый прогон, безусловно (без `--now` — юнит запускается уже потом, самим systemd или руками) | `run_onchange_before_60-ziti.sh.tmpl` | [network.md](network.md) |
+| `sudo systemctl enable --now killswitch.service` | Фича `killswitch`, только если в `/etc/killswitch.conf` уже заполнен `VPN_IF` (`grep -q '^VPN_IF=.\+' "$CONF"`) — иначе юнит остаётся `disabled` | `run_onchange_after_39-killswitch.sh.tmpl` | [killswitch.md](killswitch.md) |
+| Спасательное переключение экрана входа внутри `check_invariant`: `sudo systemctl disable sddm.service` (если `greetd_ok` — четырёхчастная проверка: юнит enabled, бинарник на месте, конфиг настроен, кеш существует — при этом и `sddm.service` тоже enabled), либо `sudo systemctl disable greetd.service` и следом `sudo systemctl enable sddm.service` (если `greetd_ok` нет и `sddm.service` тоже не enabled) | Фича `greeter`, на каждом `apply`, безусловно — это не запись файла, а посмертная проверка того, что хоть один экран входа сможет стартовать | `run_after_45-greeter.sh.tmpl` | [greeter.md](greeter.md) |
+| `xdg-mime default <junction>.desktop x-scheme-handler/http(s)` | Только если текущий обработчик ещё не Junction | `run_onchange_after_38-linkrouting.sh.tmpl`; переустанавливает при необходимости и `zz-next-steps` на каждом `apply` (единственная строка, где сам чеклист что-то меняет, а не читает — см. вступление раздела) | [isolation-links.md](isolation-links.md) |
 
 \* `sddm.service` включается условно — см. [greeter.md](greeter.md), там же
 объяснение, почему это не безусловный `enable_unit`.
@@ -251,6 +280,19 @@ install.sh` перечисляет исключительно отслеженн
 поэтому такой файл вполне реально попадёт на машину при следующем `chezmoi
 apply`, пока проверка покрытия документации будет молчать, будто всё
 покрыто.
+
+У этого же пробела есть зеркальная, шумная сторона — `git ls-files` в
+`covered_universe()` не единственное место, где генератор так делает. Сама
+проверка `EMPTY-PATTERN` устроена так же: `if [[ -z "$(git ls-files --
+"$pattern")" ]]`, — и список совпавших файлов для `UNCOVERED-FILE`
+собирается тем же способом: `git ls-files -- "$pattern" >> "$MATCHED"`. Если
+`covers.paths` документа уже правильно называет свежий файл, который просто
+ещё не прошёл `git add`, генератор в этом случае не промолчит — он выдаст
+ложный `EMPTY-PATTERN`, «шаблон не совпал ни с одним файлом», хотя файл
+лежит на диске по указанному пути, а строка в шапке набрана верно. Первое
+следствие (тишина `UNCOVERED-FILE`) не поднимает тревогу там, где она
+нужна; второе (ложный `EMPTY-PATTERN`) поднимает тревогу там, где её нет —
+и оба растут из одной и той же строки кода.
 
 Ни один из трёх пробелов не проверяет сети и не трогает семантику текста —
 всё, что описано в разделе «Как проверить» ниже, доступно человеку читать и
