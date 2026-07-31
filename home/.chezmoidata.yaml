@@ -116,9 +116,10 @@ bookmarks_demo:
 # правилами не покрываются никогда, по той же причине, по которой на них нельзя
 # ставить правила Multi-Account Containers -- см. docs/isolation-links.md,
 # раздел «Правило "Always Open This Site in…"».
-# Один адрес ещё без организации: Teams у stellium (нужен tenantId, как
-# digi3.de ниже). Заменить url -- и всё: политика сверяет закладки по адресу,
-# старая уйдёт, новая придёт сама на следующем старте браузера.
+# Поменять адрес закладки -- значит заменить url здесь: политика сверяет
+# закладки по адресу, старая уйдёт, новая придёт сама на следующем старте
+# браузера. tenantId у Teams принимает домен тенанта (то, что после @ в
+# рабочем логине) наравне с GUID.
 contexts:
   - name: digi3
     socks: 11081
@@ -135,7 +136,7 @@ contexts:
     route: true
     bookmarks:
       - title: Teams
-        url: https://teams.microsoft.com
+        url: https://teams.microsoft.com/v2/?tenantId=stellium.consulting
       - title: DevOps AI-Factory
         url: https://dev.azure.com/tsacc-msfwex53-01-AI-Factory/
       - title: DevOps OCDIO

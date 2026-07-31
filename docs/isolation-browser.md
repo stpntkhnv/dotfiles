@@ -96,7 +96,7 @@ sequenceDiagram
 
     Note over P,CI: только если профиль ещё пуст
     P->>CI: Containers.Default → создать digi3, stellium, personal, home
-    P->>P: ExtensionSettings → поставить 15 расширений
+    P->>P: ExtensionSettings → поставить 16 расширений
 
     T->>CP: browser.proxy.onRequest(tabId)
     CP->>CI: чей это cookieStoreId?
@@ -163,9 +163,9 @@ Zen.
 | Режим | Что позволяет | Расширения у Zen |
 |---|---|---|
 | `force_installed` | нельзя ни выключить, ни удалить | Multi-Account Containers, Open external links in a container, наш `context-proxy`, uBlock Origin |
-| `normal_installed` | можно выключить (официальная формулировка Mozilla: «allows it to be disabled by the user»); удаление тем же кодом политики тоже придерживается — `disallowFeature('uninstall-extension:…')` в `Policies.sys.mjs` вызывается для обоих режимов одинаково, различие именно в «выключить» | Temporary Containers, Bitwarden и семь инструментов второго слоя (список ниже) |
+| `normal_installed` | можно выключить (официальная формулировка Mozilla: «allows it to be disabled by the user»); удаление тем же кодом политики тоже придерживается — `disallowFeature('uninstall-extension:…')` в `Policies.sys.mjs` вызывается для обоих режимов одинаково, различие именно в «выключить» | Temporary Containers, Bitwarden и восемь инструментов второго слоя (список ниже) |
 
-Пятнадцать расширений делятся на два слоя. Три `force_installed` из четырёх — это
+Шестнадцать расширений делятся на два слоя. Три `force_installed` из четырёх — это
 не настройка на вкус, это **сама граница** изоляции контекстов:
 
 - **Multi-Account Containers** даёт сам механизм банок кук и интерфейс к ним.
@@ -211,6 +211,8 @@ Zen.
 - **LanguageTool** — грамматика и орфография в полях ввода. Оговорка: текст
   для проверки по умолчанию уходит на сервер LanguageTool.
 - **ClearURLs** — молча срезает следящие параметры (`utm_...`) из ссылок.
+- **Refined GitHub** — пара сотен мелких правок интерфейса GitHub: отставание
+  ветки PR, фильтр активности в обсуждениях, видимые пробелы в диффах.
 
 **Контейнеры** тоже приходят политикой, ключ `Containers.Default`, по одному
 на каждую запись `contexts:`, плюс `home` последним — единственный без пары в
@@ -803,15 +805,15 @@ for i in d['identities']:
 том, который старше самой политики.
 
 Расширения действительно **загрузились** — не просто лежат файлами, а активны
-(сверить с пятнадцатью ожидаемыми — пять из таблицы режимов выше плюс
+(сверить с шестнадцатью ожидаемыми — пять из таблицы режимов выше плюс
 второй слой; полный список id лежит в `$zenExts` скрипта 32):
 
 ```sh
 jq -r '[.addons[]|select(.active)|.id]|sort|.[]' ~/.config/zen/*/extensions.json \
-  | grep -E 'testpilot|f069aec0|c607c8df|446900e4|context-proxy|uBlock0|clipper|c2c003ee|sponsorBlocker|a6c4a591|gdpr@cavi|762f9885|531906d3|languagetool|74145f27'
+  | grep -E 'testpilot|f069aec0|c607c8df|446900e4|context-proxy|uBlock0|clipper|c2c003ee|sponsorBlocker|a6c4a591|gdpr@cavi|762f9885|531906d3|languagetool|74145f27|a4c4eda4'
 ```
 
-Ожидается пятнадцать строк. Пять первых сняты на этой машине 31 июля, до
+Ожидается шестнадцать строк. Пять первых сняты на этой машине 31 июля, до
 добавления второго слоя расширений; три новых проверяются тем же способом
 после следующего перезапуска Zen.
 
