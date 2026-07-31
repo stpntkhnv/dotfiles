@@ -116,39 +116,39 @@ bookmarks_demo:
 # правилами не покрываются никогда, по той же причине, по которой на них нельзя
 # ставить правила Multi-Account Containers -- см. docs/isolation-links.md,
 # раздел «Правило "Always Open This Site in…"».
-# Адреса Teams, DevOps и Portal пока базовые: после входа сервис сам уводит в
-# свою организацию. Когда появятся ссылки с организацией в адресе -- заменить
-# url здесь; политика сверяет закладки по адресу, старая уйдёт, новая придёт
-# сама на следующем старте браузера.
+# Два адреса ещё без организации, потому что она пока не названа: DevOps у
+# digi3 и Teams у stellium (нужен tenantId, как digi3.de ниже). Заменить url --
+# и всё: политика сверяет закладки по адресу, старая уйдёт, новая придёт сама
+# на следующем старте браузера.
 contexts:
   - name: digi3
     socks: 11081
     route: true
     bookmarks:
       - title: Teams
-        url: https://teams.microsoft.com
+        url: https://teams.microsoft.com/v2/?tenantId=digi3.de
       - title: Azure DevOps
         url: https://dev.azure.com
       - title: Azure Portal
-        url: https://portal.azure.com
-      - title: GitHub
-        url: https://github.com
+        url: https://portal.azure.com/#home
   - name: stellium
     socks: 11082
     route: true
     bookmarks:
       - title: Teams
         url: https://teams.microsoft.com
-      - title: Azure DevOps
-        url: https://dev.azure.com
+      - title: DevOps AI-Factory
+        url: https://dev.azure.com/tsacc-msfwex53-01-AI-Factory/
+      - title: DevOps OCDIO
+        url: https://dev.azure.com/tsacc-msfwex01-76-OCDIO/
       - title: Azure Portal
-        url: https://portal.azure.com
-      - title: GitHub
-        url: https://github.com
+        url: https://portal.azure.com/#home
       - title: Google Chat
-        url: https://chat.google.com
+        url: https://chat.google.com/app/home
       - title: Harvest
-        url: https://id.getharvest.com
+        url: https://stellium.harvestapp.com/time
+      - title: HRM
+        url: https://hrm.innowise.com/my-page/company-role
   - name: personal
     socks: 11083
     bookmarks:

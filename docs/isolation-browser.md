@@ -96,7 +96,7 @@ sequenceDiagram
 
     Note over P,CI: только если профиль ещё пуст
     P->>CI: Containers.Default → создать digi3, stellium, personal, home
-    P->>P: ExtensionSettings → поставить 8 расширений
+    P->>P: ExtensionSettings → поставить 9 расширений
 
     T->>CP: browser.proxy.onRequest(tabId)
     CP->>CI: чей это cookieStoreId?
@@ -163,9 +163,9 @@ Zen.
 | Режим | Что позволяет | Расширения у Zen |
 |---|---|---|
 | `force_installed` | нельзя ни выключить, ни удалить | Multi-Account Containers, Open external links in a container, наш `context-proxy`, uBlock Origin |
-| `normal_installed` | можно выключить (официальная формулировка Mozilla: «allows it to be disabled by the user»); удаление тем же кодом политики тоже придерживается — `disallowFeature('uninstall-extension:…')` в `Policies.sys.mjs` вызывается для обоих режимов одинаково, различие именно в «выключить» | Temporary Containers, Bitwarden, Obsidian Web Clipper, Auto Tab Discard |
+| `normal_installed` | можно выключить (официальная формулировка Mozilla: «allows it to be disabled by the user»); удаление тем же кодом политики тоже придерживается — `disallowFeature('uninstall-extension:…')` в `Policies.sys.mjs` вызывается для обоих режимов одинаково, различие именно в «выключить» | Temporary Containers, Bitwarden, Obsidian Web Clipper, Auto Tab Discard, SponsorBlock |
 
-Восемь расширений делятся на два слоя. Три `force_installed` из четырёх — это
+Девять расширений делятся на два слоя. Три `force_installed` из четырёх — это
 не настройка на вкус, это **сама граница** изоляции контекстов:
 
 - **Multi-Account Containers** даёт сам механизм банок кук и интерфейс к ним.
@@ -197,6 +197,9 @@ Zen.
   (`AvailableMemoryWatcherLinux.cpp`), и выгружает по одной вкладке. Таймер —
   то, что реально держит стопку фоновых вкладок вне памяти, пока до аварии ещё
   далеко.
+- **SponsorBlock** — пропуск рекламных вставок внутри роликов YouTube. Хотелся
+  для пространства `home`, но расширения живут на профиле, а не на контейнере,
+  поэтому он просто есть везде и заметен только там, где открыт YouTube.
 
 **Контейнеры** тоже приходят политикой, ключ `Containers.Default`, по одному
 на каждую запись `contexts:`, плюс `home` последним — единственный без пары в
@@ -789,16 +792,16 @@ for i in d['identities']:
 том, который старше самой политики.
 
 Расширения действительно **загрузились** — не просто лежат файлами, а активны
-(сверить с восемью ожидаемыми: пять из таблицы режимов выше плюс
-`uBlock0@raymondhill.net`, `clipper@obsidian.md` и Auto Tab Discard
-`{c2c003ee-bd69-42a2-b0e9-6f34222cb046}`):
+(сверить с девятью ожидаемыми: пять из таблицы режимов выше плюс
+`uBlock0@raymondhill.net`, `clipper@obsidian.md`, `sponsorBlocker@ajay.app` и
+Auto Tab Discard `{c2c003ee-bd69-42a2-b0e9-6f34222cb046}`):
 
 ```sh
 jq -r '[.addons[]|select(.active)|.id]|sort|.[]' ~/.config/zen/*/extensions.json \
-  | grep -E 'testpilot|f069aec0|c607c8df|446900e4|context-proxy|uBlock0|clipper|c2c003ee'
+  | grep -E 'testpilot|f069aec0|c607c8df|446900e4|context-proxy|uBlock0|clipper|c2c003ee|sponsorBlocker'
 ```
 
-Ожидается восемь строк. Пять первых сняты на этой машине 31 июля, до
+Ожидается девять строк. Пять первых сняты на этой машине 31 июля, до
 добавления второго слоя расширений; три новых проверяются тем же способом
 после следующего перезапуска Zen.
 
