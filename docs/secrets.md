@@ -93,6 +93,30 @@ if command -v bws &>/dev/null && [[ ! -s "$HOME/.config/bws/access-token" ]]; th
 fi
 ```
 
+**Первый вход на официальном сервере `vault.bitwarden.com` требует
+регистрации устройства.** У официального сервера включена защита от
+перебора паролей (bot detection): голый `rbw login` мастер-паролем на новом
+устройстве не проходит вовсе, пока устройство не зарегистрировано личным
+API-ключом. Порядок первого входа:
+
+```sh
+rbw config set email <почта>
+rbw register
+rbw login
+```
+
+`rbw register` спросит `client_id` и `client_secret` — они берутся в
+веб-интерфейсе хранилища: настройки аккаунта → Security → вкладка Keys →
+«View API Key». После этой разовой регистрации обычный `rbw login`
+мастер-паролем работает как обычно, при повторных входах `rbw register`
+уже не нужен.
+
+Симптом до регистрации — `rbw login` отвечает `api request returned error:
+400`, и это не про сам пароль: заведомо неверный пароль на том же сервере
+даёт другой, внятный ответ («Username or password is incorrect»), то есть до
+проверки пароля дело не доходит вовсе — сервер отбраковывает запрос раньше,
+как бот-трафик.
+
 Отсюда и граница агента: то, что Claude Code или Codex физически не может
 дойти до личного хранилища, — не флаг где-то в конфигурации `claude` и не
 проверка внутри `claudefiles` (внешний репозиторий, [agents.md](agents.md)),
@@ -342,6 +366,25 @@ origin	git@github.com:stpntkhnv/dotfiles.git (push)
 chezmoi execute-template < home/.chezmoiscripts/run_onchange_after_82-ssh-key.sh.tmpl
 ```
 
+Папка `PAT` и команда (снято 2026-07-31, значения не показаны):
+
+```sh
+$ pat
+digi3
+tsacc-msfwex01-76-OCDIO
+tsacc-msfwex53-01-AI-Factory
+
+$ pat digi3 | wc -c
+111
+
+$ pat нет-такого; echo "exit=$?"
+pat: no entry нет-такого
+digi3
+tsacc-msfwex01-76-OCDIO
+tsacc-msfwex53-01-AI-Factory
+exit=1
+```
+
 ## Когда сломалось
 
 | Симптом | Причина | Что делать |
@@ -350,6 +393,7 @@ chezmoi execute-template < home/.chezmoiscripts/run_onchange_after_82-ssh-key.sh
 | То же самое, но на `dev.azure.com` | Публичная часть `id_rsa` не добавлена в SSH-ключи профиля Azure DevOps, либо клиент предлагает не тот ключ первым | Добавить `id_rsa.pub` в настройках пользователя Azure DevOps; при нескольких ключах — прописать `IdentityFile`/`IdentitiesOnly yes` в `~/.ssh/config` для хоста `ssh.dev.azure.com`, как описывает официальная документация Microsoft (раздел «Ссылки») |
 | Ключи не создались вовсе | Скрипт 82 — `run_onchange`, выполняется один раз при появлении/изменении своего отрендеренного текста; если оба файла уже существовали до первого `apply` (перенесены руками с другой машины), скрипт и должен был промолчать — это не поломка | Проверить `ls ~/.ssh/id_ed25519 ~/.ssh/id_rsa` — если оба на месте, ключи уже есть, генерировать нечего |
 | `origin` репозитория dotfiles остался HTTPS | Скрипт 83 запускается после 82 по порядку, но если `id_ed25519` появился не через скрипт 82 (например, ключ перенесли с другой машины уже после первого `apply`, когда 83 уже отработал и получил тот же неизменный текст), `run_onchange` может не перезапуститься | Переключить руками: `git remote set-url origin git@github.com:stpntkhnv/dotfiles.git` в исходном каталоге chezmoi (`chezmoi source-path`), либо любой правкой скрипта 83 форсировать `run_onchange` |
+| `rbw login` отвечает `api request returned error: 400` | Устройство не зарегистрировано на официальном сервере (bot detection) | Выполнить `rbw register` личным API-ключом (Security → Keys → View API Key в веб-интерфейсе), затем `rbw login` снова |
 | Bitwarden в терминале (`rbw`) спрашивает мастер-пароль на каждую команду | Не запущен или не разблокирован демон-агент `rbw` | `rbw unlock`; проверить, что процесс агента `rbw` жив |
 | `bws` не может прочитать секрет проекта | Файла `~/.config/bws/access-token` нет, пуст, или срок токена истёк | Пересоздать машинный аккаунт в Secrets Manager, положить новый токен в файл, `chmod 600` |
 | `pat` отвечает «rbw is not configured» | На этой машине ещё не выполнен вход в хранилище | `rbw config set email <почта>`, затем `rbw login` |

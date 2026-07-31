@@ -74,8 +74,13 @@ case "$mode" in
     # The note is whatever --full adds to the password. Cutting the password
     # out by value rather than by line number stays correct whichever order
     # rbw prints the two in, and makes it impossible for -i to leak the token.
+    # --full separates password and note with a blank line, so cutting the
+    # password out by value leaves two leading newlines, not one -- strip all
+    # of them in a loop rather than a fixed count, but only at the front:
+    # blank lines the user typed in the middle of their own note stay put.
     note)  token=$(rbw get "$ids") || die "cannot read entry -- try 'rbw login'"
            full=$(rbw get --full "$ids") || die "cannot read entry -- try 'rbw login'"
            note=${full/"$token"/}
-           printf '%s\n' "${note#$'\n'}" ;;
+           while [[ $note == $'\n'* ]]; do note=${note#$'\n'}; done
+           printf '%s\n' "$note" ;;
 esac
