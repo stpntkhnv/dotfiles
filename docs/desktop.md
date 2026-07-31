@@ -86,7 +86,7 @@ flowchart TB
 
     subgraph ORPHANED["DMS генерирует,<br/>config.kdl не подключает"]
         WR["dms/windowrules.kdl<br/>chezmoi-атрибут empty_<br/>в исходнике"]
-        WPBLUR["dms/wpblur.kdl<br/>появляется, когда включают<br/>размытие обоев в DMS"]
+        WPBLUR["dms/wpblur.kdl<br/>сгенерирован DMS,<br/>лежит и не читается"]
     end
 
     VOICE["voice.kdl -- владеет voice.md"]
@@ -248,8 +248,8 @@ default... removes» пустые файлы, `chezmoi.io/reference/source-state
 **`dms/wpblur.kdl`.** Та же болезнь, второй экземпляр. Генерирует его функция
 `generateNiriBlurrule` (`/usr/share/quickshell/dms/Services/NiriService.qml`,
 строки 1273–1279): копирует бандловый шаблон `niri-wpblur.kdl` в
-`dms/wpblur.kdl`, когда в настройках DMS включают размытие обоев. Реальное
-содержимое, если файл создан, — блок `layer-rule` под своим служебным
+`dms/wpblur.kdl`, когда в настройках DMS включают размытие обоев. Содержимое —
+блок `layer-rule` под своим служебным
 namespace:
 
 ```
@@ -264,14 +264,11 @@ layer-rule {
 }
 ```
 
-Присутствие самого файла на диске — состояние сессии, а не факт репозитория,
-и оно успело смениться прямо в ходе работы над этим документом: на момент
-разбора этой находки `~/.config/niri/dms/wpblur.kdl` на машине не было, а на
-момент этой правки — уже есть (219 байт, содержимое как выше). Устойчиво
-ровно то, что не зависит от текущего наличия файла: **`config.kdl` не
-подключает `dms/wpblur.kdl` ни одним `include`**, поэтому размытие обоев,
-включённое через интерфейс DMS, физически не может подействовать на этой
-машине — независимо от того, успела ли DMS уже создать сам файл.
+На этой машине файл лежит на месте: `~/.config/niri/dms/wpblur.kdl`, 219 байт,
+содержимое ровно как выше. То есть DMS его уже создала. И тем не менее
+**`config.kdl` не подключает `dms/wpblur.kdl` ни одним `include`** — а значит,
+размытие обоев, включённое через интерфейс DMS, физически не может
+подействовать. Файл написан и лежит, читать его никто не приходит.
 
 Итого DMS умеет писать в каталог `dms/` не четыре файла, а пять: `colors.kdl`,
 `layout.kdl`, `alttab.kdl`, `outputs.kdl` подключены и работают,
@@ -410,7 +407,7 @@ it starship and `eza --icons` render tofu boxes». Это не про сам р�
 | `~/.config/niri/dms/cursor.kdl` | дом | заглушка-комментарий; DMS может переписать реальным содержимым при смене настроек курсора (см. выше) |
 | `~/.config/niri/dms/windowrules.kdl` | дом | пустой файл (source `empty_windowrules.kdl`); существует, но не подключён `config.kdl` |
 | `~/.config/niri/dms/{colors,layout,alttab,outputs}.kdl` | дом, вне репозитория | генерирует и перезаписывает сама DMS; подключены `include` |
-| `~/.config/niri/dms/wpblur.kdl` | дом, вне репозитория | генерирует DMS при включении размытия обоев (`generateNiriBlurrule`); не подключён `config.kdl`; присутствие на диске зависит от сессии — на этой машине то отсутствовал, то появился в ходе этой задачи |
+| `~/.config/niri/dms/wpblur.kdl` | дом, вне репозитория | генерирует DMS (`generateNiriBlurrule`); на этой машине лежит на месте, 219 байт; не подключён `config.kdl` |
 | `~/.config/niri/voice.kdl` | дом, вне этого документа | владеет [voice.md](voice.md) |
 | `~/.config/DankMaterialShell/settings.json` | дом | настройки панели: тема, виджеты бара, шрифты, настройки курсора; committed целиком, на этой машине совпадает с репозиторием побайтово |
 | `~/Pictures/wallpapers/*.jpg` | дом | три фотографии, ~7 МБ; фича `wallpapers` |
@@ -440,11 +437,11 @@ $ dms config windowrules list | python3 -c \
 $ dms doctor -v 2>&1 | grep -A1 -E 'cava|I2C|kimageformats|qt6-imageformats|power-profiles'
 ```
 
-`wpblur.kdl` в листинге `~/.config/niri/dms/` — не гарантия: он появляется,
-когда в настройках DMS хоть раз включали размытие обоев, и его отсутствие
-ничего не говорит о том, подключён ли он `config.kdl` (не подключён в любом
-случае). Вывод снят на этой машине 2026-07-31. `niri validate` и `dms config
-windowrules list`/`dms doctor` — только чтение, ничего не меняют.
+Смотреть надо на вторую команду, а не на первую: наличие `wpblur.kdl` в
+листинге само по себе ничего не решает — важно, что `grep` по `config.kdl` не
+находит на него ни одной строки `include`. Вывод снят на этой машине
+2026-07-31. `niri validate`, `dms config windowrules list` и `dms doctor` —
+только чтение, ничего не меняют.
 
 ## Когда сломалось
 
