@@ -478,6 +478,8 @@ jq -r '[.addons[]|select(.active)|.id]|sort|.[]' ~/.config/zen/*/extensions.json
 | `origin` репозитория dotfiles остался HTTPS | [secrets.md](secrets.md#когда-сломалось) |
 | `rbw` спрашивает мастер-пароль на каждую команду | [secrets.md](secrets.md#когда-сломалось) |
 | `bws` не может прочитать секрет проекта | [secrets.md](secrets.md#когда-сломалось) |
+| `pat` ругается на ненастроенный `rbw` или пустую папку `PAT` | [secrets.md](secrets.md#когда-сломалось) |
+| `pat` жалуется на неоднозначное имя записи | [secrets.md](secrets.md#когда-сломалось) |
 
 ### Инструменты
 
