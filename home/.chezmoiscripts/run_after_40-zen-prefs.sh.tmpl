@@ -22,9 +22,14 @@ ZEN_ROOTS=(
 read -r -d '' PREFS <<'JS' || true
 // Managed by chezmoi -- .chezmoiscripts/run_onchange_after_40-zen-prefs.sh
 
-// ICE otherwise bypasses the proxy and opens direct UDP flows from the host
-// interface, which defeats the whole per-context routing.
-user_pref("media.peerconnection.ice.proxy_only", true);
+// media.peerconnection.ice.proxy_only is deliberately ABSENT, and the absence
+// is a decision (2026-07-31), not an oversight. With it, every browser call
+// was dead in every space: prefs are profile-wide, the no-proxy containers had
+// zero permitted paths, and Firefox cannot push call media through SOCKS, so
+// the proxied ones had zero too. Without it, call media (WebRTC only -- tabs
+// still obey the proxy) leaves directly from the host, so a call made from a
+// work tab shows the home IP to the tenant. The owner ruled the home IP not
+// confidential; docs/isolation.md carries this in "Что не изолировано".
 
 // Web push is a notification surface during screen sharing.
 user_pref("permissions.default.desktop-notification", 2);
