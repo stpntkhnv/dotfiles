@@ -173,6 +173,34 @@ flowchart TD
 включённого, но не рабочего `greetd`, значило бы оставить алиас указывающим
 не пойми куда — ни один из двух не оказался бы реально «в силе».
 
+#### Вторая половина той же защиты живёт в другом скрипте
+
+Спор за алиас `display-manager.service` разбирается не только здесь. Раньше в
+`run_onchange_before_30-system.sh.tmpl` стояла безусловная строка
+`enable_unit sddm.service`, и на машине, где экран входа уже переехал на
+`greetd`, она обречена: `greetd` держит этот алиас своим собственным
+symlink'ом из секции `[Install]`, `systemctl enable sddm` пытается создать
+symlink, который уже занят, и падает. А этот скрипт — `before`-стадия под
+`set -euo pipefail`, поэтому падение уносит **весь** `chezmoi apply` ещё до
+того, как скрипт 45 и его ловушка вообще получат слово. Ловушка не
+срабатывает не потому, что плохо написана, а потому, что до неё не доходит
+очередь.
+
+Поэтому в том же коммите `55a7329`, что расширил `check_invariant` с трёх
+условий до четырёх, строка в скрипте 30 стала условной:
+
+```bash
+systemctl is-enabled --quiet display-manager.service || enable_unit sddm.service
+```
+
+То есть `sddm` включается только на машине, где алиас вообще никем не занят —
+на чистой. Гарантия «хоть один экран входа обязан работать» осталась там же,
+где была, в ловушке скрипта 45: она отрабатывает на каждом применении.
+
+Вывод для читателя: `check_invariant` — это страховка, а не единственная
+защита. Работает она только при условии, что до неё дошла очередь, и вторая
+половина работы сделана раньше, в `before`-стадии.
+
 ### Раскладка клавиатуры: теперь проверяется, а не пишется
 
 Более ранняя версия этого скрипта писала `/etc/greetd/niri_overrides.kdl`
@@ -438,9 +466,9 @@ greetd_configured; then ... dms greeter enable ...`) нечитаемый
 
 - [dank-greeter, AvengeMedia/dank-greeter](https://github.com/AvengeMedia/dank-greeter) —
   апстрим самого greetd-гримера (`dms-greeter`, `dms greeter enable/sync`,
-  пакет `privesc`); документация про override — в `docs/` этого репозитория,
-  раздел про niri: «`dms-greeter sync` writes the generated greeter config to
-  `/etc/greetd/niri/config.kdl`. Add local manual tweaks in
+  пакет `privesc`); про override там написано в `README.md`, раздел
+  `Configuration` → `Compositor`: «`dms-greeter sync` writes the generated
+  greeter config to `/etc/greetd/niri/config.kdl`. Add local manual tweaks in
   `/etc/greetd/niri_overrides.kdl`».
 - [DankMaterialShell, AvengeMedia/DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) —
   сама оболочка DMS, которую видно и в сессии, и на экране входа; описана в
