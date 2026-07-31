@@ -47,6 +47,8 @@ covers:
 - [`base.md`](base.md) — базовые утилиты, оболочка, git, приглашение
   командной строки.
 - [`desktop.md`](desktop.md) — niri, DankMaterialShell, обои рабочего стола.
+- [`greeter.md`](greeter.md) — экран входа в систему: greetd и оболочка DMS
+  вместо sddm.
 - [`terminal.md`](terminal.md) — ghostty и alacritty, темы оформления.
 - [`keyboard.md`](keyboard.md) — раскладка клавиатуры и её защита от
   `localectl`.
@@ -59,8 +61,6 @@ covers:
 
 - [`voice.md`](voice.md) — голосовой ввод через Handy: горячие клавиши, запись
   и печать распознанного текста.
-- [`voice-postprocess.md`](voice-postprocess.md) — постобработка
-  распознанного текста локальной моделью: пунктуация и настройки.
 
 ## Данные и сеть
 
