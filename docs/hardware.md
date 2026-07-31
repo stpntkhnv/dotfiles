@@ -370,7 +370,7 @@ sudo systemctl stop bluetooth && sudo modprobe -r btusb && sudo modprobe btusb &
 | Юниты `sddm.service`\*, `NetworkManager.service`, `bluetooth.service`, `ufw.service`, `systemd-timesyncd.service`, `fstrim.timer` | системные | `30-system`: `enable`, без `--now`, при каждом прогоне |
 | Юнит `cups.socket` | системный | `30-system`, если выбрана `printing`: `enable`, без `--now` |
 | Юнит `tailscaled.service` | системный | `30-system`, всегда (`tailscale` — `always: true`): `enable` + явный `start` |
-| Юнит `docker.socket` | системный | `30-system`, если выбрана `docker`: `enable`, без `--now` |
+| Юнит `docker.socket` | системный | `30-system`, если выбрана `docker`: `enable`, без `--now`; сама фича описана в [dev-tools.md](dev-tools.md) |
 | Политика `ufw`: `deny incoming`, `allow outgoing`, `--force enable` | хост | `30-system`, один раз — действует немедленно, не после ребута |
 | Пакеты `cups`, `cups-pk-helper`, `system-config-printer` | хост, pacman | фича `printing`, `default: true` |
 | `/etc/modprobe.d/btusb.conf` | вне дома | `50-bluetooth`, только если выбрана `bluetooth-fix` |
@@ -514,9 +514,25 @@ linux-firmware mkinitcpio linux amd-ucode`) — значит `lspci` был га
 Формула размера по умолчанию (`min(ram/2, 4096)` МБ,
 [zram-generator.conf(5)](https://man.archlinux.org/man/zram-generator.conf.5))
 на этой машине даёт 4 ГиБ при 31 ГиБ оперативной памяти — этого достаточно
-для сжатого свопа без отдельной настройки. Алгоритм меняют, потому что
-`zstd` даёт заметно лучшее сжатие, чем `lzo-rle` по умолчанию, ценой
-процессора, которая рядом со свопом на диск не имеет значения.
+для сжатого свопа без отдельной настройки.
+
+С алгоритмом сложнее, и здесь комментарий скрипта отстал от жизни. Он
+объясняет строку `compression-algorithm = zstd` тем, что `zstd` даёт заметно
+лучшее сжатие, чем `lzo-rle` по умолчанию, ценой процессора, которая рядом со
+свопом на диск не имеет значения. Довод сам по себе верен, а вот «по
+умолчанию» на этой машине уже не `lzo-rle`:
+
+```
+$ zcat /proc/config.gz | grep CONFIG_ZRAM_DEF_COMP=
+CONFIG_ZRAM_DEF_COMP="zstd"
+```
+
+То есть ядро, с которым машина живёт, само по себе собрано с `zstd` как
+умолчанием, и строка в конфиге сейчас ничего не меняет. Смысл у неё остаётся,
+но другой, чем написано в комментарии: это явная привязка к конкретному
+алгоритму на случай, если умолчание ядра однажды уедет обратно. Проверить,
+вернулся ли исходный довод в силу, можно той же командой выше: если она
+однажды покажет не `zstd`, строка снова начнёт что-то менять.
 
 ## Ссылки
 
@@ -550,8 +566,10 @@ linux-firmware mkinitcpio linux amd-ucode`) — значит `lspci` был га
 - [network.md](network.md) — последняя треть того же скрипта (firewall,
   Tailscale, Ziti), включая полный разбор `ufw allow mdns`.
 - [greeter.md](greeter.md) — почему `sddm.service` включается условно.
-- [install.md](install.md) — как эта машина была установлена (`base` через
-  `pacstrap`-подобный вызов, откуда берётся `pciutils`).
+- [install.md](install.md) — установка самого репозитория на машину, где
+  система Arch уже есть. Про установку самой системы (`pacstrap`, метапакет
+  `base`, откуда берётся `pciutils`) там не написано ничего: доказательство
+  про `base` на этой машине — `/var/log/pacman.log`, а не этот документ.
 - [features.md](features.md) — исходное описание фич `printing`,
   `bluetooth-fix` и раздела про NVIDIA/zram, из которого эта тема выделена в
   отдельный документ.
