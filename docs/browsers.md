@@ -100,7 +100,9 @@ Exec={{ .chezmoi.homeDir }}/.local/bin/slice-run browser-firefox.slice /usr/lib/
 
 Казалось бы, `.desktop`-файл мог бы вызывать `systemd-run --user --scope
 --slice=browser-firefox.slice -- /usr/lib/firefox/firefox %u` напрямую, без
-отдельного скрипта. Не выходит — панель рабочего стола, из которой реально
+отдельного скрипта. Флаг `--scope` заводит вокруг команды
+[systemd scope](glossary.md#systemd-scope) — учётную обёртку над уже живым
+процессом. Не выходит — панель рабочего стола, из которой реально
 происходит клик, уже сама оборачивает `Exec` в `systemd-run --user --scope`
 раньше, чем эта строка вообще начинает выполняться:
 
