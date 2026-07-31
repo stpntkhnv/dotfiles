@@ -314,7 +314,7 @@ mDNS как протокол определён только для UDP; вхо�
 | Файл удостоверения (JSON) | `/opt/openziti/etc/identities/`, там же | руками; чеклист напоминает, пока каталог пуст |
 | `~/bin/update-ziti-hosts.sh` | хост или контейнер, где выбрана `ziti` | шаблон chezmoi раскладывает файл при каждом apply; тело пустое, если `ziti` не выбрана; запускается только руками |
 | `/etc/hosts`, блок `BEGIN/END ziti-dns-entries` | там же | только когда `update-ziti-hosts.sh` запущен руками с `sudo` |
-| Пакет и служба `ufw` | хост | ставит `host-base` ([hardware.md](hardware.md) про остальной `host-base`); `30-system` включает `ufw.service` |
+| Пакет и служба `ufw` | хост | ставит `host-base` ([base.md](base.md) про остальной `host-base`); `30-system` включает `ufw.service` |
 | Политика ufw по умолчанию | хост | `deny incoming`, `allow outgoing`, `--force enable` — один раз, пока `ufw status` не показывает `Status: active` |
 | Правило ufw `mdns` (tcp+udp/5353) | хост | добавляется, если выбрана `printing`, и правила ещё нет; не снимается при выключении фичи |
 | Правила ufw `22000/tcp`, `22000/udp`, `21027/udp` | хост | добавляются, если выбрана `syncthing`, и правила ещё нет; не снимаются при выключении фичи |
@@ -369,9 +369,10 @@ $ grep -A1 'tuple' /etc/ufw/user.rules
 ### tuple ### allow udp 21027 0.0.0.0/0 any 0.0.0.0/0 in
 -A ufw-user-input -p udp --dport 21027 -j ACCEPT
 ```
-Это ровно то же самое, что нормально смотреть одной командой
-`sudo ufw status verbose` — просто на живом сеансе с паролем под рукой она
-даёт тот же результат человекочитаемой таблицей.
+Это те же сведения, что даёт `sudo ufw status verbose`, но в другом виде:
+команда собирает из этих же файлов человекочитаемую пронумерованную таблицу,
+а здесь видны сырые строки правил, из которых она её собирает. Порты и
+политики по умолчанию совпадают; отличается только оформление.
 
 Какая ветка `30-system` вообще сработала на этой машине (только рендер
 шаблона, ничего не применяет):
@@ -476,8 +477,8 @@ non-privileged user but still want to give it some capabilities» — для
 - [glossary.md](glossary.md) — [`run_onchange`](glossary.md#run_onchange).
 - [keyboard.md](keyboard.md) — раскладка, первая треть того же скрипта
   `30-system`, и приём с проверкой состояния перед `sudo`.
-- [hardware.md](hardware.md) — zram, вторая треть того же скрипта, и пакет
-  `ufw` внутри `host-base`.
+- [hardware.md](hardware.md) — zram, вторая треть того же скрипта.
+- [base.md](base.md) — фича `host-base` целиком, включая пакет `ufw`.
 - [sync.md](sync.md) — сама синхронизация Syncthing и полный разбор портов
   со стороны демона.
 - [isolation-network.md](isolation-network.md) — как трафик вкладки внутри
