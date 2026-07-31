@@ -109,7 +109,8 @@ Bitwarden как расширение браузера — отдельная, �
 
 ### Два ключа SSH, а не один — скрипт 82
 
-`run_onchange_after_82-ssh-key.sh.tmpl` целиком:
+Существо `run_onchange_after_82-ssh-key.sh.tmpl` (шапка с `#!/bin/bash` и
+`set -euo pipefail` опущена, тело печати свёрнуто в одну строку):
 
 ```sh
 mkdir -p "$HOME/.ssh"
@@ -118,12 +119,14 @@ chmod 700 "$HOME/.ssh"
 generated=false
 
 if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
+    echo "==> Generating an ed25519 key (GitHub, GitLab)..."
     ssh-keygen -t ed25519 -C "{{ .git_email }}" -f "$HOME/.ssh/id_ed25519" -N ""
     generated=true
 fi
 
 # Azure DevOps still refuses ed25519 over SSH, hence a separate RSA key.
 if [[ ! -f "$HOME/.ssh/id_rsa" ]]; then
+    echo "==> Generating an RSA-4096 key (Azure DevOps)..."
     ssh-keygen -t rsa -b 4096 -C "{{ .git_email }}" -f "$HOME/.ssh/id_rsa" -N ""
     generated=true
 fi
@@ -134,6 +137,13 @@ if $generated; then
 EOF
 fi
 ```
+
+Две строки `echo` внутри условий стоят отдельного слова, потому что это
+единственное место, где вывод `chezmoi apply` показывает, какой именно ключ
+создаётся прямо сейчас. Финальный блок печати такого не различает: он
+вываливает обе открытые части разом, даже если свежесоздан был только один
+ключ. Так что «какой из двух появился» видно по этим строкам выше, а не по
+тому, что напечатано в конце.
 
 Каждый ключ проверяется независимо и генерируется независимо: наличие
 `id_ed25519` не влияет на решение про `id_rsa`, и наоборот. `{{ .git_email
@@ -169,7 +179,8 @@ fi
 
 ### Переключение `origin` на SSH — скрипт 83
 
-`run_onchange_after_83-origin-ssh.sh.tmpl` целиком:
+Существо `run_onchange_after_83-origin-ssh.sh.tmpl` (шапка с `#!/bin/bash` и
+`set -euo pipefail` опущена):
 
 ```sh
 cd "{{ .chezmoi.sourceDir }}"
@@ -201,8 +212,9 @@ git-репозитория на машине. `ssh_url` — не перемен�
 Комментарий в начале скрипта объясняет, зачем вообще нужен этот шаг именно
 здесь, а не раньше: `install.sh` клонирует репозиторий не сам, а поручает
 это `chezmoi init`, у которого есть своя логика выбора между SSH и HTTPS
-([install.md](install.md), раздел «Почему `install.sh` не клонирует
-репозиторий сам»). На чистой машине SSH-ключа ещё нет, и `chezmoi init`
+([install.md](install.md), абзац «Почему `install.sh` не клонирует
+репозиторий сам» внутри «Почему именно так»). На чистой машине SSH-ключа
+ещё нет, и `chezmoi init`
 уходит на HTTPS. Скрипт 83 выполняется позже по нумерации, чем 82 — то есть
 уже после того, как `id_ed25519` появился на диске, — и именно поэтому
 может безопасно переключить `origin` обратно на SSH, не рискуя оставить
