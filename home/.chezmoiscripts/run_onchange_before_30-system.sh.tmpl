@@ -107,7 +107,16 @@ enable_unit() {
     fi
 }
 
-enable_unit sddm.service                # desktop
+# Seed sddm only when nothing already holds display-manager.service. After the
+# greeter switch, greetd holds that alias through its own [Install] symlink,
+# and `systemctl enable sddm` would try to recreate a symlink greetd already
+# owns -- it fails, and set -e above takes this whole before-stage script (and
+# the apply with it) down before 45-greeter gets a turn to reconcile anything.
+# The fallback guarantee lives in that script's EXIT trap, which reruns on
+# every apply -- but only while the greeter feature is ticked; untick it and
+# 45-greeter renders down to two lines with no trap at all. This line only
+# needs to seed a machine that has nothing.
+systemctl is-enabled --quiet display-manager.service || enable_unit sddm.service   # desktop
 enable_unit NetworkManager.service      # host-base
 enable_unit bluetooth.service           # host-base
 enable_unit ufw.service                 # host-base
@@ -176,16 +185,6 @@ enable_unit docker.socket
 if ! id -nG "$USER" | grep -qw docker; then
     echo "==> Adding $USER to the docker group (effective at next login)"
     sudo usermod -aG docker "$USER"
-fi
-{{- end }}
-{{- if has "voice-postprocess" .enabled }}
-
-# Ollama serves the local model that cleans up dictated text. Started as well as
-# enabled, for the same reason as tailscaled: otherwise the feature does nothing
-# until the next reboot and looks broken.
-enable_unit ollama.service
-if ! systemctl is-active --quiet ollama.service; then
-    sudo systemctl start ollama.service
 fi
 {{- end }}
 {{- end }}

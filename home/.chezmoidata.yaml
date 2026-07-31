@@ -445,6 +445,31 @@ features:
       - docker-compose
       - lazydocker
 
+  # The login screen. greetd runs the DMS greeter, which is the desktop shell
+  # itself rather than a theme that resembles it: it reads the same
+  # settings.json the running session does, which is what genuinely cannot
+  # drift out of step. The QML is not literally shared, though -- the greeter
+  # ships in its own greetd-dms-greeter-git package, separate from the
+  # session's dms-shell, on its own update path (see README): the same
+  # upstream project installed twice, not one copy running both places.
+  #
+  # Not always: which login screen a machine has is a preference, the same way
+  # the multiplexer is, and always would drag a -git AUR package onto every
+  # machine. That package builds from source, and a failed build takes
+  # 20-packages down with the whole apply -- loudly, and before anything has
+  # been switched over, but down all the same.
+  #
+  # sddm stays in `desktop` and stays enabled by 30-system: it is the fallback
+  # this switch falls back TO, and `dms greeter uninstall` restores it.
+  - key: greeter
+    label: "Login screen: DMS greeter on greetd"
+    scope: host
+    default: true
+    pacman:
+      - greetd
+    aur:
+      - greetd-dms-greeter-git
+
   - key: go
     label: "Go"
     scope: both
@@ -569,6 +594,10 @@ features:
   # Handy is an offline speech-to-text app. The Whisper inside it reaches the
   # GPU through Vulkan rather than CUDA, so a card only needs its regular
   # driver and ICD. openblas is an undeclared dependency of handy-bin 0.9.4.
+  #
+  # Which Whisper, and the seed that keeps its punctuation from wandering, are
+  # pinned by 44-handy-settings rather than left to whatever was picked in the
+  # UI: both were measured, and neither survives a reinstall on its own.
   - key: voice
     label: "Voice input (Handy, offline)"
     scope: host
@@ -576,25 +605,6 @@ features:
       - openblas
     aur:
       - handy-bin
-
-  # Post-processing of the transcript by a local LLM. It exists because Whisper
-  # picks a transcription style at the first token of every 30-second decode
-  # window and holds it to the end of that window: with no prompt to pin it, a
-  # noticeable share of dictations come back unpunctuated (see README,
-  # Punctuation). Post-processing runs on the finished text, so window
-  # boundaries stop mattering.
-  #
-  # ollama-vulkan rather than ollama-cuda: the same GPU stack that already feeds
-  # whisper.cpp (see 40-voice), against 5.7 GB of CUDA for an unmeasured gain.
-  #
-  # Not default: 5.4 GB of weights, and a default on a feature with `needs` would
-  # drag `voice` onto every machine, including ones with no microphone.
-  - key: voice-postprocess
-    label: "Voice input: local LLM cleanup (punctuation, formatting)"
-    scope: host
-    needs: [voice]
-    pacman:
-      - ollama-vulkan
 
   # Syncthing keeps the note vaults identical across machines and pulls phone
   # photos in. Host only: containers already see the host's home tree, so a
