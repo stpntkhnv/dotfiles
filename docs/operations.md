@@ -255,8 +255,8 @@ x-scheme-handler/http x-scheme-handler/https`, когда обработчик �
 
 **Второй: источники ссылок, которые вообще проверяются — это только
 верхний уровень `docs/*.md`.** Функция `doc_files()` берёт файлы через
-`find docs -maxdepth 1 -name '*.md'`, исключая `catalog.md` и `features.md`,
-и `broken_links()` проходит по ссылкам только этих файлов
+`find docs -maxdepth 1 -name '*.md'`, исключая только `catalog.md` (он
+генерируется и шапки не носит), и `broken_links()` проходит по ссылкам этих файлов
 (`while IFS= read -r doc; do ... done < <(doc_files)`). Корневой `README.md`,
 файлы `docs/issues/*.md`, `home/**`, `tools/**` никогда не читаются как
 *источник* ссылки — независимо от того, куда эта ссылка ведёт. Если

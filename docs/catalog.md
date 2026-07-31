@@ -22,7 +22,7 @@
 | `vscode` | VS Code + extensions from extensions.txt | both | по выбору | 1 | [dev-tools.md](dev-tools.md) |
 | `browsers` | Firefox + Chromium | host | галочка стоит | 2 | [browsers.md](browsers.md) |
 | `zen` | Zen browser + Junction link picker | host | всегда | 2 | [isolation-browser.md](isolation-browser.md) |
-| `printing` | Printing (CUPS) | host | галочка стоит | 3 | — |
+| `printing` | Printing (CUPS) | host | галочка стоит | 3 | [hardware.md](hardware.md) |
 | `docker` | Docker + lazydocker | host | по выбору | 4 | [dev-tools.md](dev-tools.md) |
 | `greeter` | Login screen: DMS greeter on greetd | host | галочка стоит | 2 | [greeter.md](greeter.md) |
 | `go` | Go | both | по выбору | 1 | [dev-tools.md](dev-tools.md) |
@@ -42,6 +42,6 @@
 | `syncthing` | Syncthing: notes and phone media sync | host | галочка стоит | 2 | [sync.md](sync.md) |
 | `obsidian` | Obsidian (notes editor) | host | галочка стоит | 1 | [sync.md](sync.md) |
 | `wallpapers` | Wallpapers into ~/Pictures/wallpapers | host | галочка стоит | 0 | [desktop.md](desktop.md) |
-| `bluetooth-fix` | Fix for cheap USB Bluetooth dongle (10d7:b012) | host | по выбору | 0 | — |
+| `bluetooth-fix` | Fix for cheap USB Bluetooth dongle (10d7:b012) | host | по выбору | 0 | [hardware.md](hardware.md) |
 
 Пакеты посчитаны из всех источников фичи: pacman, AUR, npm, dotnet tool.

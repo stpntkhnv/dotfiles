@@ -32,11 +32,9 @@ covered_universe() { git ls-files home/ install.sh; }
 # с индексом.
 #
 # catalog.md исключён: он генерируется и шапки не носит.
-# features.md исключён: он живёт до задачи 27 и шапки не носит.
 doc_files() {
   find docs -maxdepth 1 -name '*.md' \
     ! -name 'catalog.md' \
-    ! -name 'features.md' \
     -print | sort
 }
 
