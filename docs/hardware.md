@@ -143,9 +143,9 @@ fi
 
 Комментарий объясняет пустое место в списке пакетов: «Note what is NOT here:
 the `cuda` package. Nothing in this setup uses CUDA — both the desktop and
-Whisper inside Handy reach the GPU through Vulkan». `docs/features.md` (раздел
-`voice`) подтверждает то же самое с другой стороны: whisper.cpp внутри Handy
-на Linux работает через Vulkan-бэкенд, не CUDA.
+Whisper inside Handy reach the GPU through Vulkan». [voice.md](voice.md)
+подтверждает то же самое с другой стороны: whisper.cpp внутри Handy на Linux
+работает через Vulkan-бэкенд, не CUDA.
 
 Выбор между `nvidia-open` и `nvidia-open-dkms`:
 
@@ -570,6 +570,3 @@ CONFIG_ZRAM_DEF_COMP="zstd"
   система Arch уже есть. Про установку самой системы (`pacstrap`, метапакет
   `base`, откуда берётся `pciutils`) там не написано ничего: доказательство
   про `base` на этой машине — `/var/log/pacman.log`, а не этот документ.
-- [features.md](features.md) — исходное описание фич `printing`,
-  `bluetooth-fix` и раздела про NVIDIA/zram, из которого эта тема выделена в
-  отдельный документ.

@@ -78,7 +78,7 @@ if [ -d "/run/user/${container_user_uid}" ] && [ "${init}" -eq 0 ]; then
 контейнер как `/var/lib/wsproxy`. Обёртка пишет туда одну строку с URL,
 `zen-open-recv` её проверяет и зовёт `zen-open`.
 
-Разбор с замерами: [docs/features.md](../features.md#почему-ссылка-уходит-через-сокет-а-не-через-distrobox-host-exec).
+Разбор с замерами: [docs/isolation-links.md](../isolation-links.md#почему-было-заменено).
 
 ## Как проверено, что починилось
 

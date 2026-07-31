@@ -48,7 +48,7 @@ flowchart TD
 
 Оба агента — обычные фичи каталога, `scope: both` (ставятся и на хосте, и
 внутри каждого [контейнера distrobox](glossary.md#контейнер-distrobox) —
-про `scope` подробнее в [features.md](features.md), раздел о фичах):
+про `scope` подробнее в [how-it-works.md](how-it-works.md#три-вопроса-которые-решают-судьбу-фичи)):
 
 ```yaml
 - key: claude
@@ -273,8 +273,6 @@ chezmoi execute-template < home/.chezmoiscripts/run_after_84-claudefiles.sh.tmpl
   применения: [Include files from
   elsewhere](https://www.chezmoi.io/user-guide/include-files-from-elsewhere/),
   [Application order](https://www.chezmoi.io/reference/application-order/).
-- [features.md](features.md), раздел `claude` — прежнее, более короткое
-  описание той же механики.
 - [multiplexer.md](multiplexer.md) — как herdr опознаёт запущенный `claude`
   внутри контейнера.
 - [secrets.md](secrets.md) — устройство самого хранилища Bitwarden и границы
