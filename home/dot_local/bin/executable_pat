@@ -68,14 +68,14 @@ case "$count" in
 esac
 
 case "$mode" in
-    print) rbw get "$ids" ;;
+    print) rbw get "$ids" || die "cannot read entry -- try 'rbw login'" ;;
     clip)  command -v wl-copy >/dev/null 2>&1 || die "wl-copy not found, no clipboard"
-           rbw get "$ids" | wl-copy ;;
+           rbw get "$ids" | wl-copy || die "cannot read entry -- try 'rbw login'" ;;
     # The note is whatever --full adds to the password. Cutting the password
     # out by value rather than by line number stays correct whichever order
     # rbw prints the two in, and makes it impossible for -i to leak the token.
-    note)  token=$(rbw get "$ids")
-           full=$(rbw get --full "$ids")
+    note)  token=$(rbw get "$ids") || die "cannot read entry -- try 'rbw login'"
+           full=$(rbw get --full "$ids") || die "cannot read entry -- try 'rbw login'"
            note=${full/"$token"/}
            printf '%s\n' "${note#$'\n'}" ;;
 esac
