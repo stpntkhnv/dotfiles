@@ -1,8 +1,12 @@
 {{/*
-   What NOT to deploy. Every condition is now about a feature rather than an
-   environment: the VS Code config shows up wherever VS Code was picked, not
-   wherever "we are in a container". The old host/container split was exactly
-   what stopped one program from reaching both environments.
+   What NOT to deploy. Conditions are about features rather than environments:
+   the VS Code config shows up wherever VS Code was picked, not wherever "we
+   are in a container". The old host/container split was exactly what stopped
+   one program from reaching both environments.
+
+   Two entries at the bottom carry an environment test on top of the feature
+   one -- `work` and `pat`. Both are commands that would break or need their
+   own setup inside a container; each block says why in its own comment.
 
    Scripts no longer appear here: they live in .chezmoiscripts/, are not
    targets, and disable themselves in-template (`exit 0` at the top). The
@@ -73,4 +77,12 @@ bin/update-ziti-hosts.sh
      the first run. */}}
 {{ if or (not (has "herdr" .enabled)) (ne .env "host") }}
 .local/bin/work
+{{ end }}
+
+{{/* Второе исключение по окружению, и по другой причине, чем у `work`. Это не
+     граница: `rbw` стоит и в контейнерах, фича bitwarden — scope: both. Но
+     вход rbw живёт в домашнем каталоге контейнера и умирает вместе с ним, так
+     что команда, которая на этот вход опирается, живёт на хосте. */}}
+{{ if or (not (has "bitwarden" .enabled)) (ne .env "host") }}
+.local/bin/pat
 {{ end }}

@@ -1,0 +1,90 @@
+#!/bin/bash
+# Managed by chezmoi -- home/dot_local/bin/executable_pat
+#
+# Access tokens live in the PAT folder of the personal Bitwarden vault: one
+# entry per organisation or service, the token in the password field, where it
+# was issued and when it expires in the note.
+#
+# The entry is resolved to a uuid here and read by that uuid, never by name.
+# The first argument of `rbw get` is a NEEDLE matched against name, URI or
+# uuid rather than compared for equality, so --folder alone would not be
+# enough: an entry in the same folder carrying "digi3" in its URI would pull
+# the read onto itself. A silently wrong token is worse than an error.
+#
+# Host only, see the gate in .chezmoiignore. That is NOT a boundary: rbw is
+# installed in containers too, because the bitwarden feature is scope: both.
+# The reason is mundane -- an rbw login lives in the container's home and dies
+# with it, so a command that assumes one belongs on the host.
+set -euo pipefail
+
+FOLDER=PAT
+
+die() { printf 'pat: %s\n' "$*" >&2; exit 1; }
+
+usage() {
+    printf '%s\n' \
+        'pat              list entry names in the PAT folder' \
+        'pat <name>       print the token' \
+        'pat -c <name>    copy the token to the clipboard, print nothing' \
+        'pat -i <name>    print only the note of the entry'
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+command -v rbw >/dev/null 2>&1 || die "rbw is not installed (feature bitwarden)"
+[[ -s "$HOME/.config/rbw/config.json" ]] ||
+    die "rbw is not configured: rbw config set email <email> && rbw login"
+
+mode=print
+case "${1:-}" in
+    -c) mode=clip; shift ;;
+    -i) mode=note; shift ;;
+    -*) usage >&2; exit 2 ;;
+esac
+
+(( $# <= 1 )) || { usage >&2; exit 2; }
+if (( $# == 0 )) && [[ $mode != print ]]; then usage >&2; exit 2; fi
+
+entries=$(rbw list --fields id,folder,name) ||
+    die "cannot read the vault -- try 'rbw login'"
+
+names=$(awk -F'\t' -v f="$FOLDER" '$2 == f { print $3 }' <<<"$entries")
+[[ -n "$names" ]] || die "folder $FOLDER is empty or missing"
+
+if (( $# == 0 )); then
+    printf '%s\n' "$names"
+    exit 0
+fi
+
+name="$1"
+ids=$(awk -F'\t' -v f="$FOLDER" -v n="$name" '$2 == f && $3 == n { print $1 }' <<<"$entries")
+count=$(grep -c . <<<"$ids" || true)
+case "$count" in
+    0) printf 'pat: no entry %s\n' "$name" >&2
+       printf '%s\n' "$names" >&2
+       exit 1 ;;
+    1) ;;
+    *) die "ambiguous name $name: $count entries in $FOLDER" ;;
+esac
+
+case "$mode" in
+    print) rbw get "$ids" || die "cannot read entry -- try 'rbw login'" ;;
+    clip)  command -v wl-copy >/dev/null 2>&1 || die "wl-copy not found, no clipboard"
+           rbw get "$ids" | wl-copy || die "cannot read entry -- try 'rbw login'" ;;
+    # The note is whatever --full adds to the password. The password value
+    # occurs verbatim in --full's output, so cutting it out by value rather
+    # than by line number stays correct regardless of the order rbw prints
+    # the two fields in -- not any output format whatsoever, just field order.
+    # --full separates password and note with a blank line, so cutting the
+    # password out by value leaves two leading newlines, not one -- strip all
+    # of them in a loop rather than a fixed count, but only at the front:
+    # blank lines the user typed in the middle of their own note stay put.
+    note)  token=$(rbw get "$ids") || die "cannot read entry -- try 'rbw login'"
+           full=$(rbw get --full "$ids") || die "cannot read entry -- try 'rbw login'"
+           note=${full/"$token"/}
+           while [[ $note == $'\n'* ]]; do note=${note#$'\n'}; done
+           printf '%s\n' "$note" ;;
+esac

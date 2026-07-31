@@ -283,8 +283,15 @@ distrobox enter --no-workdir digi3 -- pwd
 
 ```sh
 ls ~/.local/bin/work           # есть на хосте, только если тикнута herdr
-distrobox enter digi3 -- ls ~/.local/bin/work 2>&1   # No such file or directory — и это правильно
+distrobox enter digi3 -- bash -lc 'ls ~/.local/bin/work'
+# /home/stsiapan/homes/digi3/.local/bin/work: No such file or directory — и это правильно
 ```
+
+Без `bash -lc` проверка обманывает: `distrobox enter digi3 -- ls ~/.local/bin/work`
+тоже возвращает код 0 и печатает путь, но тильду в нём успевает раскрыть
+хостовый шелл ещё до передачи команды в контейнер, поэтому проверяется
+хостовый файл `/home/stsiapan/.local/bin/work`, а не то, что видно изнутри
+`digi3`.
 
 Сам `work` идемпотентен: второй запуск подряд не должен создавать новых
 воркспейсов и не должен трогать панель, в которой уже что-то запущено —
