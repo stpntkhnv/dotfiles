@@ -61,19 +61,20 @@ true`) — её единственная работа - пропустить э�
 ссылке `kdl.dev` в первой же строке самого файла). Это не голый шаблон, а
 рабочий файл с настоящими настройками: раскладка клавиатуры (`xkb`, подробно
 — [keyboard.md](keyboard.md)), горячие клавиши управления окнами (`Alt+Tab` и
-подобное, отдельно от клавиш панели), анимации, тени, семь блоков
+подобное, отдельно от клавиш панели), анимации, тени, восемь блоков
 `window-rule` под конкретные программы (WezTerm, приложения GNOME, всплывающие
 уведомления Steam, диалоги плавающими окнами) — и, в самом конце, семь строк
-`include` на отдельные файлы.
+`include` на отдельные файлы. Восемь `window-rule` и семь `include` — разные
+числа не по ошибке: проверено `grep -c '^window-rule' home/dot_config/niri/config.kdl`
+→ `8`, и живой `dms config windowrules list` нумерует их как `rule_0`…`rule_7`.
 
 ```mermaid
 flowchart TB
-    CFG["config.kdl<br/>xkb, биндинги окон,<br/>анимации, семь window-rule,<br/>в конце -- семь include"]
+    CFG["config.kdl<br/>xkb, биндинги окон,<br/>анимации, восемь window-rule,<br/>в конце -- семь include"]
 
     subgraph OURS["Наши, в репозитории"]
         BINDS["dms/binds.kdl<br/>горячие клавиши панели"]
         CURSOR["dms/cursor.kdl<br/>заглушка-комментарий"]
-        WR["dms/empty_windowrules.kdl<br/>chezmoi-атрибут empty_<br/>цель -- windowrules.kdl"]
     end
 
     subgraph DMSGEN["Генерирует DMS сама,<br/>в репозитории их нет"]
@@ -81,6 +82,11 @@ flowchart TB
         LAYOUT["dms/layout.kdl"]
         ALTTAB["dms/alttab.kdl"]
         OUTPUTS["dms/outputs.kdl"]
+    end
+
+    subgraph ORPHANED["DMS генерирует,<br/>config.kdl не подключает"]
+        WR["dms/windowrules.kdl<br/>chezmoi-атрибут empty_<br/>в исходнике"]
+        WPBLUR["dms/wpblur.kdl<br/>появляется, когда включают<br/>размытие обоев в DMS"]
     end
 
     VOICE["voice.kdl -- владеет voice.md"]
@@ -93,11 +99,13 @@ flowchart TB
     CFG -->|include| OUTPUTS
     CFG -->|include| VOICE
 
-    WR -.->|"НЕ подключён include,<br/>правила окон недостижимы"| CFG
+    WR -.->|"НЕ подключён include"| CFG
+    WPBLUR -.->|"НЕ подключён include"| CFG
 
     S80["run_after_80-niri-dms-placeholders<br/>читает include-строки regex'ом,<br/>заводит недостающие пустыми"] -.->|"на чистой машине"| DMSGEN
 
     style WR fill:#742a2a,color:#fff
+    style WPBLUR fill:#742a2a,color:#fff
 ```
 
 ### Что подключено, а что прошито в самом config.kdl
@@ -119,6 +127,11 @@ flowchart TB
   `"niri-write-outputs"`). Их нет в репозитории и не должно быть: держать их
   под chezmoi значило бы переписывать обратно на старое содержимое каждую
   смену обоев.
+
+DMS умеет генерировать в этом же каталоге ещё и пятый файл, `wpblur.kdl` —
+но его `config.kdl` не подключает вовсе ни одним `include`. Он разобран не
+здесь, а в разделе «Осиротевшие файлы» ниже, вместе со вторым файлом с той же
+судьбой, `windowrules.kdl`.
 
 ### Скрипт 80: список включаемых файлов не захардкожен
 
@@ -199,18 +212,22 @@ INFO niri: config is valid
 обход по-прежнему в деле, хотя причина, по которой он появился, для этой
 версии niri уже не действует. Запись — в [workarounds.md](workarounds.md).
 
-### Осиротевший файл: правила окон, которые никто не подключает
+### Осиротевшие файлы: DMS генерирует, config.kdl не подключает
 
-`dms/empty_windowrules.kdl` в репозитории пуст (0 байт) не случайно: имя
-несёт [атрибут chezmoi](glossary.md#шаблон-chezmoi) `empty_` — «Ensure the
-file exists, even if is empty» (без него chezmoi «by default... removes»
-пустые файлы, `chezmoi.io/reference/source-state-attributes`). Проверено
-`chezmoi target-path` на этом файле: цель на диске — `~/.config/niri/dms/
-windowrules.kdl`, без `empty_` в имени.
+Два файла в `dms/` существуют (или могут существовать) физически, но ни один
+`include` в `config.kdl` на них не смотрит. Общий признак у обоих один:
+`grep -n 'windowrules\|wpblur' home/dot_config/niri/config.kdl` в репозитории
+— пусто.
 
-Этот файл существует ровно затем, чтобы DMS не считал его отсутствующим:
-DMS сама умеет писать в него настоящие правила окон через раздел настроек
-«Window Rules» (`dms config windowrules add/update`, читается
+**`dms/windowrules.kdl`.** В репозитории лежит `dms/empty_windowrules.kdl` —
+пуст (0 байт) не случайно: имя несёт [атрибут chezmoi](glossary.md#шаблон-chezmoi)
+`empty_` — «Ensure the file exists, even if is empty» (без него chezmoi «by
+default... removes» пустые файлы, `chezmoi.io/reference/source-state-attributes`).
+Проверено `chezmoi target-path` на этом файле: цель на диске —
+`~/.config/niri/dms/windowrules.kdl`, без `empty_` в имени. Этот файл
+существует ровно затем, чтобы DMS не считала его отсутствующим: DMS сама умеет
+писать в него настоящие правила окон через раздел настроек «Window Rules»
+(`dms config windowrules add/update`, читается
 `/usr/share/quickshell/dms/Modals/WindowRuleModal.qml`). Но **`config.kdl` не
 подключает `dms/windowrules.kdl` ни одним `include`** — и сама же DMS об этом
 знает и сообщает. Проверено на этой машине, 2026-07-31, командой
@@ -223,26 +240,75 @@ DMS сама умеет писать в него настоящие правил
 ```
 
 Значит любое правило окна, заведённое через настройки DMS, а не вписанное
-руками в сам `config.kdl`, на этой машине не действует. Все семь
+руками в сам `config.kdl`, на этой машине не действует. Все восемь
 `window-rule`, которые реально работают (WezTerm, приложения GNOME,
 плавающие диалоги и так далее), прописаны прямо в `config.kdl`, а не через
-раздел настроек DMS. Это расхождение со старым текстом: и `README.md`, и
+раздел настроек DMS.
+
+**`dms/wpblur.kdl`.** Та же болезнь, второй экземпляр. Генерирует его функция
+`generateNiriBlurrule` (`/usr/share/quickshell/dms/Services/NiriService.qml`,
+строки 1273–1279): копирует бандловый шаблон `niri-wpblur.kdl` в
+`dms/wpblur.kdl`, когда в настройках DMS включают размытие обоев. Реальное
+содержимое, если файл создан, — блок `layer-rule` под своим служебным
+namespace:
+
+```
+// ! DO NOT EDIT !
+// ! AUTO-GENERATED BY DMS !
+// ! CHANGES WILL BE OVERWRITTEN !
+// ! PLACE YOUR CUSTOM CONFIGURATION ELSEWHERE !
+
+layer-rule {
+    match namespace="dms:blurwallpaper"
+    place-within-backdrop true
+}
+```
+
+Присутствие самого файла на диске — состояние сессии, а не факт репозитория,
+и оно успело смениться прямо в ходе работы над этим документом: на момент
+разбора этой находки `~/.config/niri/dms/wpblur.kdl` на машине не было, а на
+момент этой правки — уже есть (219 байт, содержимое как выше). Устойчиво
+ровно то, что не зависит от текущего наличия файла: **`config.kdl` не
+подключает `dms/wpblur.kdl` ни одним `include`**, поэтому размытие обоев,
+включённое через интерфейс DMS, физически не может подействовать на этой
+машине — независимо от того, успела ли DMS уже создать сам файл.
+
+Итого DMS умеет писать в каталог `dms/` не четыре файла, а пять: `colors.kdl`,
+`layout.kdl`, `alttab.kdl`, `outputs.kdl` подключены и работают,
+`wpblur.kdl` — нет. Плюс `windowrules.kdl`, который в репозитории заведён
+пустым самим chezmoi и может получить настоящее содержимое от DMS — тоже не
+подключён. Это расхождение со старым текстом в двух местах: `README.md` и
 `docs/features.md` называли `empty_windowrules.kdl` файлом «правил окон» без
-единого слова о том, что он не подключён.
+единого слова о том, что он не подключён; а `README.md`, в отличие от более
+ранней версии этого документа, всё-таки называл `wpblur.kdl` в числе файлов,
+которые генерирует DMS (раздел «niri and DankMaterialShell files») — этот
+пробел теперь закрыт.
 
 ### Курсор — не такое надёжное «наше», как выглядит
 
 `README.md` и `docs/features.md` относят `dms/cursor.kdl` к «нашим» файлам —
-наравне с `binds.kdl`, в отличие от четырёх генерируемых. Для `binds.kdl` это
+наравне с `binds.kdl`, в отличие от подключённых файлов, которые генерирует
+DMS (`colors.kdl`, `layout.kdl`, `alttab.kdl`, `outputs.kdl`). Для `binds.kdl` это
 верно без оговорок: в `/usr/share/quickshell/dms/Services/NiriService.qml`
 нет ни одной функции, которая писала бы в него содержимое (только общий
 цикл «создать пустым, если совсем нет файла» — тот же, что использует и
 скрипт 80). Для `cursor.kdl` — не совсем. В том же файле есть функция
 `generateNiriCursorConfig`, которая **пишет настоящий блок `cursor { ... }`**
 в `dms/cursor.kdl`, если настройки курсора (`cursorSettings` в
-`settings.json`) отличаются от значений по умолчанию — и вызывается она из
-`/usr/share/quickshell/dms/Common/SettingsData.qml:2890`, то есть при
-сохранении этих настроек через интерфейс DMS.
+`settings.json`) отличаются от значений по умолчанию, а вызывает её
+`updateCompositorCursor()` (`SettingsData.qml:2886`) — и не из одного места, а
+из двух. Первое — `Component.onCompleted` (`SettingsData.qml:1439`) через
+`loadSettings()`: срабатывает при каждом запуске DMS. Второе — `FileView` на
+самом `settings.json` с `watchChanges: true` (`SettingsData.qml:3613`): её
+`onLoaded` тоже вызывает `updateCompositorCursor()` (`SettingsData.qml:3652`)
+и срабатывает при **любом** внешнем изменении файла — включая то, которое
+делает сам `chezmoi apply`, переписывая `settings.json` обратно на committed
+содержимое. То есть вызовов, способных переписать `cursor.kdl`, не один
+эпизод («поменял курсор в настройках»), а минимум два маршрута сразу —
+каждый запуск DMS и каждая внешняя правка `settings.json`; единственное, что
+пока удерживает файл от переписывания на этой машине, — то, что
+`cursorSettings` совпадают со значениями по умолчанию (см. ниже), а не
+частота, с которой сам код пытается его перегенерировать.
 
 Сейчас на этой машине `cursorSettings` равны значениям по умолчанию
 (`"theme": "System Default", "size": 24`), поэтому `generateNiriCursorConfig`
@@ -274,14 +340,45 @@ DMS сама умеет писать в него настоящие правил
 Комментарий в `home/.chezmoidata.yaml` перед списком пакетов фичи `desktop`
 называет шесть пакетов, без которых «the shell still starts, but widgets
 silently do nothing»: `cava`, `i2c-tools`, `kimageformats`, `qt6ct`,
-`qt6-multimedia`, `tuned-ppd`. Формально для DMS они необязательны — сама DMS
-(`pacman -Qi dms-shell`, поле `Optional Deps`) перечисляет их же с тем же
-смыслом (`i2c-tools: External monitor brightness control`, `cava: Audio
-visualizer` и так далее). Репозиторий делает их обязательными для себя,
-ставя все шесть безусловно вместе с фичей `desktop`, вместо того чтобы
-рисковать тихо сломанным виджетом. Подтверждено живым `dms doctor -v`
-2026-07-31: `cava`, `i2c-tools`, `kimageformats`, `qt6-multimedia` (как
-`power-profiles-daemon` от `tuned-ppd`) отмечены `Available`/`Installed`.
+`qt6-multimedia`, `tuned-ppd`.
+
+Пакет, который реально ставит фича `desktop` (`- dms-shell-niri` в
+`.chezmoidata.yaml`), сам по себе никакого списка `Optional Deps` не несёт:
+`pacman -Qi dms-shell-niri` → `Optional Deps : None`. Список стоит на шаг
+ниже — у `dms-shell`, зависимости `dms-shell-niri` (`Depends On: dms-shell
+niri`), поставленной транзитивно (`Install Reason: Installed as a dependency
+for another package`). У `dms-shell` `Optional Deps` перечисляет одиннадцать
+пунктов: `cava`, `cups-pk-helper`, `i2c-tools`, `iwd`, `matugen`,
+`networkmanager`, `power-profiles-daemon`, `qt6-multimedia`, `qt6ct`,
+`systemd`, `wtype`.
+
+Из шести пакетов каталога с этим списком по имени совпадают четыре — `cava`,
+`i2c-tools`, `qt6ct`, `qt6-multimedia`. Пятый, `tuned-ppd`, под своим именем
+в списке `dms-shell` не встречается: там значится `power-profiles-daemon` —
+служба, которую `tuned-ppd` предоставляет (`Provides`), а не одноимённый
+пакет. Шестой, `kimageformats`, в `Optional Deps` `dms-shell` не упомянут
+вовсе — про него знает только сам `dms doctor` (см. ниже), а не пакетные
+метаданные.
+
+Живой `dms doctor -v` (2026-07-31, только чтение) подтверждает не всё
+буквально. `cava` и `kimageformats` в его выводе действительно
+`Installed` (`● cava ... Installed`, `● kimageformats ... Installed (4
+formats)`). У `i2c-tools` отдельной строки с этим именем нет — есть пункт
+`I2C/DDC`, и на этой машине он показывает `○ I2C/DDC ... No monitors
+detected`: код на месте, но статус не «доступно», а «мониторов не нашлось».
+`qt6-multimedia` в выводе `dms doctor` не фигурирует вовсе — там есть
+`qt6-imageformats`, другой пакет (доп. форматы изображений Qt: WebP, TIFF,
+GIF, JP2, ICNS — а не звуковые эффекты). `qt6ct` отдельной строкой тоже не
+проверяется. `tuned-ppd` подтверждается только через
+`power-profiles-daemon` (`● power-profiles-daemon ... Available`).
+
+Держать все шесть безусловно вместе с фичей `desktop`, вместо того чтобы
+рисковать тихо сломанным виджетом, — решение репозитория остаётся разумным
+независимо от точности формулировок. Но сам комментарий в `.chezmoidata.yaml`
+неточен вдвойне: он не совпадает с полем `Optional Deps` того пакета, что
+реально ставится (`dms-shell-niri`, а не `dms-shell`), и не все шесть
+пакетов подтверждаются одинаково прямо — часть из них инструменты DMS вообще
+не проверяют по имени.
 
 Пакет `brightnessctl` в этот список не входит и в комментарии не упомянут;
 проверка 2026-07-31 не нашла ни одного его вызова ни в репозитории
@@ -312,7 +409,8 @@ it starship and `eza --icons` render tofu boxes». Это не про сам р�
 | `~/.config/niri/dms/binds.kdl` | дом | горячие клавиши панели DMS; наш, не переписывается DMS |
 | `~/.config/niri/dms/cursor.kdl` | дом | заглушка-комментарий; DMS может переписать реальным содержимым при смене настроек курсора (см. выше) |
 | `~/.config/niri/dms/windowrules.kdl` | дом | пустой файл (source `empty_windowrules.kdl`); существует, но не подключён `config.kdl` |
-| `~/.config/niri/dms/{colors,layout,alttab,outputs}.kdl` | дом, вне репозитория | генерирует и перезаписывает сама DMS |
+| `~/.config/niri/dms/{colors,layout,alttab,outputs}.kdl` | дом, вне репозитория | генерирует и перезаписывает сама DMS; подключены `include` |
+| `~/.config/niri/dms/wpblur.kdl` | дом, вне репозитория | генерирует DMS при включении размытия обоев (`generateNiriBlurrule`); не подключён `config.kdl`; присутствие на диске зависит от сессии — на этой машине то отсутствовал, то появился в ходе этой задачи |
 | `~/.config/niri/voice.kdl` | дом, вне этого документа | владеет [voice.md](voice.md) |
 | `~/.config/DankMaterialShell/settings.json` | дом | настройки панели: тема, виджеты бара, шрифты, настройки курсора; committed целиком, на этой машине совпадает с репозиторием побайтово |
 | `~/Pictures/wallpapers/*.jpg` | дом | три фотографии, ~7 МБ; фича `wallpapers` |
@@ -327,9 +425,11 @@ niri 26.04 (8ed0da4)
 $ niri validate -c ~/.config/niri/config.kdl
 INFO niri: config is valid
 
-$ git -C ~/.local/share/chezmoi ls-files home/dot_config/niri/dms/ 2>/dev/null; \
-  ls ~/.config/niri/dms/
-alttab.kdl  binds.kdl  colors.kdl  cursor.kdl  layout.kdl  outputs.kdl  windowrules.kdl
+$ ls ~/.config/niri/dms/
+alttab.kdl  binds.kdl  colors.kdl  cursor.kdl  layout.kdl  outputs.kdl  windowrules.kdl  wpblur.kdl
+
+$ grep -n 'windowrules\|wpblur' home/dot_config/niri/config.kdl   # из корня репозитория
+(пусто -- ни один include на эти два файла не смотрит)
 
 $ dms config windowrules list | python3 -c \
   'import json,sys; print(json.load(sys.stdin)["dmsStatus"])'
@@ -337,10 +437,13 @@ $ dms config windowrules list | python3 -c \
  'rulesAfterDms': 0, 'effective': False, 'overriddenBy': 0,
  'statusMessage': 'dms/windowrules.kdl is not included in config.kdl'}
 
-$ dms doctor -v 2>&1 | grep -A1 -E 'cava|i2c-tools|kimageformats|qt6-multimedia|power-profiles'
+$ dms doctor -v 2>&1 | grep -A1 -E 'cava|I2C|kimageformats|qt6-imageformats|power-profiles'
 ```
 
-Вывод снят на этой машине 2026-07-31. `niri validate` и `dms config
+`wpblur.kdl` в листинге `~/.config/niri/dms/` — не гарантия: он появляется,
+когда в настройках DMS хоть раз включали размытие обоев, и его отсутствие
+ничего не говорит о том, подключён ли он `config.kdl` (не подключён в любом
+случае). Вывод снят на этой машине 2026-07-31. `niri validate` и `dms config
 windowrules list`/`dms doctor` — только чтение, ничего не меняют.
 
 ## Когда сломалось
@@ -349,6 +452,7 @@ windowrules list`/`dms doctor` — только чтение, ничего не 
 |---|---|---|
 | После установки на чистой машине niri стартует с настройками по умолчанию, панели DMS нет | `dms/*.kdl` ещё не созданы, скрипт 80 не отработал (или отработал раньше первого запуска DMS) | `journalctl --user -u niri` или вывод `chezmoi apply` — искать `Created placeholder ...`; вручную: `niri validate -c ~/.config/niri/config.kdl` покажет точную причину падения |
 | Правило окна, заведённое через настройки DMS («Window Rules»), не действует | `dms/windowrules.kdl` существует, но не подключён `include` в `config.kdl` (см. выше, `dms config windowrules list`) | Либо вписать правило вручную блоком `window-rule` в `config.kdl`, либо добавить строку `include "dms/windowrules.kdl"` и прогнать `niri validate` |
+| Размытие обоев, включённое переключателем в настройках DMS, визуально ничего не меняет | `dms/wpblur.kdl` генерируется, но не подключён `include` в `config.kdl` | Добавить строку `include "dms/wpblur.kdl"` в `config.kdl` вручную и прогнать `niri validate` |
 | Поменял курсор (тему/размер) в настройках DMS, а после следующего `chezmoi apply` он снова стал прежним | `dms/cursor.kdl` реально переписывается DMS (`generateNiriCursorConfig`), а chezmoi считает его «нашим» и возвращает committed-содержимое на каждом apply | Не менять курсор через настройки DMS на этой машине, либо смириться с тем, что apply отменяет выбор; постоянного решения в репозитории нет |
 | Иконки `eza --icons` и глифы `starship` — пустые квадраты | Не поставлен `ttf-jetbrains-mono-nerd` (фича `desktop` выключена или пакет удалён руками) | `pacman -Qi ttf-jetbrains-mono-nerd`; при отсутствии — `chezmoi apply` заново поставит пакет |
 | Какой-то виджет DMS (аудиовизуализатор, яркость внешнего монитора, темизация Qt6-приложений, звуковые эффекты) тихо ничего не делает | Не поставлен один из шести «формально необязательных» пакетов DMS | `dms doctor -v` — секции `Optional Features` и `Services` покажут, чего не хватает |
