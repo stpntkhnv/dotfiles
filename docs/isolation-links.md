@@ -77,9 +77,9 @@ flowchart TD
     PICK --> ZOS["zen-open scratch URL"]
 
     T --> XO["/usr/local/bin/xdg-open<br/>в контейнере"]
-    XO --> CTX["читает своё имя<br/>из /run/.containerenv"]
-    CTX --> DHE["distrobox-host-exec<br/>(сейчас не доезжает — см. ниже)"]
-    DHE -.-> ZO4["zen-open СВОЁ_ИМЯ URL"]
+    XO --> SOCK["одна строка с URL в<br/>/var/lib/wsproxy/links.sock<br/>(UNIX-сокет, socat)"]
+    SOCK --> RECV["zenopen-КОНТЕКСТ.service на хосте:<br/>zen-open-recv читает сокет,<br/>которым и назван контекст"]
+    RECV --> ZO4["zen-open КОНТЕКСТ url"]
 
     ZO1 --> URI["ext+container:name=...&url=..."]
     ZO2 --> URI
@@ -146,39 +146,54 @@ case "${1:-}" in
     *) exec /usr/bin/xdg-open "$@" ;;
 esac
 
-ctx=$(. /run/.containerenv 2>/dev/null; printf '%s' "${name:-}")
-[ -n "$ctx" ] || exec /usr/bin/xdg-open "$@"
+SOCK=/var/lib/wsproxy/links.sock
 
-exec distrobox-host-exec /usr/local/bin/zen-open "$ctx" "$1"
+if [ ! -S "$SOCK" ]; then
+    echo "xdg-open: no link socket at $SOCK -- is zenopen-<context>.service running on the host?" >&2
+    exit 1
+fi
+
+if ! command -v socat >/dev/null 2>&1; then
+    echo "xdg-open: socat is missing in this container, cannot reach the host" >&2
+    exit 1
+fi
+
+reply=$(printf '%s\n' "$1" | socat -T5 - "UNIX-CONNECT:$SOCK" 2>/dev/null || true)
+case "$reply" in
+    ok) ;;
+    '') echo "xdg-open: the host did not answer on $SOCK" >&2; exit 1 ;;
+    *)  echo "xdg-open: the host refused the link ($reply)" >&2; exit 1 ;;
+esac
 ```
 
 `/usr/local/bin` идёт в `PATH` раньше `/usr/bin`, поэтому эта обёртка
 перекрывает настоящий `xdg-open` из `xdg-utils` для всего, что запущено внутри
 контейнера, без переустановки самого пакета.
 
-**Как обёртка узнаёт своё имя.** `/run/.containerenv` — файл, который podman
-кладёт в каждый контейнер, и он написан в синтаксисе `KEY="value"`, валидном
-как POSIX shell. Строка `ctx=$(. /run/.containerenv 2>/dev/null; printf '%s'
-"${name:-}")` в подоболочке **исполняет** этот файл через `.` (source), а не
-парсит его — после чего переменная `name` (одна из строк файла) становится
-обычной переменной оболочки. Проверено на этой машине живьём:
+**До 30 июля 2026 эта обёртка читала имя контейнера из `/run/.containerenv` и
+передавала его на хост как аргумент `distrobox-host-exec` — и `distrobox-host-exec`
+не доезжал до хоста вообще, ни разу.** Разбор поломки — ниже, в «Почему было
+заменено», и полностью в
+[docs/issues/2026-07-29-distrobox-host-exec-broken.md](issues/2026-07-29-distrobox-host-exec-broken.md)
+(закрыт 30 июля 2026). Текущий код вообще не читает `/run/.containerenv` и не
+вызывает `distrobox-host-exec` — контейнер больше не называет себя, вместо
+этого он пишет одну строку с URL в UNIX-сокет `/var/lib/wsproxy/links.sock`, и
+хост узнаёт контекст по тому, в какой сокет пришла строка, а не по тому, что
+сказал контейнер.
 
-```sh
-distrobox enter digi3 -- cat /run/.containerenv
+`/var/lib/wsproxy` внутри контейнера — не отдельный путь, а точка, в которую
+`distrobox.ini.tmpl` монтирует хостовый каталог сокетов этого же контекста:
+
 ```
+additional_flags="--memory=8g --volume {{ $.chezmoi.homeDir }}/.local/share/wsproxy/{{ .name }}:/var/lib/wsproxy:rw"
 ```
-engine="podman-6.0.2"
-name="digi3"
-id="9646d6d6bf39f892599063496ab933841cb73c2a6ae183df4bf3e021bac72001"
-image="docker.io/library/archlinux:latest"
-...
-```
-```sh
-distrobox enter digi3 -- sh -c 'ctx=$(. /run/.containerenv 2>/dev/null; printf "%s" "${name:-}"); echo "ctx=[$ctx]"'
-```
-```
-ctx=[digi3]
-```
+
+(`home/dot_config/distrobox/distrobox.ini.tmpl`) — тот же каталог, где рядом с
+`links.sock` живёт `socks.sock` [SOCKS-моста](isolation-network.md). Хостовый
+конец — `zenopen-<контекст>.service`, юнит `socat`, который слушает именно
+этот файл; какой файл, тот и контекст, потому что каждый контекст получает
+свой собственный каталог и свой собственный юнит (подробности в «Вход 2:
+хостовый приёмник» ниже).
 
 **Что происходит с аргументами, которые обёртка не понимает.** Верхний
 `case` — единственная развилка: только `http://*` и `https://*` идут дальше по
@@ -203,97 +218,188 @@ xdg-open 1.2.1
 `init -eq 0`), так что вставать в этот путь целиком приходится собственному
 скрипту 37, а не полагаться на то, что distrobox сделает это сам.
 
-Если же аргумент — веб-ссылка, обёртка читает имя контейнера и вызывает на
-хосте `zen-open <имя> <url>` через `distrobox-host-exec` — команду distrobox,
-которая должна выполнить процесс на хосте из-под контейнера. Вопрос «какой
-контекст» здесь вообще не задаётся, потому что ответ уже известен: это имя
-самого контейнера.
+Комментарий в скрипте объясняет и то, почему отказ на этой ветке **не**
+проваливается дальше в настоящий `xdg-open`: ни один контейнер не ставит
+браузер (`browsers` и `zen` — обе `scope: host`), значит передать http-ссылку
+контейнерному обработчику — гарантированно провал, причём шумный (полтора
+десятка строк «command not found», за которыми теряется настоящая причина).
+Одна строка, называющая, чего именно не хватает, полезнее.
 
-#### Этот вход сейчас не работает
+### Вход 2: хостовый приёмник
 
-Честно: на этой машине, сегодня (2026-07-30), вторая часть цепочки —
-`distrobox-host-exec` — не доезжает до хоста вообще. Отказ **молчаливый**:
-никакого сообщения, никакого диалога, просто ничего не происходит.
+Хостовая часть — скрипт 38 (`run_onchange_after_38-linkrouting.sh.tmpl`),
+тот же, что ставит `zen-open`. Он же кладёт `/usr/local/bin/zen-open-recv`:
 
 ```sh
-distrobox enter digi3 -- distrobox-host-exec echo hi
+#!/bin/sh
+ctx=${1:-}
+[ -n "$ctx" ] || { printf 'no-context\n'; exit 0; }
+
+IFS= read -r url || true
+[ -n "${url:-}" ] || { printf 'no-url\n'; exit 0; }
+
+reject() {
+    printf '%s\n' "$1"
+    echo "zen-open-recv: refused a link from $ctx: $1" >&2
+    exit 0
+}
+
+[ "${#url}" -le 2048 ] || reject too-long
+case "$url" in
+    http://*|https://*) ;;
+    *) reject bad-scheme ;;
+esac
+case "$url" in
+    *[[:space:]]*) reject bad-url ;;
+esac
+
+if /usr/local/bin/zen-open "$ctx" "$url"; then
+    printf 'ok\n'
+else
+    printf 'failed\n'
+    echo "zen-open-recv: zen-open failed for $ctx" >&2
+fi
+```
+
+и по одному юниту `systemd --user` на каждый контекст из `contexts:`:
+
+```
+ExecStart=/usr/bin/socat -T10 UNIX-LISTEN:.../wsproxy/{{ .name }}/links.sock,fork,mode=600,unlink-early "EXEC:/usr/local/bin/zen-open-recv {{ .name }}"
+```
+
+Контекст `{{ .name }}` попадает в командную строку `zen-open-recv` при
+генерации юнита — то есть на этапе `chezmoi apply`, а не когда контейнер
+пишет в сокет. Отсюда и главное свойство: **контекст больше не аргумент,
+который приносит контейнер** — это то, какой сокет слушает, а слушателя
+создаёт и называет хост. Подделать его контейнер не может: ему просто нечего
+подставить в это поле.
+
+`read -r url` — ровно одна строка: вторую команду или второй URL в той же
+посылке пронести некуда, `read` останавливается на первом переводе строки.
+Четыре пути отказа, и каждый одновременно отвечает контейнеру одним словом
+**и** уходит в журнал через stderr юнита — раньше молчаливый `127` не
+оставлял вообще никакого следа:
+
+| Ответ | Когда |
+|---|---|
+| `no-context` | юнит вызван без аргумента контекста — не должно случаться при штатной генерации |
+| `no-url` | пиринг закрылся, не прислав строку |
+| `too-long` | длиннее 2048 символов |
+| `bad-scheme` | не `http://`/`https://` |
+| `bad-url` | внутри есть пробел — настоящий URL кодирует пробелы процентами, значит это либо ошибка, либо попытка второго аргумента |
+| `ok` / `failed` | `zen-open` вызван, отработал или нет |
+
+`fork` в юните — по клиенту на подключение, чтобы одна отказавшая строка не
+положила весь слушатель. `-T10` — таймаут неактивности: приёмник блокируется
+на `read`, и подключение, которое ничего не прислало, повисло бы навсегда,
+а открыть подключение может любой контейнер. `unlink-early` нужен, чтобы
+`socat` не отказался перепривязаться к сокету, оставшемуся от прошлого
+старта юнита.
+
+**Живая проверка на этой машине, 2026-07-31, только чтение и один безобидный
+запрос без открытия браузера.** Юниты подняты и слушают:
+
+```sh
+systemctl --user is-active zenopen-digi3.service zenopen-stellium.service zenopen-personal.service
 ```
 ```
-(пусто, код возврата 127)
+active
+active
+active
 ```
 
-Воспроизведено так же на `stellium` и `personal` — не особенность одного
-контейнера. Разобрано чтением кода и прямой проверкой, шаг за шагом:
+Прямой запрос к приёмнику с заведомо неверной схемой — проверяет весь путь
+приёмника (чтение строки, проверки, ответ), не трогая браузер:
 
-1. `/usr/bin/distrobox-host-exec` внутри контейнера сам знает про эту
-   ситуацию — комментарий в его коде:
+```sh
+printf 'ftp://example.com\n' | socat -T5 - UNIX-CONNECT:$HOME/.local/share/wsproxy/digi3/links.sock
+```
+```
+bad-scheme
+```
 
-   > This makes host-spawn work on initful containers, where the dbus session
-   > is separate from the host, we point the dbus session straight to the
-   > host's socket in order to talk with the
-   > org.freedesktop.Flatpak.Development.HostCommand on the host
+Тот же запрос изнутри самого контейнера, через смонтированный `/var/lib/wsproxy`
+— то есть ровно тот путь, которым идёт настоящая обёртка `xdg-open`:
 
-   и переписывает адрес шины перед вызовом `host-spawn`:
+```sh
+distrobox enter digi3 -- sh -c 'printf "ftp://example.com\n" | socat -T5 - UNIX-CONNECT:/var/lib/wsproxy/links.sock'
+```
+```
+bad-scheme
+```
 
-   ```sh
-   DBUS_SESSION_BUS_ADDRESS="unix:path=/run/host/$(echo "${DBUS_SESSION_BUS_ADDRESS}" | cut -d '=' -f2-)"
-   ```
+Хостовая половина маршрута подтверждена рабочей. **Важная оговорка про эту
+конкретную машину:** развёрнутый на ней `/usr/local/bin/xdg-open` внутри
+`digi3` на дату проверки всё ещё буквально старая версия — читает
+`/run/.containerenv` и зовёт `distrobox-host-exec`, то есть контейнерная
+сторона правки скрипта 37 сюда ещё не докатилась (тот же класс расхождения
+между рабочим деревом задачи и реальным источником chezmoi этой машины, что
+уже отмечен в [voice.md](voice.md)). Обновление контейнерного скрипта требует
+`chezmoi apply` внутри контейнера, что явно не входит в рамки этой задачи;
+факт зафиксирован здесь, чтобы не потерялся.
 
-   Шина сообщений между процессами (D-Bus) — механизм Linux для вызова одной
-   программой метода у другой по имени, без общего файла или сокета,
-   известного заранее; у каждого пользователя есть своя «сессионная» шина.
-   Этот код специально нацелен на контейнеры с собственным `init` (у нас
-   именно такие, `init=true` в `distrobox.ini.tmpl` — [containers.md](containers.md)),
-   где своя, отдельная от хоста D-Bus-сессия — и он честно правильно
-   перенаправляет вызов на хостовую шину через `/run/host`.
-2. Дальше вызывается `host-spawn` — маленький бинарник на Go
-   (`1player/host-spawn`). Его код (`command.go`) стучится в фиксированное имя
-   на шине: `org.freedesktop.Flatpak`, объект
-   `/org/freedesktop/Flatpak/Development`, метод `.HostCommand`. Комментарий в
-   том же файле называет, с кем он разговаривает: «Connect to the dbus session
-   to talk with flatpak-session-helper process.»
-3. `flatpak-session-helper` — это часть пакета `flatpak`, и именно она
-   регистрирует это имя на шине. На этой машине `flatpak` не установлен вовсе
-   — ни в `home/.chezmoidata.yaml`, ни руками:
+### Почему было заменено
 
-   ```sh
-   pacman -Q flatpak
-   ```
-   ```
-   error: package 'flatpak' was not found
-   ```
-4. Значит вызывать там реально некому — проверено прямо на настоящей,
-   хостовой сессионной шине, без всякого контейнера:
+Раньше вторая половина цепочки шла через `distrobox-host-exec /usr/local/bin/zen-open
+<контекст> <url>` — команду distrobox, которая должна выполнить процесс на
+хосте из-под контейнера. На этой машине она не доезжала до хоста ни разу, и
+отказ был идеально молчаливым: код `127`, ни строки на stdout, ни строки на
+stderr. Причин было две, обе обязательные (полный разбор с командами —
+[docs/issues/2026-07-29-distrobox-host-exec-broken.md](issues/2026-07-29-distrobox-host-exec-broken.md)):
 
-   ```sh
-   dbus-send --session --print-reply --dest=org.freedesktop.Flatpak.Development \
-     /org/freedesktop/Flatpak/Development org.freedesktop.DBus.Peer.Ping
-   ```
-   ```
-   Error org.freedesktop.DBus.Error.ServiceUnknown: The name is not activatable
-   ```
-5. `host-spawn` трактует любой отказ этого вызова как «команда не найдена» и
-   завершается молча — отсюда голый код `127` без единой строки, который и
-   видно в обёртке `xdg-open`.
+1. **Хостовая.** `distrobox-host-exec` — это `host-spawn`
+   (`1player/host-spawn`), и его код (`command.go`) стучится в фиксированное
+   имя на шине D-Bus: `org.freedesktop.Flatpak`, объект
+   `/org/freedesktop/Flatpak/Development`, метод `.HostCommand`, с
+   комментарием «talk with flatpak-session-helper process». Эту точку на шине
+   регистрирует `flatpak-session-helper` из пакета `flatpak`, которого на
+   хосте нет и не было — ни в `home/.chezmoidata.yaml`, ни руками.
+2. **Контейнерная.** `distrobox-create` монтирует хостовый `/run/user/$UID`
+   (а вместе с ним и доступ к хостовой сессионной шине) только при
+   `init -eq 0`, а в `distrobox.ini.tmpl` этого репозитория стоит `init=true`
+   ([containers.md](containers.md)) — так что контейнер живёт со своим
+   собственным `dbus-broker`, и унаследованный `DBUS_SESSION_BUS_ADDRESS`
+   указывает на него, а не на хост.
 
-Это не особенность именно этого репозитория: `89luca89/distrobox`
-issue [#1692](https://github.com/89luca89/distrobox/issues/1692) («flatpak on
-host requirement not documented?», открыт, автор `45mg`) описывает ровно то
-же самое — жёсткая зависимость `distrobox-host-exec`/`host-spawn` от
-установленного на хосте `flatpak`, нигде не задокументированная и падающая
-без единого слова. Официальная страница
-`distrobox.it/usage/distrobox-host-exec/` называет единственной зависимостью
-сам `host-spawn` и нигде не документирует зависимость от `flatpak` как
-требование на стороне хоста — `flatpak` там встречается только внутри
-примера использования (`distrobox-host-exec flatpak run
-org.mozilla.firefox`), а не в перечне того, что нужно поставить заранее.
+Обе причины нужны разом: указание контейнеру на хостовую шину лечит вторую,
+но `host-spawn` всё равно возвращает `127`, потому что упирается в первую —
+`flatpak` на хосте по-прежнему нет.
 
-**Практическое следствие: вход 2 сейчас мёртв.** Ссылка, кликнутая изнутри
-`digi3`, `stellium` или `personal`, никуда не уходит и не даёт знать, что она
-никуда не ушла. Единственный способ узнать — прогнать команду проверки из
-раздела «Как проверить» ниже. Подробнее о находке и её датировке —
-[docs/issues/2026-07-29-distrobox-host-exec-broken.md](issues/2026-07-29-distrobox-host-exec-broken.md).
-Запись в реестре обходов — [workarounds.md](workarounds.md).
+Замена — не восстановление старого поведения, а более узкий канал:
+
+| | Было (`distrobox-host-exec`) | Стало (сокет) |
+|---|---|---|
+| Кто называет контекст | контейнер, аргументом из `/run/.containerenv` | хост, по тому, в какой сокет пришла строка |
+| Что контейнер может попросить хост сделать | выполнить **любую** команду на хосте (это ровно то, что даёт `HostCommand`) | открыть один URL в одном контексте |
+| Отказ | код `127`, ни строки вывода | одно слово контейнеру и строка в журнале юнита |
+
+**Эта замена не убирает исходную дыру: она её сужает.** distrobox монтирует
+весь корень хоста в контейнер как `/run/host`, а значит контейнер может
+дотянуться до `links.sock` **соседнего** контекста по абсолютному пути и
+открыть ссылку от его имени — это не отличается от того, что уже сказано про
+`socks.sock` в [isolation-network.md](isolation-network.md): контексты
+разделяет [network namespace](glossary.md#network-namespace), а не сам факт
+существования отдельного сокета. Проверено здесь же (2026-07-31, тем же
+безобидным `bad-scheme`-запросом, без реального URL):
+
+```sh
+distrobox enter digi3 -- sh -c 'printf "ftp://example.com\n" | socat -T5 - UNIX-CONNECT:/run/host/home/stsiapan/.local/share/wsproxy/personal/links.sock'
+```
+```
+bad-scheme
+```
+
+Строка дошла до приёмника `personal`, а не `digi3` — запрос из `digi3`
+принят и обработан от имени чужого контекста. Разница с `distrobox-host-exec`
+в том, что раньше контейнер мог попросить хост выполнить произвольную
+команду, а теперь — только открыть URL, и только в каком-то контексте
+(своём или чужом), но не сделать что-то ещё. Строго уже, чем было, но не
+идеально.
+
+`distrobox-host-exec` сам по себе как был нерабочим, так и остался —
+починка не в нём, а в том, что маршрут ссылок больше на него не полагается.
+Если он когда-нибудь понадобится репозиторию для чего-то ещё, нужны оба шага
+сразу: пакет `flatpak` на хосте и явное указание контейнеру на хостовую шину.
 
 ### Вход 3: закладка
 
@@ -428,11 +534,14 @@ Multi-Account Containers (расширение из [isolation-browser.md](isola
 |---|---|---|---|
 | Обёртка `xdg-open` | `/usr/local/bin/xdg-open` (mode 755) | Контейнер, вне дома | `run_onchange_after_37-container-links.sh.tmpl`, только при `.env == container` |
 | Роутер ссылок | `/usr/local/bin/zen-open` (mode 755) | Хост, вне дома | `run_onchange_after_38-linkrouting.sh.tmpl`, только при `.env == host` и включённой фиче `zen` |
+| Приёмник ссылок из контейнера | `/usr/local/bin/zen-open-recv` (mode 755) | Хост, вне дома | скрипт 38, там же |
+| Сокет приёма ссылок | `~/.local/share/wsproxy/<контекст>/links.sock`, виден в контейнере как `/var/lib/wsproxy/links.sock` | Хост создаёт каталог и юнит; сам сокет создаёт `socat` при старте юнита | скрипт 38 (каталог, юнит), монтирование — `distrobox.ini.tmpl` ([containers.md](containers.md)) |
+| Юнит приёма ссылок | `~/.config/systemd/user/zenopen-<контекст>.service` | Хост | скрипт 38, по одному на каждую запись `contexts:`, пруниг устаревших первым шагом |
 | Ярлыки пикера | `~/.local/share/applications/zen-<контекст>.desktop`, `zen-scratch.desktop` | Хост, в доме | скрипт 38, генерируются по `contexts:` из `home/.chezmoidata.yaml`, пруниг устаревших первым шагом |
 | Обработчик по умолчанию | `xdg-mime default <junction>.desktop x-scheme-handler/http` `x-scheme-handler/https` | Хост, `~/.config/mimeapps.list` | скрипт 38, только если текущий обработчик ещё не Junction |
 | Зависимость: кодирование URL | пакет `jq` | Хост | фича `host-base`, `always: true` |
 | Зависимость: пикер | пакет `junction` | Хост | фича `zen`, `always: true` |
-| Зависимость: выход на хост из контейнера | `distrobox-host-exec`, `host-spawn` | Контейнер | приносит сам `distrobox` (host-spawn скачивается по требованию тем же скриптом distrobox, не через фичи этого репозитория) — сейчас не работает, см. выше |
+| Зависимость: канал наружу из контейнера | `socat` | Контейнер | фича `container-base`, `always: true` — обёртка `xdg-open` явно проверяет его наличие и называет причину отказа, если его вдруг нет |
 
 Ни один из двух скриптов этого документа не трогает файлы браузера напрямую
 — это тема [isolation-browser.md](isolation-browser.md); здесь только то, что
@@ -475,35 +584,43 @@ distrobox enter digi3 -- which xdg-open
 /usr/local/bin/xdg-open
 ```
 
-**Вход 2 сейчас сломан** — эта проверка должна была бы печатать имя
-пользователя, а вместо этого падает молча (снято 2026-07-30, воспроизведено
-на `digi3`, `stellium`, `personal`):
+Приёмники ссылок на хосте подняты, по одному на контекст:
 
 ```sh
-distrobox enter digi3 -- distrobox-host-exec id -un
+systemctl --user is-active zenopen-digi3.service zenopen-stellium.service zenopen-personal.service
 ```
 ```
-(пусто, код возврата 127)
+active
+active
+active
 ```
 
-Диагностика на один уровень глубже — жива ли сама причина (отсутствие
-`flatpak` на хосте):
+**Вход 2 — сквозная проверка без открытия браузера.** Заведомо неверная схема
+доходит до хостового приёмника и получает содержательный отказ вместо
+молчания — сначала с хоста, затем тем же путём, которым идёт настоящий
+`xdg-open`, изнутри контейнера:
 
 ```sh
-pacman -Q flatpak
-dbus-send --session --print-reply --dest=org.freedesktop.Flatpak.Development \
-  /org/freedesktop/Flatpak/Development org.freedesktop.DBus.Peer.Ping
+printf 'ftp://example.com\n' | socat -T5 - UNIX-CONNECT:$HOME/.local/share/wsproxy/digi3/links.sock
+distrobox enter digi3 -- sh -c 'printf "ftp://example.com\n" | socat -T5 - UNIX-CONNECT:/var/lib/wsproxy/links.sock'
+```
+```
+bad-scheme
+bad-scheme
 ```
 
-Пока первая команда отвечает «package not found», а вторая —
-«ServiceUnknown: The name is not activatable», вход 2 не работает и
-работать не будет.
+Оба ответа означают, что путь `контейнер → сокет → приёмник` жив. Если
+`ls ~/.local/share/wsproxy/<контекст>/links.sock` не находит файла или
+`systemctl --user is-active zenopen-<контекст>.service` не отвечает `active` —
+вход 2 не работает, см. «Когда сломалось» ниже.
 
 ## Когда сломалось
 
 | Симптом | Причина | Что делать |
 |---|---|---|
-| Ссылка из терминала/IDE внутри контейнера не открывается — без ошибки, без вкладки | `distrobox-host-exec`/`host-spawn` не могут достучаться до `flatpak-session-helper` на хосте — на эту дату так **всегда**, см. раздел выше | `distrobox enter <контекст> -- distrobox-host-exec id -un`; код `127` и пустой вывод подтверждают диагноз; чинится установкой `flatpak` на хосте (сейчас не входит в фичи репозитория, вне рамок этого документа) |
+| Ссылка из терминала/IDE внутри контейнера не открывается, обёртка печатает `no link socket at ...` | `zenopen-<контекст>.service` не поднят на хосте, либо контейнер собран без монтирования `/var/lib/wsproxy` | На хосте: `systemctl --user status zenopen-<контекст>.service`; если юнит не существует вовсе — `chezmoi apply` не докатился, см. также оговорку про рассинхрон источника chezmoi в конце раздела «Вход 2: хостовый приёмник» |
+| Обёртка печатает `the host did not answer` или `the host refused the link (...)` | Приёмник получил строку, но отверг её (`too-long`, `bad-scheme`, `bad-url`) либо сам `zen-open` не смог открыть браузер (`failed`) | `journalctl --user -u zenopen-<контекст>.service` — там же слово, что напечатано в контейнере, и причина рядом |
+| Ссылка из терминала/IDE внутри контейнера ведёт себя как ссылка из соседнего контекста | Контейнер обратился не к своему `links.sock`, а к чужому — `/run/host` открывает соседский каталог `wsproxy` по абсолютному пути; это известное сужение модели угроз, а не баг конкретной ссылки — см. «Почему было заменено» | Убедиться, что вызывающий код обращается к `/var/lib/wsproxy/links.sock` (свой, через штатное монтирование), а не строит путь через `/run/host` руками |
 | Пикер Junction не появляется, ссылка сразу открывается в текущей вкладке Zen | Обработчик по умолчанию — не Junction: либо браузер перехватил его сам, либо скрипт 38 не отработал | `xdg-mime query default x-scheme-handler/https`; если не `re.sonny.Junction.desktop` — `chezmoi apply` заново (скрипт меняет обработчик, только когда он ещё не Junction) |
 | Пунктов «Zen: …» в пикере нет вообще | Скрипт 38 не выполнялся: `.env` не `host`, либо фича `zen` выключена | `ls ~/.local/share/applications/zen-*.desktop`; переприменить `chezmoi apply` |
 | Ссылка на общий домен уезжает не в тот контейнер, хотя закладка или пункт пикера правильные | На этот домен стоит правило «Always Open This Site in…», которое вытаскивает переход в другой контейнер поверх любой другой маршрутизации | `about:preferences#containers` в Zen → найти домен среди привязок → снять правило либо перепроверить, что оно стоит только на уникальном для контекста домене |
@@ -521,13 +638,16 @@ dbus-send --session --print-reply --dest=org.freedesktop.Flatpak.Development \
 которое уже точно известно (вход 2 — своё имя контейнера; вход 3 — то, что
 вшито при заведении закладки).
 
-**`zen-open` лежит в `/usr/local/bin`, а не в `~/.local/bin`.** Комментарий в
-скрипте 38 называет причину: контейнеры вызывают `zen-open` через
-`distrobox-host-exec`, а внутри контейнера `HOME` — не то же самое значение,
-что `HOME` хоста (у контейнера свой домашний каталог,
-`~/homes/<контекст>` — [containers.md](containers.md)), значит путь вида
+**`zen-open` лежит в `/usr/local/bin`, а не в `~/.local/bin`.** До замены
+маршрута причиной было то, что контейнеры вызывали `zen-open` через
+`distrobox-host-exec`, а `HOME` внутри контейнера — не то же самое значение,
+что `HOME` хоста ([containers.md](containers.md)), так что путь вида
 `~/.local/bin/zen-open`, посчитанный внутри контейнера, указывал бы не туда.
-`/usr/local/bin` не зависит от того, чей `HOME` сейчас считается.
+Эта причина отпала вместе с самим `distrobox-host-exec`, но путь остался —
+комментарий в скрипте 38 называет уже другую: `zen-open` пишется через
+`sudo`, как и остальные помощники в `/usr/local/bin`, а оба его вызывающих
+— `.desktop`-записи пикера и юниты `zenopen-<контекст>.service` — обращаются
+к нему по абсолютному пути в любом случае.
 
 **`slice-run`, а не голый `systemd-run`.** Комментарий в `zen-open`:
 вызов идёт из `.desktop`-файла через панель рабочего стола, а не из терминала,
@@ -551,26 +671,26 @@ dbus-send --session --print-reply --dest=org.freedesktop.Flatpak.Development \
 `.desktop` назначенным обработчиком, и `xdg-mime default` тихо не сработал бы
 при следующем `apply`.
 
-**Вход 2 сломан не из-за кода этого репозитория, а из-за необъявленной
-зависимости `distrobox-host-exec`/`host-spawn` от пакета `flatpak` на хосте**
-— разобрано выше и зафиксировано отдельной строкой в [workarounds.md](workarounds.md).
-Собственный код этого репозитория (обёртка `xdg-open`) устроен ровно так, как
-и должен: он корректно читает своё имя и корректно вызывает
-`distrobox-host-exec` — поломка на уровень ниже, в самом `distrobox`.
+**Вход 2 больше не полагается на `distrobox-host-exec`.** До 30 июля 2026 он
+был сломан не из-за кода этого репозитория, а из-за необъявленной
+зависимости `distrobox-host-exec`/`host-spawn` от пакета `flatpak` на хосте —
+разобрано в «Почему было заменено» выше. Вместо починки чужой зависимости
+маршрут переписан так, чтобы вообще не нуждаться в ней: собственный код этого
+репозитория (сокет плюс приёмник) корректно работает уже сегодня, живой
+проверкой на этой машине (см. «Как проверить»), а `distrobox-host-exec`
+как был нерабочим на этой машине, так и остаётся — просто им больше никто не
+пользуется.
 
 **Расхождения со старыми текстами.** `BROWSER-ISOLATION.md` (раздел 10) и
-`docs/features.md` (раздел «Маршрут одной ссылки») описывают эту же цепочку,
-и всё проверяемое в них подтвердилось дословно: комментарий про `jq @uri`,
-причина отсутствия `MimeType` у `zen.desktop`, чтение имени из
-`/run/.containerenv`, провал непонятных аргументов в настоящий `xdg-open`,
-слово «вытаскивается» для доменных правил. Единственное существенное
-расхождение — не в тексте, а в умолчании: оба старых документа описывают вход
-через контейнер как рабочий, не упоминая, что `distrobox-host-exec` не
-доезжает до хоста. Это не текстовая ошибка (находка из
-`docs/issues/2026-07-29-distrobox-host-exec-broken.md` датирована днём
-позже последней правки `BROWSER-ISOLATION.md`), но именно это умолчание и
-делает нынешний отказ молчаливым уже дважды — сначала в самом коде, потом и
-в документации, которая его раньше не называла.
+`docs/features.md` (раздел «Маршрут одной ссылки») описывают эту же тему.
+`docs/features.md` уже обновлён этим же слиянием и описывает именно текущий,
+сокетный механизм (раздел «Почему ссылка уходит через сокет, а не через
+`distrobox-host-exec`»); расхождений с ним не нашлось. `BROWSER-ISOLATION.md`
+не обновлялся и всё ещё описывает вход 2 через `/run/.containerenv` и
+`distrobox-host-exec` как рабочий путь — то есть описывает механизм, который
+этот репозиторий больше не использует ни в каком виде, не только сломанный, а
+именно замененный другим кодом. Правка `BROWSER-ISOLATION.md` — вне рамок
+этого документа.
 
 ## Ссылки
 
@@ -586,9 +706,8 @@ dbus-send --session --print-reply --dest=org.freedesktop.Flatpak.Development \
 - [containers.md](containers.md) — из чего собран сам distrobox-контейнер,
   домашний каталог `~/homes/<контекст>`.
 - [docs/issues/2026-07-29-distrobox-host-exec-broken.md](issues/2026-07-29-distrobox-host-exec-broken.md) —
-  первая запись находки, дата обнаружения.
-- [workarounds.md](workarounds.md) — реестр обходов, включая запись про
-  `distrobox-host-exec`/`host-spawn`, добавленную этим документом.
+  находка, разбор двух причин, дата обнаружения (29 июля 2026) и дата закрытия
+  через замену маршрута сокетом (30 июля 2026).
 - `github.com/89luca89/distrobox/issues/1692` — «flatpak on host requirement
   not documented?», открыт, автор `45mg`: `distrobox-host-exec` требует
   `flatpak` на хосте, нигде это не документируя, и падает молча без него.
