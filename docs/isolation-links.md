@@ -75,7 +75,7 @@ flowchart TD
     PICK --> ZO1["zen-open digi3 URL"]
     PICK --> ZO2["zen-open stellium URL"]
     PICK --> ZO3["zen-open personal URL"]
-    PICK --> ZOS["zen-open scratch URL"]
+    PICK --> ZOS["zen-open home URL"]
 
     T --> XO["/usr/local/bin/xdg-open<br/>в контейнере"]
     XO --> SOCK["одна строка с URL в<br/>/var/lib/wsproxy/links.sock<br/>(UNIX-сокет, socat)"]
@@ -134,15 +134,33 @@ re.sonny.Junction.desktop
 
 Клик по ссылке открывает пикер Junction, а в списке — не голый «Zen Browser»,
 а по одному пункту на контекст: `Zen: digi3`, `Zen: stellium`, `Zen: personal`,
-`Zen: Scratch`. Каждый пункт — отдельный `.desktop`-файл, который создаёт цикл
+`Zen: Home`. Первые три — отдельные `.desktop`-файлы, которые создаёт цикл
 `{{ range .contexts }}` в скрипте 38:
 
 ```
 Exec=/usr/local/bin/zen-open digi3 %u
 ```
 
+Четвёртый пункт пишется отдельным блоком того же скрипта, из ключа
+`plain_context:` каталога, а не из `contexts:`
+(`run_onchange_after_38-linkrouting.sh.tmpl`, строки 208-220):
+
+```
+Exec=/usr/local/bin/zen-open home %u
+```
+
 Выбор пункта — это и есть ответ на вопрос «какой контекст», и он тут же
 уходит в `zen-open`.
+
+**Куда попадает ссылка, не принадлежащая ни одной работе.** Пункт `Zen: Home`
+— это не одноразовая свалка: у `home` есть свой space в сайдбаре, своя папка
+закладок и свои закреплённые вкладки (в каталоге сейчас это YouTube), то есть
+пространство, в котором человек залогинен под личными учётками. Ссылка,
+отправленная туда из пикера, попадает ровно в тот же контейнер, а значит в
+одну банку кук с этими залогиненными сайтами — со всем, что из этого следует
+при переходе по чужой ссылке. От рабочих контекстов она по-прежнему отделена
+полностью; размен целиком внутри `home` и выбран владельцем репозитория
+осознанно.
 
 ### Вход 2: изнутри контейнера, через подменённый `xdg-open`
 
@@ -492,9 +510,9 @@ https%3A%2F%2Fdev.azure.com%2Forg%2Fproject%3Fquery%3Da%26b%3Dc
 > whatever container the current workspace happens to use, which is the
 > exact silent mis-landing this setup exists to prevent.
 
-Если бы `MimeType` эти схемы объявлял, в пикере Junction рядом с пятью
-пунктами `Zen: digi3` / `Zen: stellium` / `Zen: personal` / `Zen: Scratch`
-появился бы шестой, голый — «Zen Browser», без имени контекста в `Exec`.
+Если бы `MimeType` эти схемы объявлял, в пикере Junction рядом с четырьмя
+пунктами `Zen: digi3` / `Zen: stellium` / `Zen: personal` / `Zen: Home`
+появился бы пятый, голый — «Zen Browser», без имени контекста в `Exec`.
 Выбор этого пункта запустил бы `zen-browser` с сырым URL, без
 `ext+container:` вообще, и Zen открыл бы вкладку там, где сейчас в фокусе
 раскладка — то есть ровно тот случайный, немаркированный переход между
@@ -580,7 +598,7 @@ Routing уводит в свой space любой адрес, в котором 
 | Приёмник ссылок из контейнера | `/usr/local/bin/zen-open-recv` (mode 755) | Хост, вне дома | скрипт 38, там же |
 | Сокет приёма ссылок | `~/.local/share/wsproxy/<контекст>/links.sock`, виден в контейнере как `/var/lib/wsproxy/links.sock` | Хост создаёт каталог и юнит; сам сокет создаёт `socat` при старте юнита | скрипт 38 (каталог, юнит), монтирование — `distrobox.ini.tmpl` ([containers.md](containers.md)) |
 | Юнит приёма ссылок | `~/.config/systemd/user/zenopen-<контекст>.service` | Хост | скрипт 38, по одному на каждую запись `contexts:`, пруниг устаревших первым шагом |
-| Ярлыки пикера | `~/.local/share/applications/zen-<контекст>.desktop`, `zen-scratch.desktop` | Хост, в доме | скрипт 38, генерируются по `contexts:` из `home/.chezmoidata.yaml`, пруниг устаревших первым шагом |
+| Ярлыки пикера | `~/.local/share/applications/zen-<контекст>.desktop`, `zen-home.desktop` | Хост, в доме | скрипт 38, генерируются по `contexts:` и `plain_context:` из `home/.chezmoidata.yaml`, пруниг устаревших первым шагом — список `keep=` собирается из тех же двух ключей |
 | Обработчик по умолчанию | `xdg-mime default <junction>.desktop x-scheme-handler/http` `x-scheme-handler/https` | Хост, `~/.config/mimeapps.list` | скрипт 38, только если текущий обработчик ещё не Junction |
 | Зависимость: кодирование URL | пакет `jq` | Хост | фича `host-base`, `always: true` |
 | Зависимость: пикер | пакет `junction` | Хост | фича `zen`, `always: true` |
@@ -602,14 +620,21 @@ xdg-mime query default x-scheme-handler/https
 re.sonny.Junction.desktop
 ```
 
-Ярлыки на все контексты и `scratch` реально созданы:
+Ярлыки на все рабочие контексты и на `home` реально созданы:
 
 ```sh
 ls ~/.local/share/applications/zen-*.desktop
 ```
 ```
-zen-digi3.desktop  zen-personal.desktop  zen-scratch.desktop  zen-stellium.desktop
+zen-digi3.desktop  zen-home.desktop  zen-personal.desktop  zen-stellium.desktop
 ```
+
+**Оговорка про эту конкретную машину:** на 2026-07-31 здесь всё ещё лежит
+`zen-scratch.desktop` под старым именем — переименование `scratch` в `home`
+доедет до ярлыка только следующим `chezmoi apply`, который заодно снесёт
+старый файл прунингом (список `keep=` его больше не содержит). Это то же
+расхождение между рабочим деревом задачи и реальным источником chezmoi этой
+машины, что уже отмечено выше про обёртку `xdg-open` внутри `digi3`.
 
 `zen-open` внутри себя действительно кодирует URL через `jq @uri` (сверить
 файл дословно со скриптом 38):
@@ -701,14 +726,16 @@ bad-scheme
 без этой коллизии; сам механизм `slice-run` разобран в
 [browsers.md](browsers.md).
 
-**Имя контекста в `zen-open` — строго нижний регистр.** Комментарий в
-скрипте 38 объясняет: `contextualIdentities.query` внутри `context-proxy`
+**Имя контекста в `Exec` — ровно то, что записано в каталоге, без смены
+регистра.** Комментарий в скрипте 38 (строки 206-207) объясняет:
+`contextualIdentities.query` внутри `context-proxy`
 ([isolation-browser.md](isolation-browser.md)) регистронезависимо не ищет —
-поэтому `zen-scratch.desktop` вызывает `zen-open scratch %u`, а не `Scratch`,
-хотя в отображаемом имени пункта пикера — «Zen: Scratch» с большой буквы.
-Разойдись регистр в `Exec`, расширение не нашло бы контейнер `scratch` и
-создало бы второй, пустой, с именем на другой регистр — тихая, накопительная
-поломка, а не ошибка на старте.
+поэтому `zen-home.desktop` вызывает `zen-open home %u`, взяв имя из
+`plain_context.name` как есть. С заглавной буквы делается только видимая
+строка `Name=Zen: Home`, фильтром `title` при генерации, и в браузер она
+никогда не попадает. Разойдись регистр в `Exec`, расширение не нашло бы
+контейнер `home` и создало бы второй, пустой, с именем на другой регистр —
+тихая, накопительная поломка, а не ошибка на старте.
 
 **Обработчик Junction ставится через `pacman -Ql`, а не как литеральный путь
 к `.desktop`.** Так же, как и с id пункта пикера выше — переименование

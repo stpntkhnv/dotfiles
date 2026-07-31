@@ -67,14 +67,18 @@ set -euo pipefail
 {{/* Containers.Default replaces the built-in set on a FRESH profile and
      numbers them 1..N in array order (ContextualIdentityService.sys.mjs:226).
      On a profile that already has containers.json it does nothing, so this
-     seeds a new machine and never disturbs a working one. Scratch last, and
-     without a proxy: it is the "no work session attached" one. */}}
+     seeds a new machine and never disturbs a working one. plain_context last,
+     and without a proxy: it is the "no work session attached" one.
+
+     Its colour is deliberately outside the rotation below, so it stays telling
+     apart from work no matter how many contexts get added. */}}
 {{- $containers := list }}
+{{- $palette := list "blue" "green" "purple" "orange" "red" "yellow" "pink" }}
 {{- if has "zen" .enabled }}
 {{-   range $i, $c := .contexts }}
-{{-     $containers = append $containers (dict "name" $c.name "icon" "briefcase" "color" (index (list "blue" "green" "purple" "orange" "red" "yellow" "pink" "cyan") (mod $i 8))) }}
+{{-     $containers = append $containers (dict "name" $c.name "icon" "briefcase" "color" (index $palette (mod $i (len $palette)))) }}
 {{-   end }}
-{{-   $containers = append $containers (dict "name" "scratch" "icon" "circle" "color" "gray") }}
+{{-   $containers = append $containers (dict "name" $.plain_context.name "icon" $.plain_context.icon "color" $.plain_context.color) }}
 {{- end }}
 {{/* One toolbar folder per context, holding the shared bookmarks plus that
      context's own, each as an ext+container: link. The container travels in
@@ -90,7 +94,10 @@ set -euo pipefail
      PolF-.
 
      bookmarks_demo is a flat folder of plain URLs whose titles say what to try;
-     it exists to make the difference from ManagedBookmarks visible by hand. */}}
+     it exists to make the difference from ManagedBookmarks visible by hand.
+
+     plain_context gets a folder of the same shape, but only from its own list:
+     the shared bookmarks are work addresses and have no business there. */}}
 {{- $marks := list }}
 {{- if has "zen" .enabled }}
 {{-   range $c := .contexts }}
@@ -98,6 +105,11 @@ set -euo pipefail
 {{-     if hasKey $c "bookmarks" }}{{ $own = $c.bookmarks }}{{ end }}
 {{-     range $b := concat $.bookmarks $own }}
 {{-       $marks = append $marks (dict "title" $b.title "folder" $c.name "url" (printf "ext+container:name=%s&url=%s" $c.name (urlquery $b.url))) }}
+{{-     end }}
+{{-   end }}
+{{-   if hasKey .plain_context "bookmarks" }}
+{{-     range $b := .plain_context.bookmarks }}
+{{-       $marks = append $marks (dict "title" $b.title "folder" $.plain_context.name "url" (printf "ext+container:name=%s&url=%s" $.plain_context.name (urlquery $b.url))) }}
 {{-     end }}
 {{-   end }}
 {{- end }}
@@ -155,7 +167,7 @@ managed_raw="$(cat <<'MANAGED_EOF'
 MANAGED_EOF
 )"
 contexts_json="$(cat <<'CONTEXTS_EOF'
-{{ $ctx := list }}{{ range .contexts }}{{ $ctx = append $ctx .name }}{{ end }}{{ $ctx = append $ctx "scratch" }}{{ $ctx | toJson }}
+{{ $ctx := list }}{{ range .contexts }}{{ $ctx = append $ctx .name }}{{ end }}{{ $ctx = append $ctx $.plain_context.name }}{{ $ctx | toJson }}
 CONTEXTS_EOF
 )"
 

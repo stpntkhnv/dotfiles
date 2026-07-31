@@ -44,7 +44,10 @@ import json, os, glob, subprocess, uuid, sys
 
 HOME = os.path.expanduser("~")
 # [{"name": ..., "bookmarks": [{"title": ..., "url": ...}]}]
-SEED = json.loads(r'''{{ $seed := list }}{{ range $c := .contexts }}{{ $own := list }}{{ if hasKey $c "bookmarks" }}{{ $own = $c.bookmarks }}{{ end }}{{ $seed = append $seed (dict "name" $c.name "bookmarks" (concat $.bookmarks $own)) }}{{ end }}{{ $seed | toJson }}''')
+# plain_context comes last and carries only its own list: the shared bookmarks
+# are work addresses, and the whole point of that space is that no work is
+# attached to it.
+SEED = json.loads(r'''{{ $seed := list }}{{ range $c := .contexts }}{{ $own := list }}{{ if hasKey $c "bookmarks" }}{{ $own = $c.bookmarks }}{{ end }}{{ $seed = append $seed (dict "name" $c.name "bookmarks" (concat $.bookmarks $own)) }}{{ end }}{{ $pown := list }}{{ if hasKey .plain_context "bookmarks" }}{{ $pown = .plain_context.bookmarks }}{{ end }}{{ $seed = append $seed (dict "name" $.plain_context.name "bookmarks" $pown) }}{{ $seed | toJson }}''')
 CONTEXTS = [c["name"] for c in SEED]
 # The contexts carrying `route: true`. The VALUE is tested, not the presence of
 # the key: `route: false` has to mean off rather than on.

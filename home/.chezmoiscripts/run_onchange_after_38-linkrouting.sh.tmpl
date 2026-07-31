@@ -177,7 +177,7 @@ mkdir -p "$APPS"
 
 # Prune first, same reason as the proxy units: a renamed context must not leave
 # an entry in the picker pointing at a container that no longer exists.
-keep=" {{ range .contexts }}zen-{{ .name }}.desktop {{ end }}zen-scratch.desktop "
+keep=" {{ range .contexts }}zen-{{ .name }}.desktop {{ end }}zen-{{ .plain_context.name }}.desktop "
 for f in "$APPS"/zen-*.desktop; do
     [[ -e "$f" ]] || continue
     case "$keep" in
@@ -200,17 +200,18 @@ Categories=Network;WebBrowser;
 MimeType=x-scheme-handler/http;x-scheme-handler/https;
 ENTRY
 {{ end }}
-# The name passed to zen-open is lowercase, matching the contexts and the
-# container it has to find: contextualIdentities.query is case-sensitive, and
-# the extension creates whatever name it fails to match. "Scratch" here would
-# quietly leave a second, empty container next to "scratch".
-cat > "$APPS/zen-scratch.desktop" <<'ENTRY'
+# The name passed to zen-open is the catalogue one, unchanged in case: it has to
+# match the container, contextualIdentities.query is case-sensitive, and the
+# extension creates whatever name it fails to match. Capitalising it here would
+# quietly leave a second, empty container beside the real one. Only the visible
+# Name= is title-cased, and that string never reaches the browser.
+cat > "$APPS/zen-{{ .plain_context.name }}.desktop" <<'ENTRY'
 [Desktop Entry]
 Type=Application
-Name=Zen: Scratch
+Name=Zen: {{ .plain_context.name | title }}
 Comment=Open the link with no work session attached
 Icon=zen-browser
-Exec=/usr/local/bin/zen-open scratch %u
+Exec=/usr/local/bin/zen-open {{ .plain_context.name }} %u
 Terminal=false
 StartupNotify=true
 StartupWMClass=zen

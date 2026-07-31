@@ -47,7 +47,7 @@ chezmoi apply
 человека в чеклисте), `scope`, `always`, `default`, `needs` и списки пакетов
 (`pacman`, `aur`, `npm`, `dotnet`).
 
-Кроме `features`, в этом же файле лежат ещё пять независимых списков верхнего
+Кроме `features`, в этом же файле лежат ещё шесть независимых блоков верхнего
 уровня:
 
 - `bookmarks` — закладки, которые кладутся в панель каждого контекста, с
@@ -58,6 +58,10 @@ chezmoi apply
 - `bookmarks_demo` — демонстрационная папка обычных закладок, чтобы разница
   между двумя механизмами была видна руками; удаляется одной правкой.
 - `contexts` — рабочие контексты изоляции (`digi3`, `stellium`, `personal`).
+- `plain_context` — контекст «без работы» (`home`): ровно одна запись, а не
+  список, потому что определяется он отсутствием работы, а второго такого быть
+  не может. Даёт Zen-контейнер, space, папку закладок и пункт пикера, но, в
+  отличие от `contexts`, ни прокси, ни distrobox-пары.
 - `syncthing` — папки синхронизации.
 
 У них нет ни `scope`, ни `always`, ни `default` — это не фичи, а данные,
@@ -72,7 +76,7 @@ chezmoi apply
 
 ```mermaid
 flowchart TD
-    DATA["home/.chezmoidata.yaml<br/>каталог фич + contexts/syncthing/<br/>bookmarks/managed_bookmarks/bookmarks_demo"]
+    DATA["home/.chezmoidata.yaml<br/>каталог фич + contexts/plain_context/<br/>syncthing/bookmarks/managed_bookmarks/<br/>bookmarks_demo"]
     TMPL["home/.chezmoi.toml.tmpl<br/>вопросы при chezmoi init"]
     CFG["~/.config/chezmoi/chezmoi.toml<br/>сохранённые ответы, своя на каждой машине"]
     IGNORE["home/.chezmoiignore<br/>что не класть в ~, если фича выключена"]
@@ -486,15 +490,16 @@ names=$(printf '%s\n'{{ range .contexts }} {{ .name | quote }}{{ end }})
 ports=$(printf '%s\n'{{ range .contexts }} {{ .socks }}{{ end }})
 dup_names=$(sort <<<"$names" | uniq -d | tr '\n' ' ')
 dup_ports=$(sort <<<"$ports" | uniq -d | tr '\n' ' ')
-reserved=$(grep -ix 'scratch' <<<"$names" | tr '\n' ' ' || true)
+reserved=$(grep -ix {{ .plain_context.name | quote }} <<<"$names" | tr '\n' ' ' || true)
 ```
 
 Повторяющееся имя означало бы, что два контейнера делят одну папку с
 сокетом — прямая утечка между рабочими контекстами; повторяющийся порт —
 второй `socat` не займёт порт молча, и браузер продолжит показывать на
-проксёр, которого нет; имя `scratch` столкнулось бы с зарезервированным
-именем no-proxy контейнера Zen. Любое из трёх — выход кодом `1` до единого
-`systemctl` или `mkdir`.
+проксёр, которого нет; имя из `plain_context` столкнулось бы с
+зарезервированным именем no-proxy контейнера Zen — оно берётся из каталога, а
+не зашито в скрипт, и сверяется без учёта регистра. Любое из трёх — выход
+кодом `1` до единого `systemctl` или `mkdir`.
 
 **Уровень 7: уборка устаревшего раньше создания нужного.** Тот же
 `run_onchange_after_34-wsproxy-host.sh.tmpl` сначала снимает и удаляет
@@ -691,8 +696,8 @@ chezmoi init --promptMultichoice enabled=neovim,node,claude
 - [workarounds.md](workarounds.md) — запись про `promptMultichoiceOnce`.
 - [install.md](install.md) — установка с нуля, неинтерактивный режим,
   полная процедура добавления фичи на уже установленной машине.
-- [isolation.md](isolation.md) — что растёт из списка `contexts:` в том же
-  `.chezmoidata.yaml`.
+- [isolation.md](isolation.md) — что растёт из `contexts:` и `plain_context:` в
+  том же `.chezmoidata.yaml`.
 - [sync.md](sync.md) — что растёт из списка `syncthing:`.
 - [multiplexer.md](multiplexer.md), [voice.md](voice.md),
   [killswitch.md](killswitch.md),

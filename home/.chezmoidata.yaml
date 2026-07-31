@@ -102,8 +102,8 @@ bookmarks_demo:
 # socat listens on at 127.0.0.1 on the host; the same port is baked into the
 # generated context-proxy extension.
 #
-# The name "scratch" is reserved: it is the no-proxy Zen container for links
-# that belong to nobody.
+# Имя из `plain_context` ниже здесь запрещено: скрипт 34 валит apply, если оно
+# встретится в этом списке.
 #
 # `route: true` включает штатный Space Routing браузера: правило "адрес содержит
 # имя контекста -> открыть в его спейсе". Спейс привязан к контейнеру, поэтому
@@ -125,6 +125,28 @@ contexts:
     route: true
   - name: personal
     socks: 11083
+
+# Контекст без работы: единственный контейнер Zen, у которого нет ни прокси, ни
+# distrobox-контейнера, ни моста на порт. Трафик уходит прямо с хоста. Сюда же
+# пикер отправляет ссылки, не принадлежащие ни одной работе, поэтому имя видно
+# в списке «чем открыть».
+#
+# Ровно один, не список: он определяется не работой, а её отсутствием, и второго
+# такого быть не может. Имя отсюда попадает в контейнер, спейс, папку закладок и
+# пункт пикера, и оно же запрещено внутри `contexts:` выше.
+#
+# Цвет `cyan` намеренно вынут из ротации цветов рабочих контекстов (скрипты 32 и
+# 41), поэтому он не совпадёт с ними, сколько бы работ ни завелось.
+#
+# `bookmarks` только свои: общий список `bookmarks:` в начале файла сюда не
+# приезжает, ему тут нечего делать.
+plain_context:
+  name: home
+  icon: chill
+  color: cyan
+  bookmarks:
+    - title: YouTube
+      url: https://www.youtube.com
 
 # What Syncthing keeps in step between machines. One entry is one Syncthing
 # folder; `id` is what has to be typed identically on the phone, so it is

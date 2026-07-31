@@ -24,13 +24,16 @@ mkdir -p "$UNITDIR"
 #                      architecture exists to prevent;
 #   duplicate port  -> the second socat fails to bind and that context ends up
 #                      with no proxy while the browser still points at the port;
-#   name "Scratch"  -> collides with the no-proxy Zen container used for links
-#                      that belong to nobody.
+#   the plain_context name
+#                   -> collides with the no-proxy Zen container used for links
+#                      that belong to nobody. Matched case-insensitively: the
+#                      clash is in the container, and a differently-cased name
+#                      would build a second one beside it rather than fail.
 names=$(printf '%s\n'{{ range .contexts }} {{ .name | quote }}{{ end }})
 ports=$(printf '%s\n'{{ range .contexts }} {{ .socks }}{{ end }})
 dup_names=$(sort <<<"$names" | uniq -d | tr '\n' ' ')
 dup_ports=$(sort <<<"$ports" | uniq -d | tr '\n' ' ')
-reserved=$(grep -ix 'scratch' <<<"$names" | tr '\n' ' ' || true)
+reserved=$(grep -ix {{ .plain_context.name | quote }} <<<"$names" | tr '\n' ' ' || true)
 
 if [[ -n "${dup_names}${dup_ports}${reserved}" ]]; then
     echo "!! Bad contexts in .chezmoidata.yaml:" >&2
