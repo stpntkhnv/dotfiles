@@ -418,7 +418,7 @@ Zen тем же штатным декодером.
 - `Exec` идёт через `slice-run browser-zen.slice ...`, а не запускает
   `zen-browser` напрямую — весь Zen целиком ограничен по памяти этим
   [systemd slice](glossary.md#systemd-slice) (сам механизм `slice-run` и
-  бюджеты памяти — тема будущего `browsers.md`).
+  бюджеты памяти разобраны в [browsers.md](browsers.md)).
 - `MimeType` **не несёт** `x-scheme-handler/http` и `x-scheme-handler/https`.
   Голая запись «Zen Browser» в системном пикере ссылок открывала бы адрес в
   том контейнере, который использует текущая раскладка — ровно то тихое
