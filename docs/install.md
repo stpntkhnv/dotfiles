@@ -169,7 +169,7 @@ flowchart TD
   блокирует `postinstall`, который линкует нативный бинарник `claude`, и
   результат — рабочий, но битый симлинк `~/.npm-global/bin/claude`,
   сообщающий `No such file or directory` про файл, который на самом деле на
-  месте. Поведение npm (лифецикл-скрипты `preinstall`/`install`/`postinstall`
+  месте. Поведение npm (жизненный цикл: скрипты `preinstall`/`install`/`postinstall`
   заблокированы, пока пакет не назван явно во `allow-scripts`, синтаксис
   `--allow-scripts=пакет1,пакет2`) подтверждено официальной документацией
   npm (`npm-install-scripts`, `allow-scripts` в `definitions.js`) — это не
@@ -494,7 +494,7 @@ chezmoi и завершался тем же кодом без какого-ли�
   та же, что включает флаг `--prompt`); `internal/cmd/prompt.go`, функции
   `readMultichoice`/`readLineRaw` (построчный ввод без TTY).
 - npm: `npm-install-scripts`, поле `allow-scripts` в
-  `workspaces/config/lib/definitions/definitions.js` — лифецикл-скрипты
+  `workspaces/config/lib/definitions/definitions.js` — жизненный цикл: скрипты
   заблокированы, пока пакет не назван явно.
 - [how-it-works.md](how-it-works.md) — сам механизм chezmoi: каталог фич,
   три вопроса, порядок применения, защитные приёмы; раздел «Как добавить

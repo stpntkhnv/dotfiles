@@ -27,15 +27,19 @@ sh -c "$(curl -fsSL https://api.github.com/repos/stpntkhnv/dotfiles/contents/ins
 
 ## Что попадает на машину
 
-Без единого вопроса — потому что без этого машина не работает: базовые
-утилиты и оболочка (`git`, `ssh`, starship, eza, bat, fzf, zoxide), на хосте —
-рабочий стол niri + DankMaterialShell, сеть и firewall, а также distrobox с
-podman; внутри контейнера — обвязка вроде locale-gen и xauth. Список того,
-что ставится без вопросов, и почему это не переключить галочкой — в
-[`docs/base.md`](docs/base.md), [`docs/desktop.md`](docs/desktop.md) и
-[`docs/containers.md`](docs/containers.md).
+Без единого вопроса — потому что без этого машина не работает. Таких фич
+ровно восемь (`always: true` в каталоге): `core` и `shell` — базовые утилиты
+и оболочка (`git`, `ssh`, starship, eza, bat, fzf, zoxide); `host-base` —
+обвязка хоста; `desktop` — рабочий стол niri + DankMaterialShell; `tailscale`
+— сеть между своими машинами; `distrobox` — контейнеры рабочих контекстов;
+`zen` — браузер, в котором эти контексты живут; `container-base` — обвязка
+внутри контейнера вроде locale-gen и xauth. Разобраны они в
+[`docs/base.md`](docs/base.md), [`docs/desktop.md`](docs/desktop.md),
+[`docs/network.md`](docs/network.md), [`docs/containers.md`](docs/containers.md)
+и [`docs/isolation-browser.md`](docs/isolation-browser.md); полный список фич
+с пометкой, какая безусловна, — в [`docs/catalog.md`](docs/catalog.md).
 
-Всё остальное — чеклист. `home/.chezmoidata.yaml` перечисляет 35 фич, у
+Остальные 27 фич — чеклист. Всего `home/.chezmoidata.yaml` перечисляет 35, у
 каждой свои пакеты и `scope` (хост / контейнер / везде); при установке
 чеклист можно поправить (пробел — переключить фичу, Enter — подтвердить), и
 выбор сохраняется в `~/.config/chezmoi/chezmoi.toml`. Как каталог фич
