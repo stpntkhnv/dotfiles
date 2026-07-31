@@ -40,10 +40,13 @@
 Pictures/**
 {{ end }}
 
-{{ if not (has "browsers" .enabled) }}
+{{ if not (has "firefox" .enabled) }}
 .config/systemd/user/browser-firefox.slice
-.config/systemd/user/browser-chromium.slice
 .local/share/applications/firefox.desktop
+{{ end }}
+
+{{ if not (has "chromium" .enabled) }}
+.config/systemd/user/browser-chromium.slice
 .local/share/applications/chromium.desktop
 {{ end }}
 
@@ -54,7 +57,7 @@ Pictures/**
 
 {{/* The umbrella and the launcher helper belong to whichever browsers exist,
      so they only go away when none of them do. */}}
-{{ if and (not (has "browsers" .enabled)) (not (has "zen" .enabled)) }}
+{{ if and (not (has "firefox" .enabled)) (not (has "chromium" .enabled)) (not (has "zen" .enabled)) }}
 .config/systemd/user/browser.slice
 .local/bin/slice-run
 {{ end }}

@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-{{- if or (has "browsers" .enabled) (has "zen" .enabled) }}
+{{- if or (has "firefox" .enabled) (has "chromium" .enabled) (has "zen" .enabled) }}
 
 # systemd only notices new/edited unit files after a reload. The hashes
 # below re-trigger this script whenever a slice changes:

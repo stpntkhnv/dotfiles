@@ -453,19 +453,27 @@ features:
     aur:
       - visual-studio-code-bin
 
-  - key: browsers
-    label: "Firefox + Chromium"
+# Три браузера -- три отдельных фичи, по явному решению: какой браузер стоит
+# на машине, выбирается в чеклисте, а не приезжает пакетом "и то и другое".
+  - key: firefox
+    label: "Firefox (everything-else browser)"
     scope: host
-    default: true
+    pacman:
+      - firefox
+
+  - key: chromium
+    label: "Chromium (for the Chromium-only sites)"
+    scope: host
     pacman:
       - chromium
-      - firefox
 
   # The browser for work contexts, and the reason there is one browser process
   # instead of three. Zen shows only the current workspace's tabs in the
   # sidebar, and a workspace is bound to a Firefox container, which is what
-  # carries the per-context proxy and cookie jar. always: true because the
-  # whole context-isolation setup is built on it.
+  # carries the per-context proxy and cookie jar. default: true rather than
+  # always: the whole context-isolation setup is built on it, so it is
+  # preselected -- but a machine without work contexts may honestly not want
+  # it, and every script it feeds is gated on the key.
   #
   # Junction is the link picker: it becomes the default https handler, so a
   # link opened from a host document asks which context it belongs to instead
@@ -473,7 +481,7 @@ features:
   - key: zen
     label: "Zen browser + Junction link picker"
     scope: host
-    always: true
+    default: true
     pacman:
       - junction
     aur:

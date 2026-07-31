@@ -42,7 +42,8 @@ SOCK=/var/lib/wsproxy/links.sock
 # installed there, or zenopen-<context>.service is down.
 #
 # This does NOT fall through to /usr/bin/xdg-open, and that is deliberate. No
-# container installs a browser -- `browsers` and `zen` are both scope: host --
+# container installs a browser -- `firefox`, `chromium` and `zen` are all
+# scope: host --
 # so handing an http link to the container's own handler is guaranteed to fail,
 # and it fails badly: sixteen lines of "command not found" followed by "no
 # method available", which reads like noise rather than like a diagnosis. One

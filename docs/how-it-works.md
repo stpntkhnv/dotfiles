@@ -165,20 +165,20 @@ stat "/run/.containerenv" | not | not -}}`) — человека об этом �
 — изолированное окружение под конкретную работу.
 
 **`always`** — фича ставится без единого вопроса, как только `scope`
-пропустил её для этого окружения. В каталоге на сегодня восемь таких фич:
+пропустил её для этого окружения. В каталоге на сегодня семь таких фич:
 `core`, `shell`, `container-base`, `host-base`, `desktop`, `tailscale`,
-`distrobox`, `zen` (посчитано `awk` по `home/.chezmoidata.yaml`, не
-переписано со старого текста).
+`distrobox` (посчитано по `home/.chezmoidata.yaml`, не переписано со старого
+текста).
 
 **`default`** имеет смысл только у фич без `always` — это те, что попадают в
 чеклист. `default: true` значит «галочка стоит заранее», её надо снять
 руками, чтобы отказаться. Таких фич сейчас семнадцать: `herdr`, `tmux`,
-`neovim`, `node`, `browsers`, `printing`, `greeter`, `dotnet`, `rider`,
+`neovim`, `node`, `zen`, `printing`, `greeter`, `dotnet`, `rider`,
 `db-tools`, `api-tools`, `bitwarden`, `claude`, `gh`, `syncthing`, `obsidian`,
-`wallpapers`. Ещё десять — в чеклисте, но без галочки: `vscode`,
-`docker`, `go`, `codex`, `azure`, `teams`, `ziti`, `killswitch`, `voice`,
-`bluetooth-fix`. Восемь плюс семнадцать плюс
-десять — все тридцать пять фич каталога.
+`wallpapers`. Ещё двенадцать — в чеклисте, но без галочки: `vscode`,
+`firefox`, `chromium`, `docker`, `go`, `codex`, `azure`, `teams`, `ziti`,
+`killswitch`, `voice`, `bluetooth-fix`. Семь плюс семнадцать плюс
+двенадцать — все тридцать шесть фич каталога.
 
 Код читает необязательные поля только через `hasKey` (`home/.chezmoi.toml.tmpl`,
 комментарий перед циклом по каталогу: «Optional fields are only ever read
@@ -591,7 +591,7 @@ proxy units»). Переименованный или удалённый кон�
 
 ```sh
 $ grep -c '^  - key:' home/.chezmoidata.yaml
-35
+36
 ```
 
 Скрипты по видам:

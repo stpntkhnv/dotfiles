@@ -1,6 +1,6 @@
 ---
 covers:
-  features: [browsers]
+  features: [firefox, chromium]
   paths:
     - home/dot_config/systemd/user/browser.slice
     - home/dot_config/systemd/user/browser-chromium.slice
@@ -21,6 +21,17 @@ covers:
 [isolation-browser.md](isolation-browser.md)), а про то, что общее у всех
 трёх: сколько памяти каждому положено и как это ограничение технически
 устроено через [systemd slice](glossary.md#systemd-slice).
+
+В каталоге (`home/.chezmoidata.yaml`) каждый браузер — своя фича, по явному
+решению, записанному комментарием прямо над блоком `key: firefox` («какой
+браузер стоит на машине, выбирается в чеклисте, а не приезжает пакетом "и то
+и другое"»): `firefox` (label «Firefox (everything-else browser)») и
+`chromium` (label «Chromium (for the Chromium-only sites)») — отдельные
+пункты чеклиста без предвыбора, `zen` — отдельная фича с `default: true`
+(тема [isolation-browser.md](isolation-browser.md)). Слайс, ярлык и пакет
+каждого браузера привязаны к его собственному ключу: не отметил в чеклисте
+`chromium` — не приедут ни пакет `chromium`, ни `browser-chromium.slice`, ни
+ярлык, а Firefox это никак не заденет.
 
 ## Что это даёт
 
@@ -266,26 +277,38 @@ systemctl --user daemon-reload
 скрипта (`daemon-reload`) не изменилась ни на символ. Только так правка числа
 в `MemoryMax` вообще доходит до `daemon-reload`.
 
-Скрипт запускается, только если включена хотя бы одна из фич `browsers` или
-`zen`:
+Скрипт запускается, только если включена хотя бы одна из фич `firefox`,
+`chromium` или `zen`:
 
 ```
-{{- if or (has "browsers" .enabled) (has "zen" .enabled) }}
+{{- if or (has "firefox" .enabled) (has "chromium" .enabled) (has "zen" .enabled) }}
 ```
 
 ## Что ставится и что меняется
 
 | Категория | Путь | Где | Кто создаёт |
 |---|---|---|---|
-| Слайс-зонтик | `~/.config/systemd/user/browser.slice` | Хост | фича `browsers` или `zen` |
-| Слайс Firefox | `~/.config/systemd/user/browser-firefox.slice` | Хост | фича `browsers` |
-| Слайс Chromium | `~/.config/systemd/user/browser-chromium.slice` | Хост | фича `browsers` |
+| Слайс-зонтик | `~/.config/systemd/user/browser.slice` | Хост | любая из фич `firefox`, `chromium`, `zen` |
+| Слайс Firefox | `~/.config/systemd/user/browser-firefox.slice` | Хост | фича `firefox` |
+| Слайс Chromium | `~/.config/systemd/user/browser-chromium.slice` | Хост | фича `chromium` |
 | Слайс Zen | `~/.config/systemd/user/browser-zen.slice` | Хост | фича `zen` (тема [isolation-browser.md](isolation-browser.md)) |
-| Обёртка запуска | `~/.local/bin/slice-run` (mode 755) | Хост | фича `browsers` или `zen` |
-| Ярлык Firefox | `~/.local/share/applications/firefox.desktop` — перекрывает `/usr/share/applications/firefox.desktop` | Хост, в доме | шаблон `firefox.desktop.tmpl`, фича `browsers` |
-| Ярлык Chromium | `~/.local/share/applications/chromium.desktop` — перекрывает `/usr/share/applications/chromium.desktop` | Хост, в доме | шаблон `chromium.desktop.tmpl`, фича `browsers` |
-| Пакеты | `chromium`, `firefox` (pacman) | Хост | фича `browsers`, `default: true` |
+| Обёртка запуска | `~/.local/bin/slice-run` (mode 755) | Хост | любая из фич `firefox`, `chromium`, `zen` |
+| Ярлык Firefox | `~/.local/share/applications/firefox.desktop` — перекрывает `/usr/share/applications/firefox.desktop` | Хост, в доме | шаблон `firefox.desktop.tmpl`, фича `firefox` |
+| Ярлык Chromium | `~/.local/share/applications/chromium.desktop` — перекрывает `/usr/share/applications/chromium.desktop` | Хост, в доме | шаблон `chromium.desktop.tmpl`, фича `chromium` |
+| Пакет Firefox | `firefox` (pacman) | Хост | фича `firefox` |
+| Пакет Chromium | `chromium` (pacman) | Хост | фича `chromium` |
 | Пересчитать юниты | `systemctl --user daemon-reload` | — | скрипт 33, при изменении текста (значит и хеша) любого из четырёх `.slice` |
+
+На уже установленной машине разделение бывшей единой фичи `browsers` на
+`firefox` и `chromium` само по себе ничего не ставит и не удаляет. Сохранённый
+выбор из `~/.config/chezmoi/chezmoi.toml` не переспрашивается — это свойство
+`promptMultichoiceOnce`, записанное строкой в
+[workarounds.md](workarounds.md), — поэтому новые ключи не появятся в
+`data.enabled` сами, а снятая или исчезнувшая фича не удаляет уже стоящий
+пакет: скрипт 20 только ставит выбранное. Починить выбор — вписать `firefox`
+и/или `chromium` руками в `data.enabled` (ключ в секции `data` файла
+`chezmoi.toml`) или пройти чеклист заново через `chezmoi init --prompt`, с
+оговорками из [install.md](install.md).
 
 Ярлык Zen (`zen.desktop.tmpl`) собирает те же две вещи — `slice-run
 browser-zen.slice ...` вместо голого запуска — но сам файл принадлежит

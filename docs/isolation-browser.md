@@ -676,9 +676,9 @@ Multi-Account Containers. Отказ выглядит так: чужая стр�
 
 | Категория | Путь | Где | Кто создаёт |
 |---|---|---|---|
-| Пакеты | `junction`, `zen-browser-bin` (AUR) | Хост | фича `zen`, всегда включена |
+| Пакеты | `junction`, `zen-browser-bin` (AUR) | Хост | фича `zen` — `default: true`: предвыбрана в чеклисте, потому что на ней стоит вся изоляция контекстов, но её можно снять, и каждый её скрипт закрыт проверкой ключа (комментарий над `key: zen` в `home/.chezmoidata.yaml`) |
 | Системная политика Zen | `/etc/zen/policies/policies.json` | Хост, вне дома | скрипт 32 |
-| Системная политика Firefox (только Bitwarden) | `/etc/firefox/policies/policies.json` | Хост, вне дома | скрипт 32, если включена фича `browsers` |
+| Системная политика Firefox (uBlock Origin, плюс Bitwarden при фиче `bitwarden`) | `/etc/firefox/policies/policies.json` | Хост, вне дома | скрипт 32, если включена фича `firefox` |
 | Собранное расширение | `/usr/local/lib/zen-context-proxy.xpi` | Хост, вне дома | скрипт 41 |
 | Настройки профиля | `<профиль>/user.js` (`~/.zen/*/` или `~/.config/zen/*/`) | Хост, в доме | скрипт 40 |
 | Сессия и spaces | `<профиль>/zen-sessions.jsonlz4` | Хост, в доме | скрипт 43, стадия 1 (дописывает в существующий файл, не создаёт с нуля) |

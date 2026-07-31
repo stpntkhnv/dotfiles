@@ -4,7 +4,7 @@
      Источник: home/.chezmoidata.yaml и шапки covers в docs/*.md
      Пересобрать: tools/gen-catalog.sh -->
 
-Все 35 фич каталога. Столбец «Документ» ведёт в подробное описание.
+Все 36 фич каталога. Столбец «Документ» ведёт в подробное описание.
 
 | Фича | Что это | Где | Как включается | Пакетов | Документ |
 |---|---|---|---|---|---|
@@ -20,8 +20,9 @@
 | `neovim` | Neovim + LSP, treesitter | both | галочка стоит | 2 | [dev-tools.md](dev-tools.md) |
 | `node` | Node.js + npm | both | галочка стоит | 2 | [dev-tools.md](dev-tools.md) |
 | `vscode` | VS Code + extensions from extensions.txt | both | по выбору | 1 | [dev-tools.md](dev-tools.md) |
-| `browsers` | Firefox + Chromium | host | галочка стоит | 2 | [browsers.md](browsers.md) |
-| `zen` | Zen browser + Junction link picker | host | всегда | 2 | [isolation-browser.md](isolation-browser.md) |
+| `firefox` | Firefox (everything-else browser) | host | по выбору | 1 | [browsers.md](browsers.md) |
+| `chromium` | Chromium (for the Chromium-only sites) | host | по выбору | 1 | [browsers.md](browsers.md) |
+| `zen` | Zen browser + Junction link picker | host | галочка стоит | 2 | [isolation-browser.md](isolation-browser.md) |
 | `printing` | Printing (CUPS) | host | галочка стоит | 3 | [hardware.md](hardware.md) |
 | `docker` | Docker + lazydocker | host | по выбору | 4 | [dev-tools.md](dev-tools.md) |
 | `greeter` | Login screen: DMS greeter on greetd | host | галочка стоит | 2 | [greeter.md](greeter.md) |

@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-{{- if or (has "browsers" .enabled) (has "zen" .enabled) }}
+{{- if or (has "firefox" .enabled) (has "chromium" .enabled) (has "zen" .enabled) }}
 
 # Extensions arrive through system policies: the browser installs them on next
 # start, no store visit needed. Every file below is wholly owned by this
@@ -155,7 +155,7 @@ set -euo pipefail
 {{-   end }}
 {{- end }}
 {{- $ffExts := list }}
-{{- if has "browsers" .enabled }}
+{{- if has "firefox" .enabled }}
 {{-   if has "bitwarden" .enabled }}{{ $ffExts = append $ffExts $bitwarden }}{{ end }}
 {{-   $ffExts = append $ffExts $ublock }}
 {{- end }}
@@ -234,7 +234,7 @@ managed=$(jq -c 'walk(
 managed=""
 {{ end }}
 echo "==> Installing browser extension policies..."
-{{- if and (has "browsers" .enabled) (has "bitwarden" .enabled) }}
+{{- if and (has "chromium" .enabled) (has "bitwarden" .enabled) }}
 
 sudo install -d /etc/chromium/policies/managed
 sudo tee /etc/chromium/policies/managed/bitwarden-extension.json >/dev/null <<'EOF'
@@ -248,7 +248,7 @@ sudo tee /etc/chromium/policies/managed/bitwarden-extension.json >/dev/null <<'E
 }
 EOF
 {{- end }}
-{{- if has "browsers" .enabled }}
+{{- if has "firefox" .enabled }}
 
 ff_exts="$(cat <<'FF_EXTS_EOF'
 {{ range $i, $e := $ffExts }}{{ if $i }},
