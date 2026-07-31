@@ -1,0 +1,231 @@
+#!/bin/bash
+{{- if ne .env "host" }}
+exit 0
+{{- else }}
+{{- if not (has "greeter" .enabled) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# The login screen is the desktop shell itself, run under greetd instead of
+# sddm. Everything it draws comes out of ~/.config/DankMaterialShell/
+# settings.json -- the same file the running session reads -- so there is no
+# second implementation of the look to keep in step with the first.
+#
+# What this script owns is only what the vendor cannot know about this machine:
+# the keyboard layout on the greeter, when the theme is carried across, and a
+# rescue for a switch that half succeeded.
+#
+# run_after_ rather than run_onchange_: the theme moves independently of this
+# script's own text -- a new wallpaper changes nothing here -- so an onchange
+# script would never re-run and the login screen would stay at whatever it was
+# first seeded with.
+#
+# NOTHING HERE MAY FAIL THE APPLY. There is a working session on screen while
+# this runs; a half-configured login screen is worth a message, never a broken
+# apply. That is enforced by the EXIT trap below, which exits zero whatever
+# happened -- an unguarded sudo under set -e would otherwise take the apply
+# down even though the rescue itself ran.
+
+say()  { echo "==> greeter: $*"; }
+bail() { say "$*"; exit 0; }
+
+GREETD_CONF=/etc/greetd/config.toml
+GREETER_CACHE=/var/cache/dms-greeter
+GREETER_NIRI_DIR=/etc/greetd/niri
+
+# ---- the rescue, armed before anything else -----------------------------
+# Exactly one display manager has to be able to start, and that must be checked
+# on every way out of this script. A check at the bottom would be jumped over
+# twice: by set -e when any step below fails, and by the `command -v` bail just
+# after this -- which is precisely the case where a machine already living on
+# greetd has lost the binary greetd runs.
+#
+# Anything other than a literal "enabled" -- masked, static, linked, absent --
+# counts as off. A masked unit does not start, and taking it for a working way
+# in would defeat the whole check.
+unit_enabled() {
+    [[ "$(systemctl is-enabled "$1" 2>/dev/null || true)" == "enabled" ]]
+}
+
+# Only the command line counts. Reading the file as a whole would accept a
+# comment, or a dead line left over from an earlier layout, and call a machine
+# configured when greetd would come up with nothing to run.
+greetd_configured() {
+    grep -qE '^[[:space:]]*command[[:space:]]*=.*dms-greeter' "$GREETD_CONF" 2>/dev/null
+}
+
+# For check_invariant only -- see the comment above greetd_ok below. A config
+# that exists but this user cannot read is a state a switched machine can
+# genuinely be in (permissions tightened by hand, or by a future greetd), and
+# it must not read the same as "not configured". Same principle already used
+# for the cache directory in sync_needed: trust what cannot be looked at
+# rather than assume the worst.
+greetd_conf_present_but_unreadable() {
+    [[ -e "$GREETD_CONF" && ! -r "$GREETD_CONF" ]]
+}
+
+check_invariant() {
+    # set -e is still in force here: it is a shell-wide setting, not a
+    # per-function one, and the trap that calls this runs this whole command
+    # as one command list. Without turning it off, a non-zero return from any
+    # line below -- or from this function itself -- aborts the trap before it
+    # reaches the forced `exit 0`, which is the one thing this script promises
+    # never to skip.
+    set +e
+    local greetd_ok=no sddm_on=no
+
+    # Four conditions, not one, because greetd_ok has to mean "will actually
+    # start", not merely "was told to be enabled":
+    #   - the unit is enabled, or systemd never tries it at boot;
+    #   - dms-greeter is on PATH, or the AUR package never built;
+    #   - config.toml names it in a command line, or a `dms greeter enable`
+    #     that died halfway left the unit pointed at nothing;
+    #   - the cache directory exists, or the vendor wrapper itself refuses to
+    #     start -- see /usr/share/quickshell/dms/Modules/Greetd/assets/dms-greeter,
+    #     which exits 1 rather than run without one.
+    # An enabled unit that fails any single one of these is a black screen,
+    # not a login, and telling the two apart is the whole point of this check.
+    if unit_enabled greetd.service \
+       && command -v dms-greeter >/dev/null 2>&1 \
+       && { greetd_configured || greetd_conf_present_but_unreadable; } \
+       && [[ -d "$GREETER_CACHE" ]]; then
+        greetd_ok=yes
+    fi
+    if unit_enabled sddm.service; then
+        sddm_on=yes
+    fi
+
+    if [[ "$greetd_ok" == yes && "$sddm_on" == yes ]]; then
+        say "both greetd and sddm are enabled; switching sddm off"
+        sudo systemctl disable sddm.service || say "!! could not disable sddm"
+    elif [[ "$greetd_ok" == no && "$sddm_on" == no ]]; then
+        say "!! no usable display manager is enabled -- putting sddm back so this machine can still be logged into"
+        # greetd goes first: both units claim the display-manager.service alias,
+        # and enabling sddm while a dead greetd still holds it leaves neither in
+        # charge.
+        if unit_enabled greetd.service; then
+            say "!! greetd is enabled but cannot start; disabling it"
+            sudo systemctl disable greetd.service || say "!! could not disable greetd"
+        fi
+        sudo systemctl enable sddm.service \
+            || say "!! could not enable sddm either; log in from a TTY (Ctrl+Alt+F2) and fix this by hand"
+    elif [[ "$greetd_ok" == no ]]; then
+        say "the greeter is not in charge; this machine still logs in through sddm"
+    fi
+
+    say "display-manager -> $(readlink -e /etc/systemd/system/display-manager.service 2>/dev/null || echo none)"
+}
+
+trap 'check_invariant; exit 0' EXIT
+
+command -v dms >/dev/null 2>&1 || bail "dms is not installed, nothing to configure"
+command -v dms-greeter >/dev/null 2>&1 \
+    || bail "dms-greeter is missing (the AUR package did not build); leaving the login screen alone"
+
+# ---- 1. remove the keyboard override this script used to write ----------
+# An earlier version of this script wrote /etc/greetd/niri_overrides.kdl with
+# its own copy of the layout, on the theory that the greeter had no other way
+# to learn it. That was wrong on two counts: DMS already carries the layout
+# out of the live ~/.config/niri/config.kdl by itself (see the check in step
+# 4), so the override was never needed; and the wrapper includes it AFTER the
+# generated config's own include, so the override's `input` block sat as a
+# second one in the greeter's niri config. `niri validate` accepts that
+# without complaint -- if niri's semantics for a duplicated section are
+# last-wins, that second block silently replaced the first one, dropping
+# numlock, the touchpad, mouse and trackpoint settings. A login screen with no
+# numlock is a password that cannot be typed on the numeric keypad.
+#
+# Nothing else will ever remove this file -- scripts 34 and 38 already
+# establish the pattern of pruning what an earlier apply left behind -- so
+# this one does, once, for the copy it recognizes as its own by the same
+# marker every managed file in this repo carries. The check and the removal
+# are both guarded so a failure here can only be a message, never a reason to
+# stop applying.
+STALE_OVERRIDES=/etc/greetd/niri_overrides.kdl
+if [[ -f "$STALE_OVERRIDES" ]] \
+   && head -n1 "$STALE_OVERRIDES" 2>/dev/null | grep -q 'Managed by chezmoi'; then
+    say "removing stale $STALE_OVERRIDES"
+    sudo rm -f "$STALE_OVERRIDES" || say "!! could not remove $STALE_OVERRIDES"
+fi
+
+# ---- 2. hand the login screen to the greeter ----------------------------
+# greetd ships config.toml world readable, so plain grep is enough and an apply
+# that changes nothing asks for no password. If a future version tightened
+# that, the grep fails here every time and `enable` runs again on every apply
+# -- idempotent, but not merely noisy: `dms greeter enable` escalates
+# privileges, so the real cost is a sudo password prompt on every single
+# apply. check_invariant does not share this gate: it treats the same
+# unreadable file as configured instead, because there the failure mode isn't
+# a repeated prompt, it's disabling a greeter that already works -- see
+# greetd_conf_present_but_unreadable above.
+#
+# DMS_PRIVESC=sudo: measured on this machine, both `dms greeter enable -y`
+# and `dms greeter sync` stop and wait on "Multiple privilege escalation
+# tools detected: [1] sudo [2] run0" the first time they run here -- `-y`
+# does not cover that prompt, only the ones that come after it. Left unset,
+# an unattended `chezmoi apply` hangs forever right here. sudo is what every
+# other script in this repository already uses.
+if ! greetd_configured; then
+    say "handing the login screen to the DMS greeter"
+    DMS_PRIVESC=sudo dms greeter enable -y \
+        || say "!! dms greeter enable failed; the check on exit says where that left this machine"
+fi
+
+# ---- 3. carry the theme across ------------------------------------------
+# sync copies settings, palette and wallpaper into the greeter cache; it does
+# not link them. So a wallpaper changed since the last apply reaches the login
+# screen only when this runs -- and, because the copy escalates privileges,
+# running it unconditionally would ask for a password on every single apply.
+# Hence the stamp. DMS_PRIVESC=sudo here for the same reason as step 2 above.
+STAMP="{{ .chezmoi.homeDir }}/.cache/dms-greeter-sync.stamp"
+SETTINGS="{{ .chezmoi.homeDir }}/.config/DankMaterialShell/settings.json"
+COLORS="{{ .chezmoi.homeDir }}/.cache/DankMaterialShell/dms-colors.json"
+
+sync_needed() {
+    [[ -f "$STAMP" ]] || return 0
+    # The cache can be emptied without either source changing, so a missing copy
+    # counts as stale too. Only the two files with fixed names are checked: the
+    # wallpaper lands under a name taken from the source image, which is not
+    # knowable from here.
+    #
+    # The cache is 0750 greeter:greeter, and group membership only lands at the
+    # next login, so for a while the user cannot even stat the copies. Treat
+    # "cannot look" as "trust the stamp": the alternative is re-syncing on every
+    # apply, with a password prompt each time, which is what the stamp exists to
+    # prevent. The trade-off: while the directory is unreadable, an emptied cache
+    # goes unnoticed, and the repair is a hand-run `dms greeter sync`.
+    if [[ -x "$GREETER_CACHE" ]]; then
+        [[ -e "$GREETER_CACHE/colors.json" ]] || return 0
+        [[ -e "$GREETER_CACHE/settings.json" ]] || return 0
+    fi
+    [[ "$SETTINGS" -nt "$STAMP" ]] && return 0
+    [[ "$COLORS" -nt "$STAMP" ]] && return 0
+    return 1
+}
+
+if sync_needed; then
+    say "syncing the theme to the greeter"
+    if DMS_PRIVESC=sudo dms greeter sync; then
+        { mkdir -p "$(dirname "$STAMP")" && touch "$STAMP"; } \
+            || say "!! could not write $STAMP; the theme will be re-synced on every apply"
+    else
+        say "!! dms greeter sync failed; on a first switch there is no previous theme to fall back to -- if the cache never got created, the invariant check below will catch that and put sddm back"
+    fi
+fi
+
+# ---- 4. verify the keyboard layout landed --------------------------------
+# The layout used to be a blind guarantee: this script wrote it and trusted
+# its own copy. Now it is a checked one instead -- `dms greeter sync` writes
+# the layout it read out of the live niri config into files under
+# $GREETER_NIRI_DIR, so look for it there rather than assert it. The
+# directory is checked rather than parsed out of greetd's -C argument on
+# purpose: if DMS ever moves where it writes the synced config, this should
+# come up empty and say so, not go on pretending to still look in the right
+# place. A missing layout here is discovered before the password field
+# instead of at it, which is the whole point of checking instead of writing.
+if ! grep -rq 'xkb' "$GREETER_NIRI_DIR" 2>/dev/null; then
+    say "!! no keyboard layout found under $GREETER_NIRI_DIR; the login screen will come up on whatever layout niri defaults to"
+fi
+{{- end }}
+{{- end }}

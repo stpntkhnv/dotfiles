@@ -24,12 +24,15 @@ import re, subprocess, sys
 # No newline is ever typed, wherever it sits. wtype has no notion of text: it
 # turns every character into a key press, and libxkbcommon maps U+000A to
 # keysym Linefeed, which reaches the application as 0x0A -- the same byte
-# Ctrl+J sends, which a terminal input line reads as Enter. Dictating into
-# Claude Code, a transcript the cleanup model had broken into three paragraphs
-# submitted itself twice on the way in, the message arriving in pieces
-# (history.db rows 347 and 348: 2 of 18 cleaned transcripts carried an inner
-# newline, 0 of 18 raw ones did, so the model puts them there and Whisper does
-# not). Carriage return and tab are the same failure with a different key, so
+# Ctrl+J sends, which a terminal input line reads as Enter.
+# It happened: a transcript broken into three paragraphs submitted itself twice
+# on the way into Claude Code, the message arriving in pieces (history.db rows
+# 347 and 348). Back then the paragraphs came from an LLM cleanup pass that no
+# longer exists -- measured at the time, 2 of 18 cleaned transcripts carried an
+# inner newline against 0 of 18 raw ones, so Whisper was never the source. The
+# flattening stays anyway: it costs nothing and turns "Whisper does not emit
+# newlines" from an observation into a guarantee.
+# Carriage return and tab are the same failure with a different key, so
 # they go the same way. Runs collapse to one space, with the whitespace either
 # side absorbed, so a blank line does not arrive as a double space.
 text = re.sub(r"\s*[\n\r\t]+\s*", " ", sys.argv[1]).strip()

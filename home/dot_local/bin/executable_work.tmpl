@@ -96,7 +96,7 @@ first_tab_pane() {
         '[.result.panes[] | select(.tab_id == $t)] | length' 2>/dev/null || true)
     if [ "$count" = 1 ]; then
         printf '%s' "$panes" | jq -r --arg t "$tab" \
-            '.result.panes[] | select(.tab_id == $t) | .pane_id'
+            '.result.panes[] | select(.tab_id == $t) | .pane_id' || true
     elif [ -n "$count" ] && [ "$count" -gt 1 ] 2>/dev/null; then
         echo "work: '$ctx' left alone, its first tab is split into $count panes." >&2
     fi
@@ -220,8 +220,8 @@ for ctx in "${usable[@]}"; do
     else
         created=$(herdr workspace create --label "$ctx" --no-focus) \
             || { server_gone_hint; exit 1; }
-        ws=$(printf '%s' "$created" | jq -r '.result.workspace.workspace_id // empty')
-        pane=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
+        ws=$(printf '%s' "$created" | jq -r '.result.workspace.workspace_id // empty' || true)
+        pane=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty' || true)
         # An empty pane id is a real, if rare, shape of the response -- and
         # wait_for_idle_shell does not know that; it would poll an id that
         # was never a pane for the full 50 tries (5s) and then print "pane

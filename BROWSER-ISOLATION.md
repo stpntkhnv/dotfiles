@@ -534,6 +534,8 @@ additional_flags="--volume ~/.local/share/wsproxy/digi3:/var/lib/wsproxy:rw"
 | `wsproxy-*.service` | наши скрипты | Запуск и перезапуск socat и microsocks |
 | Junction | пакет на хосте | Пикер: спрашивает, в какой контекст открыть ссылку |
 | `zen-open` | наш скрипт | Собирает `ext+container:` ссылку |
+| `zen-open-recv` | наш скрипт на хосте | Читает URL из сокета, проверяет его, зовёт `zen-open` |
+| `zenopen-*.service` | наши скрипты | Слушатель сокета ссылок, по одному на контекст |
 | `/usr/local/bin/xdg-open` | наш скрипт в контейнере | Перехват ссылок изнутри контейнера |
 | политики `/etc/zen/policies/` | наш скрипт | Принудительная установка расширений |
 | `user.js` | наш скрипт | Настройки браузера |
@@ -546,7 +548,7 @@ home/dot_config/distrobox/distrobox.ini.tmpl             манифест кон
 home/.chezmoiscripts/run_onchange_after_34-wsproxy-host.sh.tmpl        мосты на хосте
 home/.chezmoiscripts/run_onchange_after_36-wsproxy-container.sh.tmpl   мосты в контейнере
 home/.chezmoiscripts/run_onchange_after_37-container-links.sh.tmpl     xdg-open в контейнере
-home/.chezmoiscripts/run_onchange_after_38-linkrouting.sh.tmpl         zen-open и пикер
+home/.chezmoiscripts/run_onchange_after_38-linkrouting.sh.tmpl         zen-open, приёмник, пикер
 home/.chezmoiscripts/run_onchange_before_32-browser-extensions.sh.tmpl политики
 home/.chezmoiscripts/run_onchange_after_40-zen-prefs.sh.tmpl           user.js
 ```
@@ -749,9 +751,20 @@ flowchart TD
 сейчас в фокусе.
 
 **Изнутри контейнера.** В контейнере лежит свой `/usr/local/bin/xdg-open`. Он
-перехватывает http(s), читает имя контейнера из `/run/.containerenv` и вызывает
-на хосте `zen-open <имя> <url>` через `distrobox-host-exec`. Вопрос не
-задаётся, потому что ответ известен.
+перехватывает http(s) и пишет одну строку с URL в `/var/lib/wsproxy/links.sock`
+— тот же смонтированный каталог, через который выходит SOCKS-прокси. На хосте
+эту строку принимает `zenopen-<контекст>.service` и вызывает `zen-open`. Вопрос
+«к какому контексту» не задаётся, потому что ответ известен, и, что важнее,
+**контейнер его не сообщает**: имя контекста определяется тем, в какой сокет
+пришла строка, а это соответствие принадлежит хосту.
+
+Раньше здесь был `distrobox-host-exec`, который на этой машине не работал ни
+разу и возвращал 127 без единого слова: `host-spawn` вызывает
+`org.freedesktop.Flatpak.Development.HostCommand`, а `flatpak` на хосте не
+установлен, и при `init=true` distrobox вообще не монтирует хостовый
+`/run/user/$UID`, так что унаследованная переменная шины показывает на
+контейнерный `dbus-broker`. Разбор с замерами — в
+[docs/features.md](docs/features.md#почему-ссылка-уходит-через-сокет-а-не-через-distrobox-host-exec).
 
 **Закладки.** Обычная закладка открывается в текущем контексте, то есть закладка
 stellium, нажатая из space digi3, уедет в digi3. Поэтому рабочие закладки
@@ -826,6 +839,12 @@ curl --socks5-hostname 127.0.0.1:9999 http://127.0.0.1:8099/
 # stellium
 ```
 
+То же и с сокетом ссылок рядом. Из `digi3` строка, записанная в
+`/run/host/home/stsiapan/.local/share/wsproxy/personal/links.sock`, принимается
+и открывает вкладку в контексте `personal` — проверено. Хост по-прежнему
+определяет контекст сам, по сокету, поэтому подделать поле с именем нельзя;
+выбрать чужой канал — можно.
+
 Против кого это важно: против **кода, работающего внутри контейнера**. Против
 работодателя, который читает свои логи, — нет. Модель угроз в спеке говорит про
 второе, но первое стоит понимать явно.
@@ -863,7 +882,9 @@ curl --socks5-hostname 127.0.0.1:9999 http://127.0.0.1:8099/
 ```sh
 ss -ltn | grep -E '1108[0-9]'                    # мосты слушают
 ls -l ~/.local/share/wsproxy/*/socks.sock        # контейнеры ответили
-distrobox enter digi3 -- ls /var/lib/wsproxy     # виден только свой сокет
+ls -l ~/.local/share/wsproxy/*/links.sock        # слушатели ссылок на месте
+systemctl --user is-active 'zenopen-*'           # ... и живы
+distrobox enter digi3 -- ls /var/lib/wsproxy     # видны только свои два сокета
 ls ~/.config/zen/*/extensions/                   # политика сработала
 ```
 
@@ -983,6 +1004,23 @@ xdg-mime query default x-scheme-handler/https    # должно быть Junctio
 Лечится `chezmoi apply` — скрипт next-steps отбирает обработчик обратно.
 От повторения защищает `browser.shell.checkDefaultBrowser = false` в `user.js`.
 
+### Ссылка изнутри контейнера не доезжает до браузера
+
+Обёртка говорит вслух, в отличие от прежней. По её строке видно, где встало:
+
+| Что сказала обёртка | Что это значит |
+|---|---|
+| `no link socket at /var/lib/wsproxy/links.sock` | на хосте не поднят `zenopen-<контекст>.service`, либо фича `zen` не выбрана |
+| `the host did not answer` | сокет есть, слушателя за ним нет: юнит упал между проверкой и записью |
+| `the host refused the link (bad-scheme)` | это не http(s); до сокета такое доходит только в обход обёртки |
+| `the host refused the link (bad-url)` | в URL пробел, он должен быть закодирован процентами |
+| `the host refused the link (too-long)` | длиннее 2048 символов |
+| ничего, код возврата 0 | доехало; дальше смотреть `journalctl --user -u zenopen-<контекст>` |
+
+Проверить канал целиком, не открывая браузер: остановить слушатель, запустить
+вместо него `socat` с `EXEC:cat` на тот же путь и записать строку изнутри
+контейнера.
+
 ### Добавить четвёртый контекст
 
 ```yaml
@@ -999,10 +1037,11 @@ distrobox enter newjob
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/install.sh)"
 ```
 
-Firefox-контейнер и прокси появятся сами: расширение пересоберётся с новой
-таблицей и создаст недостающий контейнер при следующем старте Zen. Руками
-останется только новый space и привязка к контейнеру — засев spaces работает
-лишь на нетронутом профиле и рабочий не трогает.
+Firefox-контейнер, прокси и слушатель ссылок появятся сами: юниты и расширение
+собираются из этой же таблицы, а недостающий контейнер расширение создаст при
+следующем старте Zen. Руками останется только новый space и привязка к
+контейнеру — засев spaces работает лишь на нетронутом профиле и рабочий не
+трогает.
 
 ### Новая машина с нуля
 
