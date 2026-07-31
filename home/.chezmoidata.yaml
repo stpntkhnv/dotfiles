@@ -143,12 +143,12 @@ contexts:
         url: https://dev.azure.com/tsacc-msfwex01-76-OCDIO/
       - title: Azure Portal
         url: https://portal.azure.com/#home
-      - title: Google Chat
-        url: https://chat.google.com/app/home
       - title: Harvest
         url: https://stellium.harvestapp.com/time
       - title: HRM
         url: https://hrm.innowise.com/my-page/company-role
+      - title: Claude
+        url: https://claude.ai/new
   - name: personal
     socks: 11083
     bookmarks:
