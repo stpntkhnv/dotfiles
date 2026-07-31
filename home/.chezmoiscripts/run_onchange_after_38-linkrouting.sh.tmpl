@@ -70,7 +70,7 @@ sudo chmod 755 /usr/local/bin/zen-open
 # "Some" and not "its own", because distrobox mounts the whole host root as
 # /run/host: a container can reach a neighbour's links.sock by absolute path and
 # open a link in that context. Measured from digi3 against personal's socket --
-# accepted, routed as personal. That is the same exposure BROWSER-ISOLATION.md
+# accepted, routed as personal. That is the same exposure docs/isolation.md
 # already records for socks.sock next to it, and the same answer applies: what
 # separates the contexts is the network namespace, not the socket. This route is
 # strictly narrower than the one it replaces either way.

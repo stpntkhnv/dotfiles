@@ -128,9 +128,10 @@ write_gecko_policy() {
     # sets browser.toolbars.bookmarks.visibility to "never", overriding the
     # "newtab" that Firefox itself ships. The managed folder is worse than
     # merely inconvenient there -- it exists ONLY as a toolbar button
-    # (browser-init.js:716-769), so a hidden toolbar means no way to reach it at
-    # all. The policy is runOncePerModification, so hiding the toolbar again by
-    # hand sticks.
+    # (browser-init.js:717-779 builds it and drops it into
+    # CustomizableUI.AREA_BOOKMARKS, and nowhere else), so a hidden toolbar
+    # means no way to reach it at all. The policy is runOncePerModification, so
+    # hiding the toolbar again by hand sticks.
     if [[ -n "$marks" || -n "$managed" ]]; then
         toolbar=$(printf ',\n    "DisplayBookmarksToolbar": "always"')
     fi

@@ -111,7 +111,7 @@ flowchart TD
 |---|---|---|
 | `zen` | Каталог профиля Zen (`~/.zen` или `~/.config/zen`) вообще существует | «Zen: never launched -- run 'zen-browser' once, then 'chezmoi apply' to write user.js» |
 | `zen` | В профиле есть `user.js` | «Zen: prefs not applied -- run 'chezmoi apply' with Zen closed» |
-| `zen` | Все три расширения на месте: `@testpilot-containers`, `{f069aec0-43c5-4bbf-b6b4-df95c4326b98}`, `context-proxy@dotfiles.local` | По одной строке на каждое отсутствующее: «Zen: extension $ext is missing -- check about:policies, install from addons.mozilla.org if the policy did not take» ([isolation-browser.md](isolation-browser.md)) |
+| `zen` | Все три расширения действительно загружены: в `<профиль>/extensions.json` у `@testpilot-containers`, `{f069aec0-43c5-4bbf-b6b4-df95c4326b98}` и `context-proxy@dotfiles.local` поле `active == true`. Именно `active`, а не наличие `.xpi` на диске: файл от прошлой установки не доказывает ничего, и у отключённого расширения файл тоже на месте | По одной строке на каждое незагруженное: «Zen: extension $ext is not loaded -- check about:policies and about:addons; 'chezmoi apply' rebuilds the policy and the XPI» ([isolation-browser.md](isolation-browser.md)) |
 | `zen` | `/usr/local/lib/zen-context-proxy.xpi` существует | «Zen: the context proxy extension was never built -- run 'chezmoi apply'» |
 | `zen` | Обработчик `x-scheme-handler/https` — Junction | Если не Junction, но пакет `junction` есть — скрипт сам, без вопроса, выполняет `xdg-mime default $junction_id x-scheme-handler/http x-scheme-handler/https` (единственная строка во всём файле, которая что-то меняет, а не только читает — см. вступление раздела «Что ставится и что меняется» ниже) и печатает «Link handler reclaimed from the browser: $junction_id»; если пакета `junction` нет — «Links: Junction is not the default https handler and the package is missing» ([isolation-links.md](isolation-links.md)) |
 | `syncthing` | Конфиг демона существует (`syncthing paths`) | «Syncthing: no configuration yet -- run 'chezmoi apply' once the service has started» |
@@ -168,7 +168,7 @@ x-scheme-handler/http x-scheme-handler/https`, когда обработчик �
 | `/etc/vconsole.conf` (строка `KEYMAP=`) | Раскладка консоли (TTY) | там же | [keyboard.md](keyboard.md) |
 | `/etc/systemd/zram-generator.conf` | Сжатый своп в оперативной памяти | там же | [hardware.md](hardware.md) |
 | `/etc/modprobe.d/btusb.conf`, `/etc/udev/rules.d/50-bt-dongle-nosuspend.rules` | Обход бага автоусыпления конкретного Bluetooth-донгла | `run_onchange_before_50-bluetooth.sh.tmpl` | [hardware.md](hardware.md) |
-| `/etc/zen/policies/policies.json` | Политика Zen: Firefox-контейнеры, force-installed расширения | `run_onchange_before_32-browser-extensions.sh.tmpl` | [isolation-browser.md](isolation-browser.md) |
+| `/etc/zen/policies/policies.json` | Политика Zen: Firefox-контейнеры, force-installed расширения, `Bookmarks` (закладки на панели), `ManagedBookmarks` (меню только для чтения), `Preferences` (снимает требование подписи расширений, без чего наше расширение не ставилось вообще), `DisplayBookmarksToolbar` (Zen прячет панель закладок по умолчанию, а управляемое меню существует только как кнопка на ней) | `run_onchange_before_32-browser-extensions.sh.tmpl` | [isolation-browser.md](isolation-browser.md) |
 | `/etc/firefox/policies/policies.json` | Тот же механизм для обычного Firefox, только Bitwarden (фичи `browsers`+`bitwarden`) | там же | [isolation-browser.md](isolation-browser.md) |
 | `/etc/chromium/policies/managed/bitwarden-extension.json` | Force-installed Bitwarden в Chromium (фичи `browsers`+`bitwarden`) | там же | [isolation-browser.md](isolation-browser.md) |
 | `/etc/systemd/system/wsproxy-socks.service`, `wsproxy-bridge.service` | Мост SOCKS5 внутри distrobox-контейнера | `run_onchange_after_36-wsproxy-container.sh.tmpl` | [isolation-network.md](isolation-network.md) |
@@ -319,6 +319,17 @@ tools/gen-catalog.sh --check
 файлов без документа: 0
 прочих замечаний:     0
 ```
+
+**Какие расширения Zen реально загрузились** (то же поле `active`, по которому
+смотрит `zz-next-steps`: файл на диске не доказывает ничего, у отключённого
+расширения он тоже на месте):
+
+```sh
+jq -r '[.addons[]|select(.active)|.id]|sort|.[]' ~/.config/zen/*/extensions.json
+```
+
+Ожидаемые идентификаторы и разбор вывода:
+[isolation-browser.md](isolation-browser.md).
 
 **Полезные команды chezmoi** (разобраны по коду и подтверждены запуском на
 этой машине, `chezmoi version v2.71.1`):

@@ -47,13 +47,24 @@ chezmoi apply
 человека в чеклисте), `scope`, `always`, `default`, `needs` и списки пакетов
 (`pacman`, `aur`, `npm`, `dotnet`).
 
-Кроме `features`, в этом же файле лежат ещё три независимых списка верхнего
-уровня — `bookmarks`, `contexts` (рабочие контексты изоляции — `digi3`,
-`stellium`, `personal`) и `syncthing` (папки синхронизации). У них нет ни
-`scope`, ни `always`, ни `default` — это не фичи, а данные, которые читают
-конкретные скрипты напрямую. Что из них растёт — тема [isolation.md](isolation.md)
-и [sync.md](sync.md), а не этого документа: здесь важно только то, что это
-тот же самый файл, с той же ролью «единственный источник правды».
+Кроме `features`, в этом же файле лежат ещё пять независимых списков верхнего
+уровня:
+
+- `bookmarks` — закладки, которые кладутся в панель каждого контекста, с
+  контекстом, вшитым в саму ссылку.
+- `managed_bookmarks` — второй, отдельный механизм закладок: не закладки, а
+  кнопка-меню на панели, читаемая из политики при каждом старте, зато с
+  вложенностью любой глубины.
+- `bookmarks_demo` — демонстрационная папка обычных закладок, чтобы разница
+  между двумя механизмами была видна руками; удаляется одной правкой.
+- `contexts` — рабочие контексты изоляции (`digi3`, `stellium`, `personal`).
+- `syncthing` — папки синхронизации.
+
+У них нет ни `scope`, ни `always`, ни `default` — это не фичи, а данные,
+которые читают конкретные скрипты напрямую. Что из них растёт — тема
+[isolation.md](isolation.md) и [sync.md](sync.md), а не этого документа: здесь
+важно только то, что это тот же самый файл, с той же ролью «единственный
+источник правды».
 
 Дальше всё остальное в репозитории — вопрос при установке, что попадёт в
 пакетный менеджер, какой конфиг доедет до `~`, — производится из этого
@@ -61,7 +72,7 @@ chezmoi apply
 
 ```mermaid
 flowchart TD
-    DATA["home/.chezmoidata.yaml<br/>каталог фич + contexts/syncthing/bookmarks"]
+    DATA["home/.chezmoidata.yaml<br/>каталог фич + contexts/syncthing/<br/>bookmarks/managed_bookmarks/bookmarks_demo"]
     TMPL["home/.chezmoi.toml.tmpl<br/>вопросы при chezmoi init"]
     CFG["~/.config/chezmoi/chezmoi.toml<br/>сохранённые ответы, своя на каждой машине"]
     IGNORE["home/.chezmoiignore<br/>что не класть в ~, если фича выключена"]
@@ -294,24 +305,26 @@ flowchart TD
 
 | Вид | Когда выполняется тело скрипта | Сколько сейчас |
 |---|---|---|
-| `run_onchange_before_*` / `run_onchange_after_*` | Только когда изменился текст самого скрипта после подстановки переменных шаблона | 20 |
-| `run_before_*` / `run_after_*` без `onchange` | На каждом `chezmoi apply`, безусловно | 7 |
+| `run_onchange_before_*` / `run_onchange_after_*` | Только когда изменился текст самого скрипта после подстановки переменных шаблона | 19 |
+| `run_before_*` / `run_after_*` без `onchange` | На каждом `chezmoi apply`, безусловно | 8 |
 
-(посчитано по `ls home/.chezmoiscripts` — 20 файлов с `onchange` в имени, 7
+(посчитано по `ls home/.chezmoiscripts` — 19 файлов с `onchange` в имени, 8
 без него; в этом репозитории `run_before_*` без `onchange` не встречается,
 только `run_after_*`).
 
-Список тех, что гоняются каждый раз: `run_after_43-zen-session.sh.tmpl`,
-`run_after_44-handy-settings.sh.tmpl`, `run_after_45-greeter.sh.tmpl`,
-`run_after_46-syncthing.sh.tmpl`, `run_after_80-niri-dms-placeholders.sh.tmpl`,
+Список тех, что гоняются каждый раз: `run_after_40-zen-prefs.sh.tmpl`,
+`run_after_43-zen-session.sh.tmpl`, `run_after_44-handy-settings.sh.tmpl`,
+`run_after_45-greeter.sh.tmpl`, `run_after_46-syncthing.sh.tmpl`,
+`run_after_80-niri-dms-placeholders.sh.tmpl`,
 `run_after_84-claudefiles.sh.tmpl`, `run_after_zz-next-steps.sh.tmpl`.
 
 Зачем нужен второй вид, если первый и так покрывает почти всё: `onchange`
 следит за **текстом скрипта**, а не за состоянием машины. Если настройку
 можно сбить из интерфейса самой программы, `onchange`-скрипт этого не
 заметит никогда — его текст не менялся, значит для chezmoi ничего не
-произошло. Три реальных примера из этого репозитория, и все три сами
-объясняют это в комментарии над собой:
+произошло. Четыре реальных примера из этого репозитория; первые три сами
+объясняют это в комментарии над собой, четвёртый попал сюда через сломанную
+установку:
 
 - `run_after_44-handy-settings.sh.tmpl` — «Handy's settings file belongs
   to the application: it is read at startup and rewritten whole whenever
@@ -329,6 +342,16 @@ flowchart TD
   file, and it has to re-evaluate that on every apply». Профиль Zen меняется
   сам по себе (открытые вкладки, новые контейнеры), а не по правке этого
   скрипта.
+- `run_after_40-zen-prefs.sh.tmpl` — был `run_onchange_after_40-...` и из-за
+  этого не работал вовсе. `onchange` хеширует отрендеренный текст скрипта, а
+  на свежей машине скрипт первый раз отрабатывает тогда, когда Zen ещё ни
+  разу не запускали и профиля не существует: скрипт печатал «Zen has not
+  created a profile yet, skipping prefs.» (строка `((found)) || echo ...`),
+  chezmoi записывал состояние — текст скрипта не менялся, значит выполнять
+  нечего — и `user.js` не появлялся уже никогда. Переименование в `run_after`
+  чинит это по той же причине, что и у скрипта 43: результат зависит от
+  состояния профиля, а не от текста скрипта, и проверять это надо на каждом
+  `apply`.
 
 ### `.chezmoiignore`
 
@@ -527,6 +550,15 @@ proxy units»). Переименованный или удалённый кон�
 как именно она прорастает во все эти места, разобрано в
 [isolation.md](isolation.md) и соседних документах изоляции, а не здесь.
 
+Третье поле, `route: true`, необязательное (стоит у `digi3` и `stellium`, не
+стоит у `personal`). Оно включает штатное Space Routing браузера: правило
+«адрес содержит имя контекста — открыть в спейсе этого контекста». Спейс
+привязан к контейнеру, поэтому вместе со спейсом приезжает и прокси.
+Ставить флаг стоит не всякому контексту: правило не подсказывает, а
+**вытаскивает** ссылку, поэтому имя контекста должно быть редкой подстрокой
+в адресах. У `personal` флага нет намеренно — слово встречается в обычных
+адресах вроде `github.com/settings/personal-access-tokens`.
+
 ## Что ставится и что меняется
 
 | Категория | Путь / команда | Когда |
@@ -558,9 +590,9 @@ $ grep -c '^  - key:' home/.chezmoidata.yaml
 $ ls home/.chezmoiscripts | wc -l
 27
 $ ls home/.chezmoiscripts | grep -c onchange
-20
+19
 $ ls home/.chezmoiscripts | grep -vc onchange
-7
+8
 ```
 
 Превью того, что реально попадёт в пакетный менеджер, без применения:

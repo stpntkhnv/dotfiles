@@ -114,7 +114,8 @@ bookmarks_demo:
 # `personal` поэтому без флага -- слово встречается в обычных адресах
 # (github.com/settings/personal-access-tokens и подобных). Общие домены Microsoft
 # правилами не покрываются никогда, по той же причине, по которой на них нельзя
-# ставить правила Multi-Account Containers -- см. BROWSER-ISOLATION.md, раздел 10.
+# ставить правила Multi-Account Containers -- см. docs/isolation-links.md,
+# раздел «Правило "Always Open This Site in…"».
 contexts:
   - name: digi3
     socks: 11081
