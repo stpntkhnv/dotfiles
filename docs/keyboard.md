@@ -117,10 +117,64 @@ KEYMAP
 
 `keycode 58` физически — клавиша Caps Lock, `keycode 29` — левый Control;
 строки переставляют символы, которые эти клавиши шлют, ровно как задумано.
-`include` собран **абсолютным путём** намеренно: при вызове `loadkeys` с явным
-путём к файлу инклюды разрешаются относительно этого файла, а не через
-встроенные каталоги поиска, и голое `us.map.gz` без полного пути там не
-находится.
+
+`include` собран **абсолютным путём** намеренно, но не по той причине, которую
+можно было бы предположить по способу вызова `loadkeys`. Форма вызова (полный
+путь к `$CONSOLE_MAP` против относительного) на разрешение `include` внутри
+файла не влияет вообще — проверено экспериментально 2026-07-31:
+
+```sh
+$ printf 'include "us.map.gz"\nkeycode 58 = Control\n' > t.map
+$ loadkeys --mktable "$PWD/t.map" >/dev/null; echo $?
+1
+$ loadkeys --mktable t.map >/dev/null; echo $?
+1
+```
+
+Обе формы падают с одной и той же ошибкой (`cannot open include file
+us.map.gz`), и обе начинают проходить, если положить `us.map.gz` рядом с
+`t.map` — то есть решает совпадение каталога, а не то, каким путём назвали
+сам `$CONSOLE_MAP` в командной строке.
+
+Настоящая причина — в наборе каталогов, которые `loadkeys` вообще просматривает
+для `include`. По исходнику `legionus/kbd`
+([`src/libkeymap/analyze.l`](https://github.com/legionus/kbd/blob/master/src/libkeymap/analyze.l),
+версия пакета на этой машине — `kbd 2.10.0-1`): для нет-абсолютного имени
+(`find_incl_file` → `find_standard_incl_file`) перебираются по порядку —
+`include_dirpath1` (`../include/`, `../../include/` от текущей рабочей
+директории), затем `find_incl_file_near_fn` — каталог, где лежит **сам файл,
+который сейчас разбирается** (плюс его же `../include/` и `../../include/`),
+и только в конце `include_dirpath3` — три фиксированных системных каталога:
+
+```c
+static const char *const include_dirpath3[] = {
+	DATADIR "/" KEYMAPDIR "/include/",
+	DATADIR "/" KEYMAPDIR "/i386/include/",
+	DATADIR "/" KEYMAPDIR "/mac/include/",
+	NULL
+};
+```
+
+На этой машине это разворачивается в `/usr/share/kbd/keymaps/include/` и
+`/usr/share/kbd/keymaps/i386/include/` — оба каталога существуют и правда
+устроены под вспомогательные инклюды (`compose.*`, `azerty-layout.inc` и
+подобное). Ни один из всех перечисленных выше каталогов не покрывает
+`/usr/share/kbd/keymaps/i386/qwerty/` — а `us.map.gz` физически лежит именно
+там, это обычный каталог с готовыми раскладками, а не каталог для инклюдов.
+Голое `include "us.map.gz"` не нашлось бы независимо от того, как вызван сам
+`loadkeys` на `$CONSOLE_MAP` — оно не находится вообще ни при каком способе
+вызова, потому что нужный каталог не входит ни в один из проверяемых путей.
+Отсюда и обязательный полный путь прямо в самой строке `include`.
+
+**Комментарий в скрипте объясняет это неверно.** Тот же вывод (нужен полный
+путь) верен, но обоснование в `run_onchange_before_30-system.sh.tmpl`, блок
+`# The include deliberately uses an ABSOLUTE path`, звучит как «when invoked
+with a file path, loadkeys resolves includes relative to that file rather
+than through its compiled-in search directories» — то есть выбор
+абсолютного/относительного пути в вызове `loadkeys` будто бы меняет то, как
+резолвится `include` внутри файла. Эксперимент выше показывает, что это не
+так: обе формы вызова ведут себя идентично. Правка кода не входит в эту
+задачу, комментарий не менялся.
 
 Прежде чем `vconsole.conf` начнёт указывать на эту карту, скрипт проверяет,
 что она вообще компилируется:
@@ -311,6 +365,10 @@ list-x11-keymap-options` на этой машине.
   `KEYMAP=` чистится из статуса.
 - [Linux console/Keyboard configuration, ArchWiki](https://wiki.archlinux.org/title/Linux_console/Keyboard_configuration) —
   общий разбор консольных карт клавиш и `loadkeys`.
+- [`legionus/kbd`, `src/libkeymap/analyze.l`](https://github.com/legionus/kbd/blob/master/src/libkeymap/analyze.l) —
+  `find_incl_file`/`find_standard_incl_file`/`find_incl_file_near_fn`: реальный
+  список каталогов, где `loadkeys` ищет цель `include`, и почему
+  `i386/qwerty/` в него не входит.
 - [Xorg/Keyboard configuration, ArchWiki](https://wiki.archlinux.org/title/Xorg/Keyboard_configuration) —
   `/etc/X11/xorg.conf.d/00-keyboard.conf` и кто его читает.
 - [glossary.md](glossary.md) — термины: [шаблон chezmoi](glossary.md#шаблон-chezmoi),
