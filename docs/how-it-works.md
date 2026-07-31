@@ -157,13 +157,13 @@ stat "/run/.containerenv" | not | not -}}`) — человека об этом �
 
 **`default`** имеет смысл только у фич без `always` — это те, что попадают в
 чеклист. `default: true` значит «галочка стоит заранее», её надо снять
-руками, чтобы отказаться. Таких фич сейчас шестнадцать: `herdr`, `tmux`,
-`neovim`, `node`, `browsers`, `printing`, `dotnet`, `rider`, `db-tools`,
-`api-tools`, `bitwarden`, `claude`, `gh`, `syncthing`, `obsidian`,
-`wallpapers`. Ещё одиннадцать — в чеклисте, но без галочки: `vscode`,
+руками, чтобы отказаться. Таких фич сейчас семнадцать: `herdr`, `tmux`,
+`neovim`, `node`, `browsers`, `printing`, `greeter`, `dotnet`, `rider`,
+`db-tools`, `api-tools`, `bitwarden`, `claude`, `gh`, `syncthing`, `obsidian`,
+`wallpapers`. Ещё десять — в чеклисте, но без галочки: `vscode`,
 `docker`, `go`, `codex`, `azure`, `teams`, `ziti`, `killswitch`, `voice`,
-`voice-postprocess`, `bluetooth-fix`. Восемь плюс шестнадцать плюс
-одиннадцать — все тридцать пять фич каталога.
+`bluetooth-fix`. Восемь плюс семнадцать плюс
+десять — все тридцать пять фич каталога.
 
 Код читает необязательные поля только через `hasKey` (`home/.chezmoi.toml.tmpl`,
 комментарий перед циклом по каталогу: «Optional fields are only ever read
@@ -174,10 +174,9 @@ through hasKey: chezmoi executes templates with missingkey=error»), то ест
 
 **`needs`** разворачивается уже после того, как чеклист собран: то, что
 пользователь и `always` вместе включили, дополняется зависимостями. В
-каталоге сейчас четыре такие связи, и все — глубиной в один уровень: `claude`
+каталоге сейчас три такие связи, и все — глубиной в один уровень: `claude`
 и `codex` тянут `node` (CLI ставится через npm), `rider` тянет `dotnet`
-(IDE без SDK бесполезна), `voice-postprocess` тянет `voice` (нечего
-вычитывать без распознавания). Код это разворачивает так:
+(IDE без SDK бесполезна). Код это разворачивает так:
 
 ```
 {{- range $pass := until 3 -}}
@@ -256,7 +255,8 @@ flowchart TD
         A40a["40 zen-prefs"]
         A41["41 zen-context-proxy"]
         A43["43 zen-session"]
-        A44["44 handy-postprocess"]
+        A44["44 handy-settings"]
+        A45["45 greeter"]
         A46["46 syncthing"]
         A80["80 niri-dms-placeholders"]
         A81["81 vscode-extensions"]
@@ -264,7 +264,7 @@ flowchart TD
         A83["83 origin-ssh"]
         A84["84 claudefiles"]
         AZZ["zz next-steps<br/>чеклист что осталось руками"]
-        A33 --> A34 --> A36 --> A37 --> A38 --> A39 --> A40a --> A41 --> A43 --> A44 --> A46 --> A80 --> A81 --> A82 --> A83 --> A84 --> AZZ
+        A33 --> A34 --> A36 --> A37 --> A38 --> A39 --> A40a --> A41 --> A43 --> A44 --> A45 --> A46 --> A80 --> A81 --> A82 --> A83 --> A84 --> AZZ
     end
 
     BEFORE --> FILES --> AFTER
@@ -289,22 +289,22 @@ flowchart TD
 
 ### Два вида скриптов
 
-В `home/.chezmoiscripts/` двадцать шесть файлов, и делятся они по признаку
+В `home/.chezmoiscripts/` двадцать семь файлов, и делятся они по признаку
 `once`/`onchange` в имени на два вида, а не по этапу `before`/`after`.
 
 | Вид | Когда выполняется тело скрипта | Сколько сейчас |
 |---|---|---|
 | `run_onchange_before_*` / `run_onchange_after_*` | Только когда изменился текст самого скрипта после подстановки переменных шаблона | 20 |
-| `run_before_*` / `run_after_*` без `onchange` | На каждом `chezmoi apply`, безусловно | 6 |
+| `run_before_*` / `run_after_*` без `onchange` | На каждом `chezmoi apply`, безусловно | 7 |
 
-(посчитано по `ls home/.chezmoiscripts` — 20 файлов с `onchange` в имени, 6
+(посчитано по `ls home/.chezmoiscripts` — 20 файлов с `onchange` в имени, 7
 без него; в этом репозитории `run_before_*` без `onchange` не встречается,
 только `run_after_*`).
 
 Список тех, что гоняются каждый раз: `run_after_43-zen-session.sh.tmpl`,
-`run_after_44-handy-postprocess.sh.tmpl`, `run_after_46-syncthing.sh.tmpl`,
-`run_after_80-niri-dms-placeholders.sh.tmpl`, `run_after_84-claudefiles.sh.tmpl`,
-`run_after_zz-next-steps.sh.tmpl`.
+`run_after_44-handy-settings.sh.tmpl`, `run_after_45-greeter.sh.tmpl`,
+`run_after_46-syncthing.sh.tmpl`, `run_after_80-niri-dms-placeholders.sh.tmpl`,
+`run_after_84-claudefiles.sh.tmpl`, `run_after_zz-next-steps.sh.tmpl`.
 
 Зачем нужен второй вид, если первый и так покрывает почти всё: `onchange`
 следит за **текстом скрипта**, а не за состоянием машины. Если настройку
@@ -313,7 +313,7 @@ flowchart TD
 произошло. Три реальных примера из этого репозитория, и все три сами
 объясняют это в комментарии над собой:
 
-- `run_after_44-handy-postprocess.sh.tmpl` — «Handy's settings file belongs
+- `run_after_44-handy-settings.sh.tmpl` — «Handy's settings file belongs
   to the application: it is read at startup and rewritten whole whenever
   anything changes in its own UI... run_after_ rather than run_onchange_: ...
   a setting clobbered from Handy's UI would never be restored». Скрипт
@@ -418,7 +418,7 @@ exit 0
 | `dotnet tool update -g` вместо `install` | ставит отсутствующее, не трогает актуальное (там же) |
 | функция `enable_unit()` с `systemctl is-enabled --quiet` | не дёргает уже включённый юнит (`run_onchange_before_30-system.sh.tmpl`) |
 | `[[ ! -f "$HOME/.ssh/id_ed25519" ]]` | не перегенерирует существующий ключ (`run_onchange_after_82-ssh-key.sh.tmpl`) |
-| `diff -q <(jq -S . "$NEW") <(jq -S . "$STORE")` | выходит, если настройка Handy и так совпадает с желаемой (`run_after_44-handy-postprocess.sh.tmpl`) |
+| `diff -q <(jq -S . "$NEW") <(jq -S . "$STORE")` | выходит, если настройка Handy и так совпадает с желаемой (`run_after_44-handy-settings.sh.tmpl`) |
 
 **Уровень 4: ничего не роняет apply.** Правило записано прямым текстом в
 комментарии `run_after_46-syncthing.sh.tmpl`: «NOTHING HERE MAY FAIL THE
@@ -426,7 +426,7 @@ APPLY». Демон не поднялся, нет пользовательско
 там, где ждали — каждое из этого должно сказать и уйти кодом `0`, а не
 уронить `chezmoi apply` ненулевым выходом, который подхватит `set -e`.
 
-**Уровень 5: атомарность.** Показательнее всего `run_after_44-handy-postprocess.sh.tmpl`:
+**Уровень 5: атомарность.** Показательнее всего `run_after_44-handy-settings.sh.tmpl`:
 
 ```mermaid
 flowchart TD
@@ -663,7 +663,7 @@ chezmoi init --promptMultichoice enabled=neovim,node,claude
   `.chezmoidata.yaml`.
 - [sync.md](sync.md) — что растёт из списка `syncthing:`.
 - [multiplexer.md](multiplexer.md), [voice.md](voice.md),
-  [voice-postprocess.md](voice-postprocess.md), [killswitch.md](killswitch.md),
+  [killswitch.md](killswitch.md),
   [isolation-network.md](isolation-network.md), [isolation-browser.md](isolation-browser.md),
   [containers.md](containers.md) — документы, которым принадлежат конкретные
   скрипты, упомянутые здесь как примеры механики.
