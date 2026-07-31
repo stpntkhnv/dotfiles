@@ -44,7 +44,7 @@ sh -c "$(curl -fsSL https://api.github.com/repos/stpntkhnv/dotfiles/contents/ins
 
 ```mermaid
 flowchart TD
-    A["curl | sh — одна команда"] --> B{"chezmoi уже есть в PATH?"}
+    A["одна команда: curl, переданный в sh"] --> B{"chezmoi уже есть в PATH?"}
     B -->|нет| C["Скачать официальный установщик chezmoi<br/>(git.io/chezmoi) в ~/.local/bin"]
     B -->|да| D["Использовать то, что уже стоит"]
     C --> E
