@@ -22,13 +22,17 @@ FOLDER=PAT
 die() { printf 'pat: %s\n' "$*" >&2; exit 1; }
 
 usage() {
-    cat <<'EOF'
-pat              list entry names in the PAT folder
-pat <name>       print the token
-pat -c <name>    copy the token to the clipboard, print nothing
-pat -i <name>    print only the note of the entry
-EOF
+    printf '%s\n' \
+        'pat              list entry names in the PAT folder' \
+        'pat <name>       print the token' \
+        'pat -c <name>    copy the token to the clipboard, print nothing' \
+        'pat -i <name>    print only the note of the entry'
 }
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
 
 command -v rbw >/dev/null 2>&1 || die "rbw is not installed (feature bitwarden)"
 [[ -s "$HOME/.config/rbw/config.json" ]] ||
@@ -36,7 +40,6 @@ command -v rbw >/dev/null 2>&1 || die "rbw is not installed (feature bitwarden)"
 
 mode=print
 case "${1:-}" in
-    -h|--help) usage; exit 0 ;;
     -c) mode=clip; shift ;;
     -i) mode=note; shift ;;
     -*) usage >&2; exit 2 ;;
@@ -71,9 +74,10 @@ case "$mode" in
     print) rbw get "$ids" || die "cannot read entry -- try 'rbw login'" ;;
     clip)  command -v wl-copy >/dev/null 2>&1 || die "wl-copy not found, no clipboard"
            rbw get "$ids" | wl-copy || die "cannot read entry -- try 'rbw login'" ;;
-    # The note is whatever --full adds to the password. Cutting the password
-    # out by value rather than by line number stays correct whichever order
-    # rbw prints the two in, and makes it impossible for -i to leak the token.
+    # The note is whatever --full adds to the password. The password value
+    # occurs verbatim in --full's output, so cutting it out by value rather
+    # than by line number stays correct regardless of the order rbw prints
+    # the two fields in -- not any output format whatsoever, just field order.
     # --full separates password and note with a blank line, so cutting the
     # password out by value leaves two leading newlines, not one -- strip all
     # of them in a loop rather than a fixed count, but only at the front:
