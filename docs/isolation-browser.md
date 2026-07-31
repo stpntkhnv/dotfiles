@@ -96,7 +96,7 @@ sequenceDiagram
 
     Note over P,CI: только если профиль ещё пуст
     P->>CI: Containers.Default → создать digi3, stellium, personal, home
-    P->>P: ExtensionSettings → поставить 10 расширений
+    P->>P: ExtensionSettings → поставить 13 расширений
 
     T->>CP: browser.proxy.onRequest(tabId)
     CP->>CI: чей это cookieStoreId?
@@ -163,9 +163,9 @@ Zen.
 | Режим | Что позволяет | Расширения у Zen |
 |---|---|---|
 | `force_installed` | нельзя ни выключить, ни удалить | Multi-Account Containers, Open external links in a container, наш `context-proxy`, uBlock Origin |
-| `normal_installed` | можно выключить (официальная формулировка Mozilla: «allows it to be disabled by the user»); удаление тем же кодом политики тоже придерживается — `disallowFeature('uninstall-extension:…')` в `Policies.sys.mjs` вызывается для обоих режимов одинаково, различие именно в «выключить» | Temporary Containers, Bitwarden, Obsidian Web Clipper, Auto Tab Discard, SponsorBlock, User-Agent Switcher |
+| `normal_installed` | можно выключить (официальная формулировка Mozilla: «allows it to be disabled by the user»); удаление тем же кодом политики тоже придерживается — `disallowFeature('uninstall-extension:…')` в `Policies.sys.mjs` вызывается для обоих режимов одинаково, различие именно в «выключить» | Temporary Containers, Bitwarden, Obsidian Web Clipper, Auto Tab Discard, SponsorBlock, User-Agent Switcher, Consent-O-Matic, Return YouTube Dislike, SingleFile |
 
-Десять расширений делятся на два слоя. Три `force_installed` из четырёх — это
+Тринадцать расширений делятся на два слоя. Три `force_installed` из четырёх — это
 не настройка на вкус, это **сама граница** изоляции контекстов:
 
 - **Multi-Account Containers** даёт сам механизм банок кук и интерфейс к ним.
@@ -202,6 +202,12 @@ Zen.
   поэтому он просто есть везде и заметен только там, где открыт YouTube.
 - **User-Agent Switcher and Manager** — подмена агента браузера для сайтов,
   пускающих только «из Edge». Молчит, пока не попросят кнопкой на панели.
+- **Consent-O-Matic** — сам отвечает на GDPR-баннеры, причём отказом, а не
+  согласием. Расширение исследователей Орхусского университета.
+- **Return YouTube Dislike** — возвращает счётчик дизлайков на YouTube.
+- **SingleFile** — сохраняет страницу в один html-файл целиком, с картинками и
+  стилями. Дополняет клиппер: Markdown — для агента, SingleFile — когда нужна
+  точная копия.
 
 **Контейнеры** тоже приходят политикой, ключ `Containers.Default`, по одному
 на каждую запись `contexts:`, плюс `home` последним — единственный без пары в
@@ -794,17 +800,15 @@ for i in d['identities']:
 том, который старше самой политики.
 
 Расширения действительно **загрузились** — не просто лежат файлами, а активны
-(сверить с десятью ожидаемыми: пять из таблицы режимов выше плюс
-`uBlock0@raymondhill.net`, `clipper@obsidian.md`, `sponsorBlocker@ajay.app`,
-Auto Tab Discard `{c2c003ee-bd69-42a2-b0e9-6f34222cb046}` и User-Agent
-Switcher `{a6c4a591-f1b2-4f03-b3ff-767e5bedf4e7}`):
+(сверить с тринадцатью ожидаемыми — пять из таблицы режимов выше плюс
+второй слой; полный список id лежит в `$zenExts` скрипта 32):
 
 ```sh
 jq -r '[.addons[]|select(.active)|.id]|sort|.[]' ~/.config/zen/*/extensions.json \
-  | grep -E 'testpilot|f069aec0|c607c8df|446900e4|context-proxy|uBlock0|clipper|c2c003ee|sponsorBlocker|a6c4a591'
+  | grep -E 'testpilot|f069aec0|c607c8df|446900e4|context-proxy|uBlock0|clipper|c2c003ee|sponsorBlocker|a6c4a591|gdpr@cavi|762f9885|531906d3'
 ```
 
-Ожидается десять строк. Пять первых сняты на этой машине 31 июля, до
+Ожидается тринадцать строк. Пять первых сняты на этой машине 31 июля, до
 добавления второго слоя расширений; три новых проверяются тем же способом
 после следующего перезапуска Zen.
 

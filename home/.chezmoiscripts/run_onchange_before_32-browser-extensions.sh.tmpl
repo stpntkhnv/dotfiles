@@ -90,6 +90,9 @@ set -euo pipefail
 {{-   $zenExts = append $zenExts (dict "guid" "{c2c003ee-bd69-42a2-b0e9-6f34222cb046}" "slug" "auto-tab-discard"         "mode" "normal_installed") }}
 {{-   $zenExts = append $zenExts (dict "guid" "sponsorBlocker@ajay.app"                "slug" "sponsorblock"             "mode" "normal_installed") }}
 {{-   $zenExts = append $zenExts (dict "guid" "{a6c4a591-f1b2-4f03-b3ff-767e5bedf4e7}" "slug" "user-agent-string-switcher" "mode" "normal_installed") }}
+{{-   $zenExts = append $zenExts (dict "guid" "gdpr@cavi.au.dk"                        "slug" "consent-o-matic"          "mode" "normal_installed") }}
+{{-   $zenExts = append $zenExts (dict "guid" "{762f9885-5a13-4abd-9c77-433dcd38b8fd}" "slug" "return-youtube-dislikes"  "mode" "normal_installed") }}
+{{-   $zenExts = append $zenExts (dict "guid" "{531906d3-e22f-4a6c-a102-8057b88a1a63}" "slug" "single-file"              "mode" "normal_installed") }}
 {{-   $zenExts = append $zenExts (dict "guid" "context-proxy@dotfiles.local" "url" "file:///usr/local/lib/zen-context-proxy.xpi" "mode" "force_installed") }}
 {{- end }}
 {{/* Containers.Default replaces the built-in set on a FRESH profile and
