@@ -162,6 +162,9 @@ Description=Link hand-off from the {{ .name }} container to Zen
 ExecStart=/usr/bin/socat -T10 UNIX-LISTEN:{{ $.chezmoi.homeDir }}/.local/share/wsproxy/{{ .name }}/links.sock,fork,mode=600,unlink-early "EXEC:/usr/local/bin/zen-open-recv {{ .name }}"
 Restart=always
 RestartSec=2
+# socat catches SIGTERM and exits 143 instead of dying by the signal, so a
+# plain `systemctl stop` would otherwise leave the unit marked failed.
+SuccessExitStatus=143
 
 [Install]
 WantedBy=default.target

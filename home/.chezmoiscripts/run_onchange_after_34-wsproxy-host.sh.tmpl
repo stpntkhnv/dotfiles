@@ -69,6 +69,9 @@ Description=SOCKS5 bridge to the {{ .name }} container
 ExecStart=/usr/bin/socat TCP-LISTEN:{{ .socks }},bind=127.0.0.1,fork,reuseaddr UNIX-CONNECT:{{ $.chezmoi.homeDir }}/.local/share/wsproxy/{{ .name }}/socks.sock
 Restart=always
 RestartSec=2
+# socat catches SIGTERM and exits 143 instead of dying by the signal, so a
+# plain `systemctl stop` would otherwise leave the unit marked failed.
+SuccessExitStatus=143
 
 [Install]
 WantedBy=default.target

@@ -41,13 +41,14 @@ SOCK=/var/lib/wsproxy/links.sock
 # No socket means the host is not listening for this context: Zen is not
 # installed there, or zenopen-<context>.service is down.
 #
-# This does NOT fall through to /usr/bin/xdg-open, and that is deliberate. No
-# container installs a browser -- `firefox`, `chromium` and `zen` are all
-# scope: host --
-# so handing an http link to the container's own handler is guaranteed to fail,
-# and it fails badly: sixteen lines of "command not found" followed by "no
-# method available", which reads like noise rather than like a diagnosis. One
-# line naming the actual missing piece is worth more.
+# This does NOT fall through to /usr/bin/xdg-open, and that is deliberate.
+# This repo installs no browser inside containers (`firefox`, `chromium` and
+# `zen` are all scope: host), but claudefiles may have put chromium here for
+# Playwright MCP -- and falling through would then open the link in the
+# container's own chromium, the exact silent mis-landing this wrapper exists
+# to prevent. Without a browser the fallback fails badly anyway: sixteen
+# lines of "command not found" that read like noise. One line naming the
+# actual missing piece is worth more.
 if [ ! -S "$SOCK" ]; then
     echo "xdg-open: no link socket at $SOCK -- is zenopen-<context>.service running on the host?" >&2
     exit 1
@@ -70,4 +71,36 @@ esac
 WRAP
 
 sudo chmod 755 /usr/local/bin/xdg-open
+
+# The wrapper only catches callers that resolve `xdg-open` through PATH.
+# Anything that opens links through GLib (gio open, GAppInfo — plenty of CLIs
+# do) never looks at PATH: it takes the default handler from mimeapps.list,
+# and with no default it falls back to whatever installed .desktop file
+# claims the scheme. This repo installs no browser inside containers, but
+# other tooling legitimately can — claudefiles puts chromium here as the
+# Playwright MCP browser — and then a login link from a CLI silently opens
+# the container's own chromium instead of routing to Zen on the host.
+# So the wrapper gets a .desktop entry of its own and is pinned as the
+# default http(s) handler for this container's user.
+sudo install -d /usr/local/share/applications
+sudo tee /usr/local/share/applications/container-link.desktop >/dev/null <<'DESK'
+[Desktop Entry]
+Type=Application
+Name=Zen on host (context route)
+Exec=/usr/local/bin/xdg-open %u
+MimeType=x-scheme-handler/http;x-scheme-handler/https;
+NoDisplay=true
+Terminal=false
+DESK
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+    sudo update-desktop-database /usr/local/share/applications 2>/dev/null || true
+fi
+
+if command -v xdg-mime >/dev/null 2>&1; then
+    xdg-mime default container-link.desktop x-scheme-handler/http x-scheme-handler/https \
+        || echo "!! could not set container-link.desktop as the default link handler" >&2
+else
+    echo "!! xdg-mime not found, default link handler left as is" >&2
+fi
 {{- end }}
