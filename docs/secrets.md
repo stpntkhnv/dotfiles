@@ -41,7 +41,7 @@ flowchart TD
         BWS["AUR bws-bin<br/>(агенты)"]
     end
 
-    DESK -->|"вход руками,<br/>не chezmoi"| VAULT["Личное хранилище<br/>vault.bitwarden.com"]
+    DESK -->|"вход руками,<br/>не chezmoi"| VAULT["Личное хранилище<br/>vault.bitwarden.eu"]
     RBW -->|"'rbw config set email' + 'rbw login',<br/>руками"| VAULT
     BWS -->|"токен машинного аккаунта<br/>Secrets Manager,<br/>~/.config/bws/access-token"| SM["Secrets Manager,<br/>один dev-проект"]
 
@@ -89,21 +89,24 @@ flowchart TD
 ```sh
 if command -v rbw &>/dev/null; then
     [[ -s "$HOME/.config/rbw/config.json" ]] || \
-        steps+=("Bitwarden: account at https://vault.bitwarden.com (register if new), then 'rbw config set email <email>' and 'rbw login'")
+        steps+=("Bitwarden: account at https://vault.bitwarden.eu (register if new), then 'rbw config set email <email>', 'rbw config set base_url https://vault.bitwarden.eu', 'rbw register' and 'rbw login'")
 fi
 if command -v bws &>/dev/null && [[ ! -s "$HOME/.config/bws/access-token" ]]; then
-    steps+=("Bitwarden agents: create a Secrets Manager machine account at https://vault.bitwarden.com -> Secrets Manager -> Machine accounts, put its token in ~/.config/bws/access-token (chmod 600)")
+    steps+=("Bitwarden agents: create a Secrets Manager machine account at https://vault.bitwarden.eu -> Secrets Manager -> Machine accounts, put its token in ~/.config/bws/access-token (chmod 600)")
 fi
 ```
 
-**Первый вход на официальном сервере `vault.bitwarden.com` требует
-регистрации устройства.** У официального сервера включена защита от
-перебора паролей (bot detection): голый `rbw login` мастер-паролем на новом
+**Аккаунт живёт на европейском сервере `vault.bitwarden.eu`, а `rbw` по
+умолчанию смотрит на `vault.bitwarden.com`** — поэтому перед первым входом
+серверу надо назвать адрес, иначе логин уходит не туда. **И первый вход
+требует регистрации устройства:** у официальных серверов включена защита от
+перебора паролей (bot detection), и голый `rbw login` мастер-паролем на новом
 устройстве не проходит вовсе, пока устройство не зарегистрировано личным
 API-ключом. Порядок первого входа:
 
 ```sh
 rbw config set email <почта>
+rbw config set base_url https://vault.bitwarden.eu
 rbw register
 rbw login
 ```
@@ -119,6 +122,19 @@ rbw login
 даёт другой, внятный ответ («Username or password is incorrect»), то есть до
 проверки пароля дело не доходит вовсе — сервер отбраковывает запрос раньше,
 как бот-трафик.
+
+**Защита входа с нового устройства отключена в аккаунте (2026-08-01).**
+У Bitwarden есть и вторая преграда, отдельная от bot detection: вход с
+незнакомого устройства требует одноразовый код, присланный на почту (new
+device login protection). Для этой конструкции она означала код с почты на
+**каждый** пересозданный контейнер — сервер видит каждый новый дом контейнера
+как новое устройство, и настройка превращалась в беготню между почтой и
+терминалом. Отключено руками в веб-интерфейсе: `vault.bitwarden.eu` →
+Settings → My account → Danger Zone → new device login protection. После
+этого входу хватает мастер-пароля (плюс разовая регистрация `rbw register`
+выше). Цена размена названа честно: узнавший мастер-пароль входит с любого
+устройства, второго фактора нет — принято осознанно, как и открытые риски
+`pat` ниже.
 
 Отсюда и граница токена `bws`: то, что он не даёт доступа к личному
 хранилищу, — не флаг где-то в конфигурации `claude` и не проверка внутри
@@ -461,7 +477,8 @@ exit=1
 | То же самое, но на `dev.azure.com` | Публичная часть `id_rsa` не добавлена в SSH-ключи профиля Azure DevOps, либо клиент предлагает не тот ключ первым | Добавить `id_rsa.pub` в настройках пользователя Azure DevOps; при нескольких ключах — прописать `IdentityFile`/`IdentitiesOnly yes` в `~/.ssh/config` для хоста `ssh.dev.azure.com`, как описывает официальная документация Microsoft (раздел «Ссылки») |
 | Ключи не создались вовсе | Скрипт 82 — `run_onchange`, выполняется один раз при появлении/изменении своего отрендеренного текста; если оба файла уже существовали до первого `apply` (перенесены руками с другой машины), скрипт и должен был промолчать — это не поломка | Проверить `ls ~/.ssh/id_ed25519 ~/.ssh/id_rsa` — если оба на месте, ключи уже есть, генерировать нечего |
 | `origin` репозитория dotfiles остался HTTPS | Скрипт 83 запускается после 82 по порядку, но если `id_ed25519` появился не через скрипт 82 (например, ключ перенесли с другой машины уже после первого `apply`, когда 83 уже отработал и получил тот же неизменный текст), `run_onchange` может не перезапуститься | Переключить руками: `git remote set-url origin git@github.com:stpntkhnv/dotfiles.git` в исходном каталоге chezmoi (`chezmoi source-path`), либо любой правкой скрипта 83 форсировать `run_onchange` |
-| `rbw login` отвечает `api request returned error: 400` | Устройство не зарегистрировано на официальном сервере (bot detection) | Выполнить `rbw register` личным API-ключом (Security → Keys → View API Key в веб-интерфейсе), затем `rbw login` снова |
+| `rbw login` отвечает `api request returned error: 400` | Устройство не зарегистрировано на официальном сервере (bot detection), либо `base_url` не задан и логин ушёл на `.com` вместо `.eu` | Проверить `rbw config show`; выполнить `rbw config set base_url https://vault.bitwarden.eu`, затем `rbw register` личным API-ключом (Security → Keys → View API Key в веб-интерфейсе) и `rbw login` снова |
+| `rbw login` требует одноразовый код с почты | Включилась обратно защита входа с нового устройства (new device login protection) — она отключена в аккаунте 2026-08-01, но настройка живёт на сервере и может вернуться после смены параметров аккаунта | Либо ввести код с почты, либо снова отключить: `vault.bitwarden.eu` → Settings → My account → Danger Zone |
 | Bitwarden в терминале (`rbw`) спрашивает мастер-пароль на каждую команду | Не запущен или не разблокирован демон-агент `rbw` | `rbw unlock`; проверить, что процесс агента `rbw` жив |
 | `bws` не может прочитать секрет проекта | Файла `~/.config/bws/access-token` нет, пуст, или срок токена истёк | Пересоздать машинный аккаунт в Secrets Manager, положить новый токен в файл, `chmod 600` |
 | `pat` отвечает «rbw is not configured» | На этой машине ещё не выполнен вход в хранилище | `rbw config set email <почта>`, затем `rbw login` |

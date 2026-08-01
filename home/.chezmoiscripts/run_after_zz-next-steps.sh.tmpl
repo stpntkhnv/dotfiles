@@ -60,10 +60,10 @@ fi
 {{- if has "bitwarden" .enabled }}
 if command -v rbw &>/dev/null; then
     [[ -s "$HOME/.config/rbw/config.json" ]] || \
-        steps+=("Bitwarden: account at https://vault.bitwarden.com (register if new), then 'rbw config set email <email>' and 'rbw login'")
+        steps+=("Bitwarden: account at https://vault.bitwarden.eu (register if new), then 'rbw config set email <email>', 'rbw config set base_url https://vault.bitwarden.eu', 'rbw register' and 'rbw login'")
 fi
 if command -v bws &>/dev/null && [[ ! -s "$HOME/.config/bws/access-token" ]]; then
-    steps+=("Bitwarden agents: create a Secrets Manager machine account at https://vault.bitwarden.com -> Secrets Manager -> Machine accounts, put its token in ~/.config/bws/access-token (chmod 600)")
+    steps+=("Bitwarden agents: create a Secrets Manager machine account at https://vault.bitwarden.eu -> Secrets Manager -> Machine accounts, put its token in ~/.config/bws/access-token (chmod 600)")
 fi
 {{- end }}
 {{- if has "tailscale" .enabled }}

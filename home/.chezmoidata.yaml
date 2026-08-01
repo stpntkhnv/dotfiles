@@ -192,7 +192,7 @@ plain_context:
     - title: DeepL
       url: https://www.deepl.com/translator
     - title: Bitwarden
-      url: https://vault.bitwarden.com
+      url: https://vault.bitwarden.eu
 
 # What Syncthing keeps in step between machines. One entry is one Syncthing
 # folder; `id` is what has to be typed identically on the phone, so it is

@@ -99,8 +99,8 @@ flowchart TD
 | `ziti` | `/opt/openziti/etc/identities/` не пуст | «OpenZiti: no identity -- copy the JSON to /opt/openziti/etc/identities/ and 'sudo systemctl start ziti-edge-tunnel'» |
 | `voice` | Закреплённый файл модели (`whisper-large-v3-Q8_0.gguf` в снапшоте `handy-computer/whisper-large-v3-gguf` кеша HuggingFace) на месте | «Handy: the pinned model is missing -- run 'handy' and download Whisper Large v3 under Settings -> Model» ([voice.md](voice.md)) |
 | `voice` | `~/.local/share/com.pais.handy/settings_store.json` существует | «Handy: never started, so its settings are unconfigured -- run 'handy', then 'chezmoi apply' again» |
-| `bitwarden` | `~/.config/rbw/config.json` не пуст (если `rbw` установлен) | «Bitwarden: account at https://vault.bitwarden.com (register if new), then 'rbw config set email <email>' and 'rbw login'» |
-| `bitwarden` | `~/.config/bws/access-token` не пуст (если `bws` установлен) | «Bitwarden agents: create a Secrets Manager machine account at https://vault.bitwarden.com -> Secrets Manager -> Machine accounts, put its token in ~/.config/bws/access-token (chmod 600)» |
+| `bitwarden` | `~/.config/rbw/config.json` не пуст (если `rbw` установлен) | «Bitwarden: account at https://vault.bitwarden.eu (register if new), then 'rbw config set email <email>', 'rbw config set base_url https://vault.bitwarden.eu', 'rbw register' and 'rbw login'» |
+| `bitwarden` | `~/.config/bws/access-token` не пуст (если `bws` установлен) | «Bitwarden agents: create a Secrets Manager machine account at https://vault.bitwarden.eu -> Secrets Manager -> Machine accounts, put its token in ~/.config/bws/access-token (chmod 600)» |
 | `tailscale` | `tailscale status` завершается успешно | «Tailscale: not connected -- 'sudo tailscale up' (browser auth)» |
 | `docker` | Текущий пользователь состоит в группе `docker` | «Docker: you are not in the docker group yet -- log out and back in to use it without sudo» |
 
