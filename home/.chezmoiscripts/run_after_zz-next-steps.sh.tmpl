@@ -68,13 +68,18 @@ if [[ ! -f "$HOME/.local/share/com.pais.handy/settings_store.json" ]]; then
     steps+=("Handy: never started, so its settings are unconfigured -- run 'handy', then 'chezmoi apply' again")
 fi
 {{- end }}
-{{- if has "bitwarden" .enabled }}
-if command -v rbw &>/dev/null; then
-    [[ -s "$HOME/.config/rbw/config.json" ]] || \
-        steps+=("Bitwarden: account at https://vault.bitwarden.eu (register if new), then 'rbw config set email <email>', 'rbw config set base_url https://vault.bitwarden.eu', 'rbw register' and 'rbw login'")
+{{- if has "keepassxc" .enabled }}
+if [[ ! -f "$HOME/Documents/Passwords/personal.kdbx" ]]; then
+    steps+=("KeePassXC: create the vault -- keepassxc, Database > New, save as ~/Documents/Passwords/personal.kdbx; Tools > Settings > Browser Integration: enable, tick BOTH Firefox (covers Zen) and Chromium; then Connect from the extension icon in each browser")
+    steps+=("KeePassXC phone: install KeePassDX, accept the 'passwords' Syncthing folder, open personal.kdbx")
 fi
-if command -v bws &>/dev/null && [[ ! -s "$HOME/.config/bws/access-token" ]]; then
-    steps+=("Bitwarden agents: create a Secrets Manager machine account at https://vault.bitwarden.eu -> Secrets Manager -> Machine accounts, put its token in ~/.config/bws/access-token (chmod 600)")
+# `|| true`: this file opens with `set -euo pipefail`, and pacman exits nonzero
+# the moment even ONE of the three packages is not found -- without the guard,
+# a partial removal (say only `bitwarden` left) would take the whole pipe's
+# exit code from pacman, grep would never run, and the reminder would vanish
+# while leftovers still sit on disk.
+if { pacman -Qq bitwarden rbw bws-bin 2>/dev/null || true; } | grep -q .; then
+    steps+=("Bitwarden leftovers: 'sudo pacman -Rns bitwarden rbw bws-bin', then rm -rf ~/.config/rbw ~/.config/bws; delete the vault.bitwarden.eu account LAST, after critical passwords are recreated in KeePassXC")
 fi
 {{- end }}
 {{- if has "tailscale" .enabled }}
@@ -269,7 +274,12 @@ SYNCTHING_CATALOG_EOF
     # matches the `name:` in its front matter, which is what [[links]] stand on.
     while IFS= read -r st_path; do
         while IFS= read -r st_conflict; do
-            steps+=("Syncthing: conflict file $st_conflict -- resolve with the kb-curate skill, do not delete blindly")
+            case "$st_conflict" in
+                # A .kdbx conflict is not a text file; kb-curate would be
+                # nonsense. KeePassXC merges databases natively.
+                *.kdbx*) steps+=("Syncthing: conflict file $st_conflict -- merge in KeePassXC (Database > Merge from database), then delete the conflict copy") ;;
+                *) steps+=("Syncthing: conflict file $st_conflict -- resolve with the kb-curate skill, do not delete blindly") ;;
+            esac
         done < <(find "$HOME/$st_path" -name '*.sync-conflict-*' -type f 2>/dev/null)
     done < <(jq -rn --argjson c "$st_catalog" --arg s "${st_self:-none}" '$c[] | select(.devices | index($s)) | .path')
 

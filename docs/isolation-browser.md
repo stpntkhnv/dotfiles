@@ -122,8 +122,8 @@ Zen это имя — `zen`, значит каталог `/etc/zen/policies/poli
 перечисленных в политике расширений. На этой машине оба каталога существуют
 одновременно и с разным содержимым — `/etc/zen/policies/policies.json` несёт
 весь стек контейнеров, `/etc/firefox/policies/policies.json` только запись про
-Bitwarden, — что и доказывает, что дерево `/etc/firefox/` для Zen не значит
-ничего:
+KeePassXC-Browser, — что и доказывает, что дерево `/etc/firefox/` для Zen не
+значит ничего:
 
 ```sh
 cat /etc/firefox/policies/policies.json
@@ -134,9 +134,9 @@ cat /etc/firefox/policies/policies.json
     "DisableAppUpdate": true,
     "DefaultSerialGuardSetting": 3,
     "ExtensionSettings": {
-      "{446900e4-71c2-419f-a6a7-df9c091e268b}": {
+      "keepassxc-browser@keepassxc.org": {
         "installation_mode": "normal_installed",
-        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/bitwarden-password-manager/latest.xpi"
+        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/keepassxc-browser/latest.xpi"
       }
     }
   }
@@ -163,7 +163,7 @@ Zen.
 | Режим | Что позволяет | Расширения у Zen |
 |---|---|---|
 | `force_installed` | нельзя ни выключить, ни удалить | Multi-Account Containers, Open external links in a container, наш `context-proxy`, uBlock Origin |
-| `normal_installed` | можно выключить (официальная формулировка Mozilla: «allows it to be disabled by the user»); удаление тем же кодом политики тоже придерживается — `disallowFeature('uninstall-extension:…')` в `Policies.sys.mjs` вызывается для обоих режимов одинаково, различие именно в «выключить» | Temporary Containers, Bitwarden и восемь инструментов второго слоя (список ниже) |
+| `normal_installed` | можно выключить (официальная формулировка Mozilla: «allows it to be disabled by the user»); удаление тем же кодом политики тоже придерживается — `disallowFeature('uninstall-extension:…')` в `Policies.sys.mjs` вызывается для обоих режимов одинаково, различие именно в «выключить» | Temporary Containers, KeePassXC-Browser и восемь инструментов второго слоя (список ниже) |
 
 Шестнадцать расширений делятся на два слоя. Три `force_installed` из четырёх — это
 не настройка на вкус, это **сама граница** изоляции контекстов:
@@ -511,7 +511,7 @@ Toolkit действительно ставит её в `false` (`greprefs.js:11
 | `permissions.default.desktop-notification` | `2` (запрещено по умолчанию) | Уведомления — поверхность утечки во время демонстрации экрана |
 | `network.protocol-handler.external.ext+container` | `true` | Без этого протокол `ext+container:` не обрабатывается как внешний вовсе — передача ссылки снаружи не работает |
 | `security.external_protocol_requires_permission` | `false` | Без этого каждая передача такой ссылки упирается в диалог подтверждения |
-| `signon.rememberSignons`, `signon.autofillForms` | `false`, `false` | Пароли живут в Bitwarden. Автозаполнение браузера воспроизводило бы ровно сценарий утечки: форма чужого тенанта загрузилась, данные ушли, вход попал в его журналы |
+| `signon.rememberSignons`, `signon.autofillForms` | `false`, `false` | Пароли живут в KeePassXC. Автозаполнение браузера воспроизводило бы ровно сценарий утечки: форма чужого тенанта загрузилась, данные ушли, вход попал в его журналы |
 | `browser.shell.checkDefaultBrowser` | `false` | Zen при первом запуске сам забирает `x-scheme-handler/http(s)` и вписывает себя в `mimeapps.list`, подменяя пикер ссылок — обработчиком по умолчанию должен оставаться Junction ([isolation-links.md](isolation-links.md)) |
 | `browser.tabs.unloadOnLowMemory` | `true` | Память — выгружать неактивные вкладки при её нехватке |
 | `dom.ipc.processCount` | `4` | Память — потолок числа content-процессов |
@@ -679,7 +679,7 @@ Multi-Account Containers. Отказ выглядит так: чужая стр�
 |---|---|---|---|
 | Пакеты | `junction`, `zen-browser-bin` (AUR) | Хост | фича `zen` — `default: true`: предвыбрана в чеклисте, потому что на ней стоит вся изоляция контекстов, но её можно снять, и каждый её скрипт закрыт проверкой ключа (комментарий над `key: zen` в `home/.chezmoidata.yaml`) |
 | Системная политика Zen | `/etc/zen/policies/policies.json` | Хост, вне дома | скрипт 32 |
-| Системная политика Firefox (uBlock Origin, плюс Bitwarden при фиче `bitwarden`) | `/etc/firefox/policies/policies.json` | Хост, вне дома | скрипт 32, если включена фича `firefox` |
+| Системная политика Firefox (uBlock Origin, плюс KeePassXC-Browser при фиче `keepassxc`) | `/etc/firefox/policies/policies.json` | Хост, вне дома | скрипт 32, если включена фича `firefox` |
 | Собранное расширение | `/usr/local/lib/zen-context-proxy.xpi` | Хост, вне дома | скрипт 41 |
 | Настройки профиля | `<профиль>/user.js` (`~/.zen/*/` или `~/.config/zen/*/`) | Хост, в доме | скрипт 40 |
 | Сессия и spaces | `<профиль>/zen-sessions.jsonlz4` | Хост, в доме | скрипт 43, стадия 1 (дописывает в существующий файл, не создаёт с нуля) |
@@ -728,9 +728,13 @@ Multi-Account Containers. Отказ выглядит так: чужая стр�
 5. **Закреплённые вкладки сверх тех, что кладёт скрипт 43** — он заводит
    только общие и контекстные закладки из каталога и никогда не трогает
    пространство, которое уже есть.
-6. **Настройки Bitwarden**: автозаполнение при загрузке страницы выключено;
-   *URI match detection* — `Never` для общих доменов Microsoft, `Host` для
-   уникальных; один аккаунт на контекст.
+6. **Подключить KeePassXC-Browser к базе.** Расширение ставится политикой
+   (выше), но само по себе с базой не разговаривает: в самом KeePassXC —
+   Tools > Settings > Browser Integration → включить, отметить и Firefox
+   (покрывает и Zen), и Chromium; после этого в каждом браузере нажать
+   «Connect» на иконке расширения. Без этого шага расширение установлено, но
+   молчит. Тот же шаг подсказывает чеклист `zz-next-steps` при первом
+   запуске ([secrets.md](secrets.md)).
 7. **`about:logins` очищен** — пустой список сохранённых логинов Firefox,
    чтобы автозаполнение браузера (даже выключенное по умолчанию, п. `user.js`
    выше) не оставалось источником соблазна включить его обратно.

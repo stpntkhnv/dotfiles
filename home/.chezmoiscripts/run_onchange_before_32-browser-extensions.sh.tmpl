@@ -29,8 +29,8 @@ set -euo pipefail
 #                       one cookie jar, and nothing in the UI would say so.
 #                       uBlock Origin is here too, by explicit decision:
 #                       everywhere, always.
-#   normal_installed -- Temporary Containers, Bitwarden, the Markdown clipper
-#                       and the tab discarder: enabled on arrival, still
+#   normal_installed -- Temporary Containers, KeePassXC-Browser, the Markdown
+#                       clipper and the tab discarder: enabled on arrival, still
 #                       removable. Personal machine, not a fleet.
 #
 # GUIDs come from the AMO API (addons.mozilla.org/api/v5/addons/addon/<slug>/),
@@ -54,7 +54,7 @@ set -euo pipefail
 # User-Agent Switcher and Manager fakes another browser's UA for the sites
 # that gate themselves behind "works only in Edge". Idle until asked via its
 # toolbar button; the spoof is per-request headers plus navigator.userAgent.
-{{- $bitwarden := dict "guid" "{446900e4-71c2-419f-a6a7-df9c091e268b}" "slug" "bitwarden-password-manager" "mode" "normal_installed" }}
+{{- $keepassxc := dict "guid" "keepassxc-browser@keepassxc.org" "slug" "keepassxc-browser" "mode" "normal_installed" }}
 {{- $ublock := dict "guid" "uBlock0@raymondhill.net" "slug" "ublock-origin" "mode" "force_installed" }}
 {{/* Zen refuses our own extension without this, and the refusal is silent
      unless the browser console is open: "Download failed -
@@ -84,7 +84,7 @@ set -euo pipefail
 {{-   $zenExts = append $zenExts (dict "guid" "@testpilot-containers"                  "slug" "multi-account-containers" "mode" "force_installed") }}
 {{-   $zenExts = append $zenExts (dict "guid" "{f069aec0-43c5-4bbf-b6b4-df95c4326b98}" "slug" "open-url-in-container"    "mode" "force_installed") }}
 {{-   $zenExts = append $zenExts (dict "guid" "{c607c8df-14a7-4f28-894f-29e8722976af}" "slug" "temporary-containers"     "mode" "normal_installed") }}
-{{-   if has "bitwarden" .enabled }}{{ $zenExts = append $zenExts $bitwarden }}{{ end }}
+{{-   if has "keepassxc" .enabled }}{{ $zenExts = append $zenExts $keepassxc }}{{ end }}
 {{-   $zenExts = append $zenExts $ublock }}
 {{-   $zenExts = append $zenExts (dict "guid" "clipper@obsidian.md"                    "slug" "web-clipper-obsidian"     "mode" "normal_installed") }}
 {{-   $zenExts = append $zenExts (dict "guid" "{c2c003ee-bd69-42a2-b0e9-6f34222cb046}" "slug" "auto-tab-discard"         "mode" "normal_installed") }}
@@ -156,7 +156,7 @@ set -euo pipefail
 {{- end }}
 {{- $ffExts := list }}
 {{- if has "firefox" .enabled }}
-{{-   if has "bitwarden" .enabled }}{{ $ffExts = append $ffExts $bitwarden }}{{ end }}
+{{-   if has "keepassxc" .enabled }}{{ $ffExts = append $ffExts $keepassxc }}{{ end }}
 {{-   $ffExts = append $ffExts $ublock }}
 {{- end }}
 
@@ -234,13 +234,19 @@ managed=$(jq -c 'walk(
 managed=""
 {{ end }}
 echo "==> Installing browser extension policies..."
-{{- if and (has "chromium" .enabled) (has "bitwarden" .enabled) }}
+# Both policy files are root-owned and survive both their own feature's
+# removal and chromium being disabled -- an orphaned policy would keep
+# installing its extension forever. Remove both unconditionally first, then
+# the block below rewrites keepassxc-extension.json fresh if the feature
+# combo is still on.
+sudo rm -f /etc/chromium/policies/managed/bitwarden-extension.json /etc/chromium/policies/managed/keepassxc-extension.json
+{{- if and (has "chromium" .enabled) (has "keepassxc" .enabled) }}
 
 sudo install -d /etc/chromium/policies/managed
-sudo tee /etc/chromium/policies/managed/bitwarden-extension.json >/dev/null <<'EOF'
+sudo tee /etc/chromium/policies/managed/keepassxc-extension.json >/dev/null <<'EOF'
 {
   "ExtensionSettings": {
-    "nngceckbapebfimnlniiiahkandclblb": {
+    "oboonakemofpalcgghocfoadofidjkkk": {
       "installation_mode": "normal_installed",
       "update_url": "https://clients2.google.com/service/update2/crx"
     }

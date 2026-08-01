@@ -31,7 +31,7 @@
 | `rider` | JetBrains Rider | both | галочка стоит | 1 | [dev-tools.md](dev-tools.md) |
 | `db-tools` | DB clients: DBeaver (GUI), lazysql, usql, sqlcmd (TUI) | both | галочка стоит | 4 | [dev-tools.md](dev-tools.md) |
 | `api-tools` | API clients: Bruno (GUI), posting (TUI) | both | галочка стоит | 2 | [dev-tools.md](dev-tools.md) |
-| `bitwarden` | Passwords: Bitwarden + rbw (terminal) + bws (agent secrets) | both | галочка стоит | 3 | [secrets.md](secrets.md) |
+| `keepassxc` | Passwords: KeePassXC (local vault + Syncthing + phone) | host | галочка стоит | 1 | [secrets.md](secrets.md) |
 | `claude` | Claude Code CLI | both | галочка стоит | 1 | [agents.md](agents.md) |
 | `codex` | OpenAI Codex CLI | both | по выбору | 1 | [agents.md](agents.md) |
 | `gh` | GitHub CLI | both | галочка стоит | 1 | [dev-tools.md](dev-tools.md) |

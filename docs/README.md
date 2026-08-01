@@ -67,7 +67,7 @@ covers:
 - [`sync.md`](sync.md) — Syncthing и Obsidian, какие папки синхронизируются и
   между какими машинами.
 - [`network.md`](network.md) — Tailscale, Ziti и firewall.
-- [`secrets.md`](secrets.md) — Bitwarden и SSH-ключи.
+- [`secrets.md`](secrets.md) — KeePassXC и SSH-ключи.
 
 ## Инструменты
 
