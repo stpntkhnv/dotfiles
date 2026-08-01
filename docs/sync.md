@@ -219,21 +219,28 @@ Syncthing на Android chezmoi вообще не трогает — он нас�
 | Служба | `syncthing.service`, пользовательский systemd-юнит | хост | включается и стартуется скриптом `46-syncthing`, если ещё не запущена |
 | Конфиг вне chezmoi | `[data.syncthing.devices]` | `~/.config/chezmoi/chezmoi.toml`, по машине | правится руками на каждой машине; в каталоге фич этих данных нет (см. «Почему device ID не в каталоге фич») |
 
-Четыре папки из каталога (`home/.chezmoidata.yaml`, ключ `syncthing.folders`):
+Пять папок из каталога (`home/.chezmoidata.yaml`, ключ `syncthing.folders`):
 
 | id | путь | тип | участники | версии |
 |---|---|---|---|---|
 | `kb` | `~/Documents/Notes/kb` | двусторонний | desktop, laptop | ступенчатые |
 | `personal` | `~/Documents/Notes/personal` | двусторонний | desktop, laptop, phone | ступенчатые |
+| `passwords` | `~/Documents/Passwords` | двусторонний | desktop, laptop, phone | ступенчатые |
 | `kb-archive` | `~/Documents/Notes/kb-archive` | двусторонний | desktop, laptop | нет |
 | `camera` | `~/Pictures/Camera` | только приём | desktop, phone | нет |
 
 Папка заводится только на тех машинах, что перечислены в её же `devices`:
 ноутбука нет в участниках `camera`, поэтому на ноутбуке этой папки не будет
 вовсе, а не появится пустой. `id` заданы руками (`kb`, `personal`,
-`kb-archive`, `camera`), а не оставлены на волю генератора Syncthing —
-приложению на телефоне тот же `id` придётся ввести вручную, и он должен
-совпасть посимвольно.
+`passwords`, `kb-archive`, `camera`), а не оставлены на волю генератора
+Syncthing — приложению на телефоне тот же `id` придётся ввести вручную, и он
+должен совпасть посимвольно. Запись папки `passwords` лежит в
+`syncthing.folders` без собственного гейта, как и остальные четыре папки
+таблицы выше, — заводит её на диске скрипт
+`run_after_46-syncthing.sh.tmpl` под фичей `syncthing`. Фича `keepassxc`
+(`needs: [syncthing]`, [secrets.md](secrets.md)) саму папку не создаёт: она
+только кладёт в неё волт (сам файл базы `personal.kdbx` в папку кладёт
+человек) и через `needs` гарантирует, что синк уже включён.
 
 **`camera` — это лоток на входящие, а не архив.** «Только приём» не значит,
 что хост игнорирует удаления с телефона — удаление с телефона применяется
@@ -281,8 +288,8 @@ $ KEY="$(sed -n 's:.*<apikey>\(.*\)</apikey>.*:\1:p' "$CONF" | head -1)"
 $ curl -s -H "X-API-Key: $KEY" http://127.0.0.1:8384/rest/system/status | jq '.myID'
 $ curl -s -H "X-API-Key: $KEY" http://127.0.0.1:8384/rest/config/folders | jq -r '.[].id'
 ```
-Второй вызов должен вывести подмножество `kb personal kb-archive camera` —
-ровно те id, в чьих `devices` эта машина названа.
+Второй вызов должен вывести подмножество `kb personal passwords kb-archive
+camera` — ровно те id, в чьих `devices` эта машина названа.
 
 Разрешённая ветка шаблона `30-system` рендерится так, как ожидается (только
 чтение, `chezmoi execute-template` ничего не применяет):

@@ -20,8 +20,9 @@ covers:
 
 `chezmoi apply` не может сделать всё сам: часть шагов требует живого человека
 за браузером (войти в GitHub, авторизовать Tailscale), часть — пароля,
-который нигде не хранится (Bitwarden), часть — файла, который взять неоткуда,
-кроме как у провайдера (identity для Ziti). После каждого прогона `apply`
+который нигде не хранится (мастер-пароль KeePassXC), часть — файла, который
+взять неоткуда, кроме как у провайдера (identity для Ziti). После каждого
+прогона `apply`
 репозиторий сам печатает список того, что из этого ещё не сделано — не
 один раз при установке, а на каждом прогоне, пока пункт не закрыт. Это
 раздел «Ручные шаги после установки» ниже: буквально построчный разбор того,
@@ -100,8 +101,9 @@ flowchart TD
 | `ziti` | `/opt/openziti/etc/identities/` не пуст | «OpenZiti: no identity -- copy the JSON to /opt/openziti/etc/identities/ and 'sudo systemctl start ziti-edge-tunnel'» |
 | `voice` | Закреплённый файл модели (`whisper-large-v3-Q8_0.gguf` в снапшоте `handy-computer/whisper-large-v3-gguf` кеша HuggingFace) на месте | «Handy: the pinned model is missing -- run 'handy' and download Whisper Large v3 under Settings -> Model» ([voice.md](voice.md)) |
 | `voice` | `~/.local/share/com.pais.handy/settings_store.json` существует | «Handy: never started, so its settings are unconfigured -- run 'handy', then 'chezmoi apply' again» |
-| `bitwarden` | `~/.config/rbw/config.json` не пуст (если `rbw` установлен) | «Bitwarden: account at https://vault.bitwarden.eu (register if new), then 'rbw config set email <email>', 'rbw config set base_url https://vault.bitwarden.eu', 'rbw register' and 'rbw login'» |
-| `bitwarden` | `~/.config/bws/access-token` не пуст (если `bws` установлен) | «Bitwarden agents: create a Secrets Manager machine account at https://vault.bitwarden.eu -> Secrets Manager -> Machine accounts, put its token in ~/.config/bws/access-token (chmod 600)» |
+| `keepassxc` | `~/Documents/Passwords/personal.kdbx` существует | «KeePassXC: create the vault -- keepassxc, Database > New, save as ~/Documents/Passwords/personal.kdbx; Tools > Settings > Browser Integration: enable, tick BOTH Firefox (covers Zen) and Chromium; then Connect from the extension icon in each browser» |
+| `keepassxc` | То же условие, вторая строка чеклиста | «KeePassXC phone: install KeePassDX, accept the 'passwords' Syncthing folder, open personal.kdbx» |
+| `keepassxc` | Ни один из трёх пакетов (`bitwarden`, `rbw`, `bws-bin`) не установлен | «Bitwarden leftovers: 'sudo pacman -Rns bitwarden rbw bws-bin', then rm -rf ~/.config/rbw ~/.config/bws; delete the vault.bitwarden.eu account LAST, after critical passwords are recreated in KeePassXC» |
 | `tailscale` | `tailscale status` завершается успешно | «Tailscale: not connected -- 'sudo tailscale up' (browser auth)» |
 | `docker` | Текущий пользователь состоит в группе `docker` | «Docker: you are not in the docker group yet -- log out and back in to use it without sudo» |
 
@@ -123,7 +125,7 @@ flowchart TD
 | `syncthing` | Каждое чужое устройство хоть раз было на связи (`lastSeen`) | «Syncthing: device '…' has never been seen -- it has to add this machine's ID too (paired from one side only)» |
 | `syncthing` | У каждого устройства в карте есть рабочий `tcp://` адрес без плейсхолдеров | Полный текст — сноска (‡) под таблицей |
 | `syncthing` | Входящие `22000/tcp`, `22000/udp`, `21027/udp` открыты в ufw (только если есть root без пароля) | «Syncthing: incoming …/tcp is closed -- 'sudo ufw allow …' (30-system only adds these once, when its own text changes, so a later apply will not put them back)» |
-| `syncthing` | Нет файлов `*.sync-conflict-*` в папках, где участвует машина | «Syncthing: conflict file … -- resolve with the kb-curate skill, do not delete blindly» |
+| `syncthing` | Нет файлов `*.sync-conflict-*` в папках, где участвует машина | Ветвится по имени файла: для `*.kdbx*` — «Syncthing: conflict file $st_conflict -- merge in KeePassXC (Database > Merge from database), then delete the conflict copy»; для всего остального — «Syncthing: conflict file … -- resolve with the kb-curate skill, do not delete blindly» |
 | `syncthing` | Путь хранилища `kb` совпадает с тем, что видит `claudefiles` (`~/.config/claudefiles/secrets.json`) | «Syncthing: claudefiles syncs the vault at … but the catalogue syncs … -- make them the same» |
 | — (все включённые контексты) | Сокет `~/.local/share/wsproxy/<контекст>/socks.sock` существует, по одному на каждую запись `contexts:` | «Proxy <контекст>: no socket -- start the container ('distrobox enter <контекст> -- true') and check wsproxy-bridge.service inside it» ([isolation-network.md](isolation-network.md)) |
 
@@ -170,8 +172,8 @@ x-scheme-handler/http x-scheme-handler/https`, когда обработчик �
 | `/etc/systemd/zram-generator.conf` | Сжатый своп в оперативной памяти | там же | [hardware.md](hardware.md) |
 | `/etc/modprobe.d/btusb.conf`, `/etc/udev/rules.d/50-bt-dongle-nosuspend.rules` | Обход бага автоусыпления конкретного Bluetooth-донгла | `run_onchange_before_50-bluetooth.sh.tmpl` | [hardware.md](hardware.md) |
 | `/etc/zen/policies/policies.json` | Политика Zen: Firefox-контейнеры, force-installed расширения, `Bookmarks` (закладки на панели), `ManagedBookmarks` (меню только для чтения), `Preferences` (снимает требование подписи расширений, без чего наше расширение не ставилось вообще), `DisplayBookmarksToolbar` (Zen прячет панель закладок по умолчанию, а управляемое меню существует только как кнопка на ней) | `run_onchange_before_32-browser-extensions.sh.tmpl` | [isolation-browser.md](isolation-browser.md) |
-| `/etc/firefox/policies/policies.json` | Тот же механизм для обычного Firefox: uBlock Origin, плюс Bitwarden при фиче `bitwarden` (фича `firefox`) | там же | [isolation-browser.md](isolation-browser.md) |
-| `/etc/chromium/policies/managed/bitwarden-extension.json` | Force-installed Bitwarden в Chromium (фичи `chromium`+`bitwarden`) | там же | [isolation-browser.md](isolation-browser.md) |
+| `/etc/firefox/policies/policies.json` | Тот же механизм для обычного Firefox: uBlock Origin, плюс KeePassXC-Browser при фиче `keepassxc` (фича `firefox`) | там же | [isolation-browser.md](isolation-browser.md) |
+| `/etc/chromium/policies/managed/keepassxc-extension.json` | `normal_installed` KeePassXC-Browser в Chromium (фичи `chromium`+`keepassxc`); скрипт сперва безусловно удаляет оба файла политики — этот и старый `bitwarden-extension.json` — и переписывает этот заново, только если фичи всё ещё включены | там же | [isolation-browser.md](isolation-browser.md) |
 | `/etc/systemd/system/wsproxy-socks.service`, `wsproxy-bridge.service` | Мост SOCKS5 внутри distrobox-контейнера | `run_onchange_before_15-wsproxy-container.sh.tmpl` | [isolation-network.md](isolation-network.md) |
 | `/etc/killswitch.conf`, `/etc/systemd/system/killswitch.service` | Конфиг и юнит килсвитча (внутри контейнера) | `run_onchange_after_39-killswitch.sh.tmpl` | [killswitch.md](killswitch.md) |
 | `/etc/greetd/config.toml`, `/etc/greetd/niri/config.kdl`, `/etc/greetd/niri/dms.kdl` | Экран входа greetd | `run_after_45-greeter.sh.tmpl` | [greeter.md](greeter.md) |
@@ -477,10 +479,9 @@ jq -r '[.addons[]|select(.active)|.id]|sort|.[]' ~/.config/zen/*/extensions.json
 | То же самое на `dev.azure.com` | [secrets.md](secrets.md#когда-сломалось) |
 | SSH-ключи не создались вовсе | [secrets.md](secrets.md#когда-сломалось) |
 | `origin` репозитория dotfiles остался HTTPS | [secrets.md](secrets.md#когда-сломалось) |
-| `rbw` спрашивает мастер-пароль на каждую команду | [secrets.md](secrets.md#когда-сломалось) |
-| `bws` не может прочитать секрет проекта | [secrets.md](secrets.md#когда-сломалось) |
-| `pat` ругается на ненастроенный `rbw` или пустую папку `PAT` | [secrets.md](secrets.md#когда-сломалось) |
-| `pat` жалуется на неоднозначное имя записи | [secrets.md](secrets.md#когда-сломалось) |
+| Расширение в браузере не подключается к базе KeePassXC | [secrets.md](secrets.md#когда-сломалось) |
+| Телефон не видит файл базы паролей | [secrets.md](secrets.md#когда-сломалось) |
+| Конфликт `personal.sync-conflict-<дата>-<устройство>.kdbx` после синхронизации | [secrets.md](secrets.md#когда-сломалось) |
 
 ### Инструменты
 

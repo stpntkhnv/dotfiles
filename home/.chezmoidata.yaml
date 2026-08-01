@@ -191,8 +191,6 @@ plain_context:
       url: https://mail.google.com
     - title: DeepL
       url: https://www.deepl.com/translator
-    - title: Bitwarden
-      url: https://vault.bitwarden.eu
 
 # What Syncthing keeps in step between machines. One entry is one Syncthing
 # folder; `id` is what has to be typed identically on the phone, so it is
@@ -229,6 +227,13 @@ syncthing:
       # settings -- is exactly why the vault is shared, so it stays.
       ignore:
         - ".obsidian/workspace*.json"
+
+    - id: passwords
+      label: "Passwords"
+      path: Documents/Passwords
+      type: sendreceive
+      devices: [desktop, laptop, phone]
+      versioning: staggered
 
     - id: kb-archive
       label: "Knowledge base archive"
@@ -597,23 +602,19 @@ features:
       - bruno-bin
       - posting
 
-  # Three Bitwarden clients on purpose: the desktop app for humans, rbw for
-  # the terminal (agent daemon + pinentry, no master password in shell
-  # history), bws for LLM agents -- a Secrets Manager machine-account token
-  # scoped to a dev project, so the bws token itself can read API keys but
-  # can never touch the personal vault. That boundary belongs to the token,
-  # not to the machine: on the host, an agent can still reach the personal
-  # vault the same way a human does, through rbw and the `pat` wrapper,
-  # whenever rbw is unlocked. See docs/agents.md.
-  - key: bitwarden
-    label: "Passwords: Bitwarden + rbw (terminal) + bws (agent secrets)"
-    scope: both
+  # One local .kdbx file instead of a password cloud: no server, no account,
+  # nothing to register or rate-limit. The database lives in
+  # ~/Documents/Passwords (the `passwords` Syncthing folder below), browsers
+  # talk to the running KeePassXC through native messaging, the phone opens
+  # the same file via Syncthing (KeePassDX). Host-only on purpose: containers
+  # get no secrets at all -- PATs are pasted by hand. See docs/secrets.md.
+  - key: keepassxc
+    label: "Passwords: KeePassXC (local vault + Syncthing + phone)"
+    scope: host
     default: true
+    needs: [syncthing]
     pacman:
-      - bitwarden
-      - rbw
-    aur:
-      - bws-bin
+      - keepassxc
 
   - key: claude
     label: "Claude Code CLI"
