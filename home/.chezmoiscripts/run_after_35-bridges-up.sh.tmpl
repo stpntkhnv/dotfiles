@@ -1,0 +1,25 @@
+#!/bin/bash
+{{- if ne .env "host" }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Bridge units are written by two onchange scripts (34 for wsproxy-*, 38 for
+# zenopen-*), and onchange means exactly that: when a teardown stops the units
+# while the scripts' rendered text never changes, nothing brings them back —
+# recreating the containers on 2026-08-01 left every work space without
+# network until a manual start. This runs on EVERY apply and starts whatever
+# bridge unit exists on disk but is not active.
+#
+# run_after_ rather than run_onchange_: what it does depends on the state of
+# the units, not on the state of this file. NOTHING HERE MAY FAIL THE APPLY.
+
+for unit in {{ range .contexts }}wsproxy-{{ .name }}.service zenopen-{{ .name }}.service {{ end }}; do
+    [[ -f "$HOME/.config/systemd/user/$unit" ]] || continue
+    if ! systemctl --user is-active --quiet "$unit"; then
+        echo "==> Bridge unit $unit is down, starting it..."
+        systemctl --user reset-failed "$unit" 2>/dev/null || true
+        systemctl --user start "$unit" || echo "!! could not start $unit" >&2
+    fi
+done
+{{- end }}

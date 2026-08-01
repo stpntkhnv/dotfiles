@@ -19,12 +19,28 @@ set -euo pipefail
 #
 # System units rather than user units because the container runs systemd as
 # init (init=true in distrobox.ini) and there is no logind session inside.
+#
+# A before-script, and an early one (15, right after bootstrap-pacman), on
+# purpose: the rest of the setup regularly needs the host browser open in THIS
+# context's space — logins, tokens, claudefiles prompts — and that space has
+# no network until this bridge is live. It used to run as after-36, which
+# meant no browser until the whole package install had finished.
 
 if [[ ! -d /var/lib/wsproxy ]]; then
     echo "!! /var/lib/wsproxy is not mounted: this container predates the volume."
     echo "!! Recreate it: distrobox rm $(. /run/.containerenv; echo "$name") &&"
     echo "!!   distrobox assemble create --name ... --file ~/.config/distrobox/distrobox.ini"
     exit 0
+fi
+
+# socat and microsocks are also in container-base, but that installs at step
+# 20 — too late for a bridge that wants to be up at 15. On a fresh container
+# the sync (-Sy) is required: bootstrap-10 only fixed the mirrorlist, no db
+# has been fetched yet. On later runs the command guard skips pacman entirely,
+# so no partial-upgrade risk builds up here; step 20 still runs the full -Syu.
+if ! command -v microsocks &>/dev/null || ! command -v socat &>/dev/null; then
+    echo "==> Installing socat and microsocks for the bridge..."
+    sudo pacman -Sy --noconfirm --needed socat microsocks
 fi
 
 echo "==> Installing the browser proxy units..."

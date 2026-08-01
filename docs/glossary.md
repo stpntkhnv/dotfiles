@@ -66,7 +66,7 @@ Namespace бывают разных видов, и каждый подменяе
 Отсюда следствие: `127.0.0.1` в контейнере и `127.0.0.1` на хосте — разные
 вещи. Разные network namespace, разные loopback-интерфейсы. Если внутри
 distrobox-контейнера что-то слушает `127.0.0.1:1080`
-(`home/.chezmoiscripts/run_onchange_after_36-wsproxy-container.sh.tmpl`,
+(`home/.chezmoiscripts/run_onchange_before_15-wsproxy-container.sh.tmpl`,
 `ExecStart=/usr/bin/microsocks -i 127.0.0.1 -p 1080`), то хост, обратившись к
 своему `127.0.0.1:1080`, туда не попадёт — он попадёт в свой собственный
 loopback, где ничего нет.
@@ -213,7 +213,7 @@ Firefox, и новые вкладки в нём открываются в это
 `home/.chezmoiscripts/run_onchange_after_34-wsproxy-host.sh.tmpl` пишет
 пользовательский юнит `wsproxy-<контекст>.service` в
 `~/.config/systemd/user/`, а
-`home/.chezmoiscripts/run_onchange_after_36-wsproxy-container.sh.tmpl` пишет
+`home/.chezmoiscripts/run_onchange_before_15-wsproxy-container.sh.tmpl` пишет
 системные юниты `wsproxy-socks.service` и `wsproxy-bridge.service` внутри
 контейнера в `/etc/systemd/system/`.
 

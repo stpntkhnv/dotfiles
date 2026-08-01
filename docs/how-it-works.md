@@ -246,6 +246,7 @@ flowchart TD
     subgraph BEFORE["BEFORE — до раскладки файлов"]
         direction TB
         B10["10 bootstrap-pacman<br/>только контейнер"]
+        B15["15 wsproxy-container<br/>только контейнер: мост первым"]
         B20["20 packages<br/>все pacman/aur/npm/dotnet разом"]
         B30["30 system"]
         B32["32 browser-extensions"]
@@ -254,7 +255,7 @@ flowchart TD
         B50["50 bluetooth"]
         B60["60 ziti"]
         B70["70 azure"]
-        B10 --> B20 --> B30 --> B32 --> B35 --> B40b --> B50 --> B60 --> B70
+        B10 --> B15 --> B20 --> B30 --> B32 --> B35 --> B40b --> B50 --> B60 --> B70
     end
 
     FILES["ФАЙЛЫ<br/>конфиги в ~, .chezmoiignore решает что не класть"]
@@ -263,7 +264,7 @@ flowchart TD
         direction TB
         A33["33 browser-slices"]
         A34["34 wsproxy-host"]
-        A36["36 wsproxy-container"]
+        A35a["35 bridges-up<br/>поднять лежащие мосты"]
         A37["37 container-links"]
         A38["38 linkrouting"]
         A39["39 killswitch"]
@@ -279,7 +280,7 @@ flowchart TD
         A83["83 origin-ssh"]
         A84["84 claudefiles"]
         AZZ["zz next-steps<br/>чеклист что осталось руками"]
-        A33 --> A34 --> A36 --> A37 --> A38 --> A39 --> A40a --> A41 --> A43 --> A44 --> A45 --> A46 --> A80 --> A81 --> A82 --> A83 --> A84 --> AZZ
+        A33 --> A34 --> A35a --> A37 --> A38 --> A39 --> A40a --> A41 --> A43 --> A44 --> A45 --> A46 --> A80 --> A81 --> A82 --> A83 --> A84 --> AZZ
     end
 
     BEFORE --> FILES --> AFTER
@@ -304,19 +305,20 @@ flowchart TD
 
 ### Два вида скриптов
 
-В `home/.chezmoiscripts/` двадцать семь файлов, и делятся они по признаку
+В `home/.chezmoiscripts/` двадцать восемь файлов, и делятся они по признаку
 `once`/`onchange` в имени на два вида, а не по этапу `before`/`after`.
 
 | Вид | Когда выполняется тело скрипта | Сколько сейчас |
 |---|---|---|
 | `run_onchange_before_*` / `run_onchange_after_*` | Только когда изменился текст самого скрипта после подстановки переменных шаблона | 19 |
-| `run_before_*` / `run_after_*` без `onchange` | На каждом `chezmoi apply`, безусловно | 8 |
+| `run_before_*` / `run_after_*` без `onchange` | На каждом `chezmoi apply`, безусловно | 9 |
 
-(посчитано по `ls home/.chezmoiscripts` — 19 файлов с `onchange` в имени, 8
+(посчитано по `ls home/.chezmoiscripts` — 19 файлов с `onchange` в имени, 9
 без него; в этом репозитории `run_before_*` без `onchange` не встречается,
 только `run_after_*`).
 
-Список тех, что гоняются каждый раз: `run_after_40-zen-prefs.sh.tmpl`,
+Список тех, что гоняются каждый раз: `run_after_35-bridges-up.sh.tmpl`,
+`run_after_40-zen-prefs.sh.tmpl`,
 `run_after_43-zen-session.sh.tmpl`, `run_after_44-handy-settings.sh.tmpl`,
 `run_after_45-greeter.sh.tmpl`, `run_after_46-syncthing.sh.tmpl`,
 `run_after_80-niri-dms-placeholders.sh.tmpl`,
@@ -620,11 +622,11 @@ $ grep -c '^  - key:' home/.chezmoidata.yaml
 
 ```sh
 $ ls home/.chezmoiscripts | wc -l
-27
+28
 $ ls home/.chezmoiscripts | grep -c onchange
 19
 $ ls home/.chezmoiscripts | grep -vc onchange
-8
+9
 ```
 
 Превью того, что реально попадёт в пакетный менеджер, без применения:
@@ -704,7 +706,7 @@ chezmoi init --promptMultichoice enabled=neovim,node,claude
 
 **Почему нет отдельного `during`-скрипта в этом репозитории.** chezmoi
 поддерживает и такой (без `before_`/`after_` в имени — выполняется в
-процессе раскладки файлов), но ни один из 27 скриптов им не пользуется:
+процессе раскладки файлов), но ни один из 28 скриптов им не пользуется:
 каждый либо ставит пакеты и правит систему до раскладки, либо донастраивает
 уже разложенное после. Середины, где нужно было бы прервать саму раскладку
 файлов, здесь просто не возникло.

@@ -3,7 +3,8 @@ covers:
   features: []
   paths:
     - home/.chezmoiscripts/run_onchange_after_34-wsproxy-host.sh.tmpl
-    - home/.chezmoiscripts/run_onchange_after_36-wsproxy-container.sh.tmpl
+    - home/.chezmoiscripts/run_onchange_before_15-wsproxy-container.sh.tmpl
+    - home/.chezmoiscripts/run_after_35-bridges-up.sh.tmpl
 ---
 
 # Мост wsproxy: как трафик вкладки попадает в сеть контейнера
@@ -12,7 +13,7 @@ covers:
 своя сеть, и показал цепочку целиком, от вкладки до [netns](glossary.md#network-namespace)
 контейнера. Этот документ — про среднюю часть этой цепочки: пять звеньев,
 которыми байты физически пересекают границу [network namespace](glossary.md#network-namespace),
-и два скрипта, которые эти звенья собирают. Что до моста (расширения браузера,
+и три скрипта: два собирают эти звенья, третий держит их поднятыми. Что до моста (расширения браузера,
 привязка [space](glossary.md#space-в-zen) к контейнеру) — [isolation-browser.md](isolation-browser.md);
 что после (killswitch при упавшем VPN) — [killswitch.md](killswitch.md); из чего физически
 собран сам контейнер, который несёт свою половину моста, — [containers.md](containers.md).
@@ -41,11 +42,30 @@ VPN, если он есть.
 - `run_onchange_after_34-wsproxy-host.sh.tmpl` — только на хосте (`{{- if ne
   .env "host" }} exit 0 {{- else }}`), пишет по одному юниту-мосту `socat` на
   контекст.
-- `run_onchange_after_36-wsproxy-container.sh.tmpl` — только внутри контейнера
-  (`{{- if ne .env "container" }} exit 0 {{- else }}`), пишет `microsocks` и
-  второй `socat` внутри того контейнера, где выполняется.
+- `run_onchange_before_15-wsproxy-container.sh.tmpl` — только внутри
+  контейнера (`{{- if ne .env "container" }} exit 0 {{- else }}`), пишет
+  `microsocks` и второй `socat` внутри того контейнера, где выполняется.
+  Это `before`-скрипт, и намеренно ранний (15, сразу после
+  bootstrap-pacman): остальная настройка контейнера регулярно требует
+  браузера, открытого в space этого же контекста — логины, токены, вопросы
+  claudefiles, — а этот space без моста сидит без сети. Пакеты `socat` и
+  `microsocks` скрипт при необходимости ставит сам (`pacman -Sy --needed`,
+  под защитой `command -v`): фича `container-base` поставила бы их только
+  на шаге 20, слишком поздно для моста на шаге 15. До 1 августа 2026 скрипт
+  был `after`-36 — мост поднимался последним, после всей установки пакетов.
 
-Оба генерируют юниты из шаблона, а не хранят их в репозитории готовыми: имена
+Третий скрипт держит мосты живыми между правками:
+`run_after_35-bridges-up.sh.tmpl`, только хост, без `onchange` — то есть на
+каждом `chezmoi apply`. Юниты пишут два `onchange`-скрипта (34 и 38), и
+`onchange` означает ровно это: если снос контейнеров остановил юниты, а текст
+скриптов не менялся, `enable --now` не перевыполнится и остановленное не
+встанет само — 2026-08-01 ровно так все рабочие space остались без сети до
+ручного старта. Скрипт 35 проходит по юнитам обоих видов (`wsproxy-*`,
+`zenopen-*`) для актуальных контекстов и стартует те, что существуют на
+диске, но не активны; ничто в нём не роняет `apply`.
+
+Оба скрипта-строителя (34 и 15) генерируют юниты из шаблона, а не хранят их в
+репозитории готовыми: имена
 и порты приходят из `contexts:` в `home/.chezmoidata.yaml`, и захардкоженный
 юнит дублировал бы этот список, расходясь с ним при первой правке.
 
@@ -53,7 +73,7 @@ VPN, если он есть.
 что-либо делает.** Это единственное место всей конструкции, которое видит
 таблицу `contexts:` целиком: всё остальное ниже по цепочке работает по одному
 контексту за раз — сам скрипт 34 генерирует юниты в цикле `{{ range .contexts
-}}` по одному, а скрипт 36 вообще не знает про соседние контексты, он
+}}` по одному, а скрипт 15 вообще не знает про соседние контексты, он
 выполняется внутри уже одного конкретного контейнера. Три проверки
 (`run_onchange_after_34-wsproxy-host.sh.tmpl`, комментарий «Validate the table
 before acting on it», строки 20-44):
@@ -137,7 +157,7 @@ sequenceDiagram
    ([containers.md](containers.md)). Механика самого UNIX-сокета — в
    [словаре](glossary.md#unix-сокет).
 3. **`socat` в контейнере.** Юнит `wsproxy-bridge.service`
-   (`run_onchange_after_36-wsproxy-container.sh.tmpl:55`):
+   (`run_onchange_before_15-wsproxy-container.sh.tmpl`, юнит `wsproxy-bridge.service`):
    `UNIX-LISTEN:/var/lib/wsproxy/socks.sock,fork,mode=600,unlink-early
    TCP:127.0.0.1:1080`. `127.0.0.1` здесь — [loopback контейнера](glossary.md#127001),
    отдельный от хостового.
@@ -152,7 +172,7 @@ sequenceDiagram
    контейнера — его маршруты, его DNS, его VPN, если есть ([killswitch.md](killswitch.md)).
 
 `wsproxy-bridge.service` требует `wsproxy-socks.service` (`Requires=`, `After=`
-в `run_onchange_after_36-wsproxy-container.sh.tmpl:50`) — мост не поднимется
+в `run_onchange_before_15-wsproxy-container.sh.tmpl`, юнит `wsproxy-bridge.service`) — мост не поднимется
 раньше, чем есть кому передавать байты дальше.
 
 ### Почему UNIX-сокет, а не проброс порта
@@ -213,7 +233,7 @@ UID `1000`, и `open()` файла с `mode=600`, принадлежащего �
 
 Юниты в контейнере — системные (`/etc/systemd/system/`), а не
 пользовательские: комментарий в
-`run_onchange_after_36-wsproxy-container.sh.tmpl` объясняет это отдельно —
+`run_onchange_before_15-wsproxy-container.sh.tmpl` объясняет это отдельно —
 контейнер поднимает systemd как `init` (`init=true` в `distrobox.ini.tmpl`), а
 `logind`-сессии внутри него нет, значит пользовательского менеджера systemd
 попросту неоткуда взяться.
@@ -225,8 +245,8 @@ UID `1000`, и `open()` файла с `mode=600`, принадлежащего �
 | Каталог сокета | `~/.local/share/wsproxy/<контекст>/` (`mode 700`) | Хост | `run_onchange_after_34-wsproxy-host.sh.tmpl` |
 | UNIX-сокет | `~/.local/share/wsproxy/<контекст>/socks.sock` = `/var/lib/wsproxy/socks.sock` в контейнере, тот же inode | Хост и контейнер | `wsproxy-bridge.service` при старте (создаёт файл), том — [containers.md](containers.md) |
 | Юнит пользователя | `~/.config/systemd/user/wsproxy-<контекст>.service` | Хост | `run_onchange_after_34-wsproxy-host.sh.tmpl` |
-| Системный юнит | `/etc/systemd/system/wsproxy-socks.service` | Контейнер | `run_onchange_after_36-wsproxy-container.sh.tmpl` |
-| Системный юнит | `/etc/systemd/system/wsproxy-bridge.service` | Контейнер | `run_onchange_after_36-wsproxy-container.sh.tmpl` |
+| Системный юнит | `/etc/systemd/system/wsproxy-socks.service` | Контейнер | `run_onchange_before_15-wsproxy-container.sh.tmpl` |
+| Системный юнит | `/etc/systemd/system/wsproxy-bridge.service` | Контейнер | `run_onchange_before_15-wsproxy-container.sh.tmpl` |
 | Список контекстов и портов | `contexts:` в `home/.chezmoidata.yaml` | Хост, источник данных | Правится руками |
 
 Пакеты `socat` (хост и контейнер) и `microsocks` (контейнер) отдельно не
@@ -343,9 +363,9 @@ root контейнера — убить его снаружи от обычно
 |---|---|---|
 | Вкладка в конкретном контексте не открывает сайты, ошибка вида «Unable to connect» | Мост не поднят: либо хостовый юнит, либо один из контейнерных | `systemctl --user status wsproxy-<контекст>.service` на хосте; `distrobox enter <контекст> -- systemctl status wsproxy-socks.service wsproxy-bridge.service` в контейнере; `podman ps` — сам контейнер вообще запущен? |
 | `chezmoi apply` останавливается с `!! Bad contexts in .chezmoidata.yaml` | Дубль имени, дубль порта или контекст, занявший в `contexts:` имя из `plain_context:` (сейчас `home`, сверка без учёта регистра) | Поправить `home/.chezmoidata.yaml`, см. таблицу проверок выше — что именно сломается, зависит от того, какая из трёх строк напечаталась |
-| После `chezmoi apply` мост для контекста не поднялся, но команда завершилась без ошибки | Контейнер собран до появления тома `/var/lib/wsproxy` в `distrobox.ini.tmpl`: скрипт 36 печатает `!! /var/lib/wsproxy is not mounted...` и выходит кодом `0`, ничего не устанавливая — `run_onchange` не считает это сбоем | Пересобрать контейнер: `distrobox rm <контекст> && distrobox assemble create --name <контекст> --file ~/.config/distrobox/distrobox.ini`, затем `chezmoi apply` заново |
+| После `chezmoi apply` мост для контекста не поднялся, но команда завершилась без ошибки | Контейнер собран до появления тома `/var/lib/wsproxy` в `distrobox.ini.tmpl`: скрипт 15 печатает `!! /var/lib/wsproxy is not mounted...` и выходит кодом `0`, ничего не устанавливая — `run_onchange` не считает это сбоем | Пересобрать контейнер: `distrobox rm <контекст> && distrobox assemble create --name <контекст> --file ~/.config/distrobox/distrobox.ini`, затем `chezmoi apply` заново |
 | Контекст переименовали или поменяли ему порт, а браузер всё ещё лезет на старый порт молча — без ошибки, но и без ответа | Прунинг в скрипте 34 определяет «устаревшее» по имени юнита. Если поменять **порт** у контекста, оставив имя тем же, `wsproxy-<имя>.service` не признаётся устаревшим и не проходит через `disable --now` — файл юнита перезаписывается новым портом, но **уже запущенный** процесс `socat` не перезапускается: `systemctl --user enable --now` на уже активном юните не делает `restart`. Проверено воспроизведением на этой машине: после подмены `ExecStart` в тестовом юните и повторного `enable --now` `MainPID` не поменялся, хотя `systemctl show` уже показывает новую команду запуска | `systemctl --user restart wsproxy-<контекст>.service` вручную после любой правки порта существующего контекста — `chezmoi apply` сам этого не сделает |
-| Все юниты `wsproxy-*` (и `zenopen-*`) разом «failed» или стоят, вкладки всех контекстов без сети | Снос и пересоздание контейнеров остановили юниты, а скрипт 34 — `onchange`: текст не менялся, `enable --now` не перевыполнился. «failed» вместо «inactive» — socat выходит кодом 143 на SIGTERM; с 2026-08-01 юниты несут `SuccessExitStatus=143` (случай разобран в [isolation-links.md](isolation-links.md), «Когда сломалось») | `systemctl --user start wsproxy-<контекст>.service` по всем контекстам; проверка — `ss -ltn \| grep -E ':1108[0-9]'` |
+| Все юниты `wsproxy-*` (и `zenopen-*`) разом «failed» или стоят, вкладки всех контекстов без сети | Снос и пересоздание контейнеров остановили юниты, а скрипт 34 — `onchange`: текст не менялся, `enable --now` не перевыполнился. «failed» вместо «inactive» — socat выходит кодом 143 на SIGTERM; с 2026-08-01 юниты несут `SuccessExitStatus=143` (случай разобран в [isolation-links.md](isolation-links.md), «Когда сломалось») | `chezmoi apply` — скрипт 35 (`run_after_35-bridges-up.sh.tmpl`) стартует лежащие юниты на каждом применении; руками — `systemctl --user start wsproxy-<контекст>.service` по всем контекстам, проверка `ss -ltn \| grep -E ':1108[0-9]'` |
 | Юнит `wsproxy-<имя>.service` исчез из списка (переименование/удаление контекста), но что-то по-прежнему слушает его старый порт | Прунинг гасит и удаляет юнит, но `systemctl --user disable --now "$base" 2>/dev/null \|\| true` глотает ошибку остановки; `rm -f` при этом всё равно выполняется. Если `disable --now` не смог реально остановить процесс, осиротевший `socat` остаётся висеть на порту без какого-либо юнита, который его отслеживает | `ss -ltnp \| grep <порт>` — найти PID напрямую и убить руками; затем `chezmoi apply` повторно, чтобы юниты были созданы заново |
 
 ## Почему именно так
