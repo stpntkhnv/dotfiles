@@ -4,5 +4,5 @@ prefix=~/.npm-global
 # npm blocks install scripts by default now. claude-code ships its binary as a
 # platform-specific optional dependency that postinstall links into place;
 # without this the CLI installs but every `claude` invocation dies with
-# "claude native binary not installed", which takes 84-claudefiles.sh with it.
+# "claude native binary not installed", which takes claudefiles' setup.sh with it.
 allow-scripts=@anthropic-ai/claude-code

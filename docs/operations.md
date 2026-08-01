@@ -93,6 +93,7 @@ flowchart TD
 |---|---|---|
 | — (всегда) | `ssh -T git@github.com` отвечает «successfully authenticated» | «GitHub SSH: key not registered -- 'cat ~/.ssh/id_ed25519.pub', paste at https://github.com/settings/keys» |
 | `claude` | `~/.claude/.credentials.json` существует | «Claude Code: not logged in -- run 'claude', pick 'Log in' (browser opens claude.ai; /login if you skipped it)» |
+| `claude` | `HEAD` клона `~/.local/share/claudefiles` совпадает с `~/.config/claudefiles/last-applied-head` | «Claude: claudefiles setup is pending -- run: ~/.local/share/claudefiles/setup.sh» — `setup.sh` больше не запускается из `apply` автоматически, только руками ([agents.md](agents.md)) |
 | `codex` | `~/.codex/auth.json` существует | «Codex: not logged in -- 'codex login' (browser OAuth via chatgpt.com) or 'codex login --api-key <key>'» |
 | `gh` | `gh auth status` завершается успешно | «GitHub CLI: not logged in -- 'gh auth login' (device code at https://github.com/login/device)» |
 | `azure` | `az account show` завершается успешно | «Azure CLI: no active session -- 'az login'» |

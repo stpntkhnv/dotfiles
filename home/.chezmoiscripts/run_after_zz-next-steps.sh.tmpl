@@ -18,6 +18,17 @@ fi
 {{ if has "claude" .enabled }}
 [[ -f "$HOME/.claude/.credentials.json" ]] || \
     steps+=("Claude Code: not logged in -- run 'claude', pick 'Log in' (browser opens claude.ai; /login if you skipped it)")
+# chezmoi pulls claudefiles but no longer runs its setup.sh: that run is long,
+# interactive and asks its own questions, which has no place inside an apply.
+# setup.sh writes last-applied-head itself on success, so this line clears
+# after a manual run and reappears when the external pulls a new revision.
+cf_dir="$HOME/.local/share/claudefiles"
+if [[ -d "$cf_dir/.git" ]]; then
+    cf_head="$(git -C "$cf_dir" rev-parse HEAD 2>/dev/null || true)"
+    cf_applied="$(cat "$HOME/.config/claudefiles/last-applied-head" 2>/dev/null || true)"
+    [[ -n "$cf_head" && "$cf_head" == "$cf_applied" ]] || \
+        steps+=("Claude: claudefiles setup is pending -- run: ~/.local/share/claudefiles/setup.sh")
+fi
 {{- end }}
 {{- if has "codex" .enabled }}
 [[ -f "$HOME/.codex/auth.json" ]] || \

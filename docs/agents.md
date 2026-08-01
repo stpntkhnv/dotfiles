@@ -2,7 +2,6 @@
 covers:
   features: [claude, codex]
   paths:
-    - home/.chezmoiscripts/run_after_84-claudefiles.sh.tmpl
     - home/.chezmoiexternal.toml.tmpl
 ---
 
@@ -21,8 +20,12 @@ MCP-серверы (внешние инструменты, которые аге
 (заготовленные инструкции под конкретные задачи). Что именно он туда кладёт
 и как это устроено внутри — вопрос уже не этого репозитория, а самого
 `claudefiles`: отсюда видно только то, что этот репозиторий делает со своей
-стороны — подтягивает `claudefiles` на диск и вызывает его `setup.sh`,
-когда есть смысл. Дальше граница ответственности заканчивается.
+стороны — подтягивает `claudefiles` на диск и **напоминает** запустить его
+`setup.sh`, пока тот не прогнан для текущей ревизии. Сам запуск — руками:
+до 1 августа 2026 `setup.sh` вызывался автоматически из `chezmoi apply`
+(скрипт 84), но это длинный интерактивный прогон со своими вопросами и
+своими сетевыми шагами, и место ему не внутри применения конфигурации.
+Дальше граница ответственности заканчивается.
 
 ## Как это работает
 
@@ -33,15 +36,12 @@ flowchart TD
 
     EXT["home/.chezmoiexternal.toml.tmpl<br/>type = git-repo, refreshPeriod 168h, pull --ff-only"] --> CLONE["~/.local/share/claudefiles<br/>клон или git pull"]
 
-    CLONE --> S84["run_after_84-claudefiles.sh.tmpl"]
-    S84 --> CHECK{".git есть?"}
-    CHECK -- нет --> EXIT0["сообщение, exit 0"]
-    CHECK -- да --> HEAD["git rev-parse HEAD"]
-    HEAD --> AIC["apply_if_changed<br/>(хелпер из самого claudefiles)"]
-    AIC --> CMP{"HEAD совпадает с<br/>~/.config/claudefiles/last-applied-head?"}
-    CMP -- да --> NOOP["ничего не делает"]
-    CMP -- нет --> RUN["setup.sh, при необходимости --non-interactive"]
-    RUN --> SAVE["записывает новый HEAD в состояние"]
+    CLONE --> ZZ["run_after_zz-next-steps.sh.tmpl<br/>(чеклист в конце каждого apply)"]
+    ZZ --> CMP{"HEAD клона совпадает с<br/>~/.config/claudefiles/last-applied-head?"}
+    CMP -- да --> NOOP["строки в чеклисте нет"]
+    CMP -- нет --> NAG["строка: claudefiles setup is pending --<br/>run: ~/.local/share/claudefiles/setup.sh"]
+    NAG --> RUN["человек запускает setup.sh руками"]
+    RUN --> SAVE["setup.sh сам записывает свой HEAD<br/>в last-applied-head при успехе"]
 ```
 
 ### Пакеты: `home/.chezmoidata.yaml`
@@ -125,63 +125,39 @@ enter` и определяет, что внутри агент, по метке 
 ([how-it-works.md, раздел «Порядок применения»](how-it-works.md#порядок-применения);
 сам порядок — из официальной документации chezmoi, [Application
 order](https://www.chezmoi.io/reference/application-order/)). Это значит,
-что при обычном `chezmoi apply` к моменту запуска `run_after_84` внешний
-репозиторий должен быть уже на диске. Проверка `[[ ! -d "$CF/.git" ]]`
-внутри скрипта 84 (см. ниже) на этот обычный случай не рассчитана — из кода
-не видно ни одного пути, которым она срабатывает при штатном полном
-`chezmoi apply`; это защитный код на случай нештатного запуска (например,
-скрипт вызван не изнутри `chezmoi apply`, а вручную), а не задокументированный
-сценарий.
+что к моменту финального чеклиста внешний репозиторий уже на диске.
 
-### Скрипт 84: `apply_if_changed`
+### Запуск `setup.sh` — руками, по подсказке чеклиста
 
-`home/.chezmoiscripts/run_after_84-claudefiles.sh.tmpl` — не
-[`run_onchange`](glossary.md#run_onchange)-скрипт, а обычный `run_after_`, то
-есть выполняется на **каждом** `chezmoi apply`, если фича `claude` включена
-(проверка `{{- if not (has "claude" .enabled) }} exit 0 {{- else }}` в первых
-строках — тот же приём «уровень 1: скрипта нет вообще», разобранный в
-`docs/how-it-works.md`).
+`chezmoi apply` сам `setup.sh` **не запускает**. Вместо этого финальный
+чеклист (`run_after_zz-next-steps.sh.tmpl`, блок под `{{ if has "claude"
+.enabled }}`) на каждом применении сравнивает `HEAD` клона
+(`git -C ~/.local/share/claudefiles rev-parse HEAD`) с файлом состояния
+`~/.config/claudefiles/last-applied-head` и, пока они расходятся — включая
+случай, когда файла состояния ещё нет вовсе, то есть свежую машину или
+свежий контейнер, — печатает строку:
 
-Дальше, если каталог `~/.local/share/claudefiles/.git` не существует, скрипт
-печатает `claudefiles external not present yet, skipping.` и завершается
-(`exit 0`) — ничего не вызывает. Если каталог есть, скрипт:
-
-1. читает текущий `HEAD` командой `git -C "$CF" rev-parse HEAD`;
-2. подключает `lib/apply-if-changed.sh` — **это файл из самого
-   `claudefiles`**, не из этого репозитория: dotfiles лишь исполняет чужой
-   хелпер по известному пути внутри уже склонированного внешнего источника;
-3. вызывает `apply_if_changed "$head" run`, где `run()` — обёртка вокруг
-   `"$CF/setup.sh"`.
-
-`apply_if_changed` (файл `lib/apply-if-changed.sh` внутри `claudefiles`,
-функция `apply_if_changed`) хранит последний применённый `HEAD` в
-`${CLAUDEFILES_STATE_DIR:-$HOME/.config/claudefiles}/last-applied-head`.
-Если в этом файле уже лежит ровно тот же `HEAD`, что передан аргументом,
-функция возвращает `0` и ничего не делает. Иначе — а «иначе» включает и тот
-случай, когда файла состояния ещё нет вовсе, то есть самый первый запуск на
-чистой машине: проверка `[ -f "$state" ]` не проходит, и дальше идёт та же
-ветка, что при изменившемся `HEAD`, — вызывает переданный
-колбэк (`run`, то есть `setup.sh`) и только после того, как он отработал
-без ошибки, перезаписывает файл состояния новым `HEAD`. Другими словами:
-`setup.sh` перезапускается не при каждом `chezmoi apply`, а только когда
-`git pull` (или первичный `git clone`) внешнего репозитория реально сдвинул
-`HEAD` с прошлого раза, когда `setup.sh` успешно отработал.
-
-### `--non-interactive`
-
-```bash
-run() { "$CF/setup.sh"{{ if not stdinIsATTY }} --non-interactive{{ end }}; }
+```
+Claude: claudefiles setup is pending -- run: ~/.local/share/claudefiles/setup.sh
 ```
 
-`stdinIsATTY` — встроенная функция шаблонов chezmoi, а не что-то из этого
-репозитория; она проверяет, есть ли терминал на стандартном вводе **в
-момент, когда chezmoi рендерит этот скрипт**. Поскольку скрипт без
-`onchange` перерисовывается и тут же исполняется на каждом `chezmoi apply` в
-рамках одного и того же процесса, это фактически проверка того, был ли у
-самого запуска `chezmoi apply` терминал на stdin: интерактивный запуск
-руками — TTY есть, флаг не добавляется; запуск без TTY (например, через
-`chezmoi apply` из скрипта, cron, CI) — флаг `--non-interactive`
-подставляется в текст рендеринга самого скрипта.
+Файл состояния пишет **сам `setup.sh`** в конце успешного прогона (код
+`claudefiles`, конец `setup.sh`: `printf '%s' "$_applied_head" >
+"$_state/last-applied-head"`, за гейтом «ни один профиль не упал»). Поэтому
+строка исчезает из чеклиста после первого же удачного ручного запуска и
+появляется снова, когда еженедельный `git pull` внешнего источника сдвинул
+`HEAD` — то есть подсказка не ноет постоянно, а появляется ровно тогда, когда
+есть что применять.
+
+До 1 августа 2026 это работало иначе: скрипт
+`run_after_84-claudefiles.sh.tmpl` вызывал `setup.sh` автоматически на каждом
+`apply` через хелпер `apply_if_changed` из самого `claudefiles`. Убрано по
+прямому решению владельца: `setup.sh` — длинный интерактивный прогон со
+своими вопросами (флаги, токены, пути), своими сетевыми шагами и своими
+способами сломаться, и внутри `chezmoi apply` он превращал применение
+конфигурации в заложника чужого установщика. Хелпер `apply_if_changed` в
+`claudefiles` остался (им могут пользоваться машины со старой версией
+dotfiles), но этот репозиторий его больше не вызывает.
 
 ### Где кончается граница с секретами
 
@@ -221,8 +197,9 @@ rbw is not configured`, а не на «command not found». Агент **на х
 | Пакет `@anthropic-ai/claude-code` | `~/.npm-global` (команда `claude` на PATH) | `run_onchange_before_20-packages.sh.tmpl` | фича `claude`, `scope: both` |
 | Пакет `@openai/codex` | `~/.npm-global` (команда `codex` на PATH) | `run_onchange_before_20-packages.sh.tmpl` | фича `codex`, `scope: both` |
 | Клон/обновление `claudefiles` | `~/.local/share/claudefiles` | `home/.chezmoiexternal.toml.tmpl`, внешний источник `git-repo` | фича `claude` |
-| Файл состояния | `~/.config/claudefiles/last-applied-head` | `apply_if_changed` (код `claudefiles`, не этого репозитория) | после каждого успешного `setup.sh` |
-| Всё, что кладёт `setup.sh` (`~/.claude`, возможно `~/.claude-super`, MCP, плагины, скиллы) | вне этого репозитория | `claudefiles/setup.sh` | не покрывается этим документом — граница ответственности другого репозитория |
+| Строка «claudefiles setup is pending» в чеклисте | вывод `chezmoi apply` | `run_after_zz-next-steps.sh.tmpl` | фича `claude`, пока `HEAD` клона не совпал с `last-applied-head` |
+| Файл состояния | `~/.config/claudefiles/last-applied-head` | сам `setup.sh` (код `claudefiles`, не этого репозитория) | в конце успешного ручного прогона |
+| Всё, что кладёт `setup.sh` (`~/.claude`, возможно `~/.claude-super`, MCP, плагины, скиллы) | вне этого репозитория | `claudefiles/setup.sh`, запускается руками | не покрывается этим документом — граница ответственности другого репозитория |
 
 ## Как проверить
 
@@ -237,13 +214,11 @@ git -C ~/.local/share/claudefiles rev-parse HEAD
 cat ~/.config/claudefiles/last-applied-head
 ```
 Ожидаемо: два значения совпадают, если `setup.sh` в последний раз отработал
-без ошибки и после этого `claudefiles` не обновлялся заново.
-
-```bash
-chezmoi execute-template < home/.chezmoiscripts/run_after_84-claudefiles.sh.tmpl
-```
-Ожидаемо: при включённой фиче `claude` виден вызов `apply_if_changed`; при
-выключенной — только `exit 0` (см. `docs/how-it-works.md`, «уровень 1»).
+без ошибки и после этого `claudefiles` не обновлялся заново. Расходятся —
+чеклист в конце `chezmoi apply` печатает строку «claudefiles setup is
+pending» с командой запуска; проверить это, ничего не применяя, можно
+рендером чеклиста: `chezmoi execute-template <
+home/.chezmoiscripts/run_after_zz-next-steps.sh.tmpl | grep -A3 claudefiles`.
 
 ## Когда сломалось
 
@@ -251,8 +226,8 @@ chezmoi execute-template < home/.chezmoiscripts/run_after_84-claudefiles.sh.tmpl
 |---|---|---|
 | `claude`/`codex`: команда не найдена | Фича не включена в `.enabled`, либо `~/.npm-global/bin` не в `PATH` | `chezmoi data \| jq '.enabled'`, проверить фичу; `echo $PATH` |
 | `~/.local/share/claudefiles` пуст или отсутствует, хотя `claude` включена | Внешний источник ещё не применялся (например, ждёт первого полного `chezmoi apply` после включения фичи) | `chezmoi apply` (полностью, не по одному файлу) |
-| `setup.sh` не перезапускается, хотя в `claudefiles` вышли новые коммиты | `git pull` внутри chezmoi ограничен `refreshPeriod = "168h"` — обновление раз в неделю, а не при каждом `apply` | подождать окно обновления, либо `chezmoi apply --refresh-externals` (форсирует обновление внешних источников, минуя `refreshPeriod`) |
-| `run_after_84` печатает `claudefiles external not present yet, skipping.` | Каталог `.git` внутри `~/.local/share/claudefiles` не существует в момент запуска скрипта — на штатном `chezmoi apply` (полном) так быть не должно | Полный `chezmoi apply`; если повторяется — смотреть, не запускается ли скрипт 84 вне `chezmoi apply` |
+| В `claudefiles` вышли новые коммиты, а чеклист не предлагает setup | `git pull` внутри chezmoi ограничен `refreshPeriod = "168h"` — обновление раз в неделю, а не при каждом `apply`; пока клон не обновился, HEAD совпадает с маркером | подождать окно обновления, либо `chezmoi apply --refresh-externals` (форсирует обновление внешних источников, минуя `refreshPeriod`) |
+| Строка «claudefiles setup is pending» не исчезает после прогона `setup.sh` | `setup.sh` завершился с ошибкой (маркер пишется только за гейтом «ни один профиль не упал»), либо это старый `setup.sh` без записи маркера | Прочитать вывод `setup.sh`, починить причину и прогнать снова; если клон старый — `chezmoi apply --refresh-externals` |
 | `git pull` внешнего источника падает с ошибкой перемотки | `claudefiles` на GitHub переписал историю (force-push) — `--ff-only` не даёт молча слить несовместимое | Разобраться, что произошло в `claudefiles` (это уже её история, не этого репозитория); при необходимости удалить и заново склонировать `~/.local/share/claudefiles` |
 
 ## Почему именно так
@@ -273,13 +248,19 @@ chezmoi execute-template < home/.chezmoiscripts/run_after_84-claudefiles.sh.tmpl
 внешнего источника чаще, чем раз в `refreshPeriod`, начальный `git clone` при
 этом не ограничен ничем и происходит всегда, когда каталога ещё нет.
 
-**Почему проверка HEAD, а не просто «`claudefiles` есть — вызвать
+**Почему проверка HEAD, а не просто «`claudefiles` есть — напомнить про
 `setup.sh`».** `setup.sh` — не бесплатная операция (спрашивает, что-то
-докатывает), гонять его на каждом `chezmoi apply` только потому, что фича
-`claude` включена, было бы избыточно в подавляющем большинстве запусков,
-когда в `claudefiles` со времени прошлого раза ничего не изменилось.
-`apply_if_changed` решает именно это: колбэк вызывается только тогда, когда
-есть основание — HEAD сдвинулся.
+докатывает), и напоминание о нём на каждом `chezmoi apply` только потому,
+что фича `claude` включена, приучило бы игнорировать чеклист. Сравнение
+`HEAD` клона с маркером даёт строке появляться ровно тогда, когда есть
+основание: клон реально сдвинулся с той ревизии, которую `setup.sh` в
+последний раз успешно применил.
+
+**Почему `setup.sh` не запускается из `apply` автоматически.** Так было до
+1 августа 2026, и разобрано выше в «Запуск `setup.sh` — руками, по подсказке
+чеклиста»: интерактивному установщику с собственными вопросами и сетевыми
+шагами не место внутри применения конфигурации — его отказ или зависание
+превращали весь `chezmoi apply` в заложника.
 
 ## Ссылки
 

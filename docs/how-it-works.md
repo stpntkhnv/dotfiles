@@ -278,9 +278,8 @@ flowchart TD
         A81["81 vscode-extensions"]
         A82["82 ssh-key"]
         A83["83 origin-ssh"]
-        A84["84 claudefiles"]
         AZZ["zz next-steps<br/>чеклист что осталось руками"]
-        A33 --> A34 --> A35a --> A37 --> A38 --> A39 --> A40a --> A41 --> A43 --> A44 --> A45 --> A46 --> A80 --> A81 --> A82 --> A83 --> A84 --> AZZ
+        A33 --> A34 --> A35a --> A37 --> A38 --> A39 --> A40a --> A41 --> A43 --> A44 --> A45 --> A46 --> A80 --> A81 --> A82 --> A83 --> AZZ
     end
 
     BEFORE --> FILES --> AFTER
@@ -305,15 +304,15 @@ flowchart TD
 
 ### Два вида скриптов
 
-В `home/.chezmoiscripts/` двадцать восемь файлов, и делятся они по признаку
+В `home/.chezmoiscripts/` двадцать семь файлов, и делятся они по признаку
 `once`/`onchange` в имени на два вида, а не по этапу `before`/`after`.
 
 | Вид | Когда выполняется тело скрипта | Сколько сейчас |
 |---|---|---|
 | `run_onchange_before_*` / `run_onchange_after_*` | Только когда изменился текст самого скрипта после подстановки переменных шаблона | 19 |
-| `run_before_*` / `run_after_*` без `onchange` | На каждом `chezmoi apply`, безусловно | 9 |
+| `run_before_*` / `run_after_*` без `onchange` | На каждом `chezmoi apply`, безусловно | 8 |
 
-(посчитано по `ls home/.chezmoiscripts` — 19 файлов с `onchange` в имени, 9
+(посчитано по `ls home/.chezmoiscripts` — 19 файлов с `onchange` в имени, 8
 без него; в этом репозитории `run_before_*` без `onchange` не встречается,
 только `run_after_*`).
 
@@ -322,7 +321,7 @@ flowchart TD
 `run_after_43-zen-session.sh.tmpl`, `run_after_44-handy-settings.sh.tmpl`,
 `run_after_45-greeter.sh.tmpl`, `run_after_46-syncthing.sh.tmpl`,
 `run_after_80-niri-dms-placeholders.sh.tmpl`,
-`run_after_84-claudefiles.sh.tmpl`, `run_after_zz-next-steps.sh.tmpl`.
+`run_after_zz-next-steps.sh.tmpl`.
 
 Зачем нужен второй вид, если первый и так покрывает почти всё: `onchange`
 следит за **текстом скрипта**, а не за состоянием машины. Если настройку
@@ -449,12 +448,13 @@ flowchart TD
 выключенный скрипт в файл из двух строк, а не в «скрипт с проверкой внутри»:
 
 ```
-{{- if not (has "claude" .enabled) }}
+{{- if not (has "vscode" .enabled) }}
 exit 0
 {{- else }}
 ```
 
-(`home/.chezmoiscripts/run_after_84-claudefiles.sh.tmpl`, первые строки).
+(`home/.chezmoiscripts/run_onchange_after_81-vscode-extensions.sh.tmpl`,
+первые строки).
 
 **Уровень 2: проверка окружения.** Тот же приём, но по `.env`:
 `{{- if ne .env "host" }}` (`run_onchange_after_34-wsproxy-host.sh.tmpl`) и
@@ -622,11 +622,11 @@ $ grep -c '^  - key:' home/.chezmoidata.yaml
 
 ```sh
 $ ls home/.chezmoiscripts | wc -l
-28
+27
 $ ls home/.chezmoiscripts | grep -c onchange
 19
 $ ls home/.chezmoiscripts | grep -vc onchange
-9
+8
 ```
 
 Превью того, что реально попадёт в пакетный менеджер, без применения:
@@ -706,7 +706,7 @@ chezmoi init --promptMultichoice enabled=neovim,node,claude
 
 **Почему нет отдельного `during`-скрипта в этом репозитории.** chezmoi
 поддерживает и такой (без `before_`/`after_` в имени — выполняется в
-процессе раскладки файлов), но ни один из 28 скриптов им не пользуется:
+процессе раскладки файлов), но ни один из 27 скриптов им не пользуется:
 каждый либо ставит пакеты и правит систему до раскладки, либо донастраивает
 уже разложенное после. Середины, где нужно было бы прервать саму раскладку
 файлов, здесь просто не возникло.
