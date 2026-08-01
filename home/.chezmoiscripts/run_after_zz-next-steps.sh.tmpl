@@ -172,13 +172,36 @@ else
     # WHOLE checklist down -- not just the Syncthing lines, but GitHub, Tailscale
     # and everything else in it.
     st_myid="$(st_api /rest/system/status | jq -r '.myID // empty' || true)"
-    # Quoted heredocs rather than single-quoted assignments: an apostrophe in a
+    # Same runtime device map as script 46; here every abnormal state becomes a
+    # checklist line rather than a say(), because this file IS the checklist.
+    # /usr/bin/yq by full path for the same reason as there: a python yq earlier
+    # in PATH takes different flags.
+    st_devmap="$HOME/.config/syncthing-devices.yaml"
+    st_devices='{}'
+    if [[ ! -f "$st_devmap" ]]; then
+        :   # the map-absence step below speaks, with a paste-ready skeleton
+    elif [[ ! -x /usr/bin/yq ]]; then
+        steps+=("Syncthing: go-yq is not installed, the device map cannot be read -- 'chezmoi apply' should install it")
+    else
+        st_devices="$(/usr/bin/yq -o=json '.' "$st_devmap" 2>/dev/null || true)"
+        if [[ -z "$st_devices" ]] || ! jq -e 'type == "object"' <<<"$st_devices" >/dev/null 2>&1; then
+            steps+=("Syncthing: device map exists but did not parse -- fix $st_devmap")
+            st_devices='{}'
+        else
+            # Same sanitising as script 46, for the same reason: one malformed
+            # entry must not break self-matching and make this checklist claim
+            # the machine is not in the map at all.
+            while IFS= read -r st_bad; do
+                [[ -n "$st_bad" ]] || continue
+                steps+=("Syncthing: device map entry '$st_bad' is malformed (needs id and addresses) -- fix $st_devmap")
+            done < <(jq -rn --argjson d "$st_devices" \
+                '$d | to_entries[] | select(((.value | type) != "object") or ((.value.id? | type) != "string") or ((.value.addresses? | type) != "array")) | .key')
+            st_devices="$(jq -c 'with_entries(select(((.value | type) == "object") and ((.value.id? | type) == "string") and ((.value.addresses? | type) == "array")))' <<<"$st_devices")"
+        fi
+    fi
+    # Quoted heredoc rather than a single-quoted assignment: an apostrophe in a
     # folder label would otherwise end the string early and take this whole file
     # down, checklist included.
-    st_devices="$(cat <<'SYNCTHING_DEVICES_EOF'
-{{ if hasKey .syncthing "devices" }}{{ .syncthing.devices | toJson }}{{ else }}{}{{ end }}
-SYNCTHING_DEVICES_EOF
-)"
     st_catalog="$(cat <<'SYNCTHING_CATALOG_EOF'
 {{ .syncthing.folders | toJson }}
 SYNCTHING_CATALOG_EOF
@@ -187,7 +210,7 @@ SYNCTHING_CATALOG_EOF
         '[$d | to_entries[] | select(.value.id == $id) | .key] | first // empty' 2>/dev/null || true)"
 
     if [[ -n "$st_myid" && -z "$st_self" ]]; then
-        steps+=("Syncthing: this machine is not in the device map -- add to ~/.config/chezmoi/chezmoi.toml under [data.syncthing.devices]: thismachine = { id = \"$st_myid\", addresses = [\"dynamic\", \"tcp://<name>.<tailnet>.ts.net:22000\"] }, then add the same line on every other machine and run 'chezmoi apply' there too")
+        steps+=("Syncthing: this machine is not in the device map -- create ~/.config/syncthing-devices.yaml with:  <name>:  id: \"$st_myid\"  addresses: [\"dynamic\", \"tcp://<host>.<tailnet>.ts.net:22000\"]  -- where <name> is one of the catalogue device names (desktop | laptop | phone; a made-up name silently gets no folders); then 'chezmoi apply' here and add the same entry on every other machine")
     fi
 
     # Pairing is mutual, so a device named in the catalogue but absent from the
@@ -252,7 +275,7 @@ SYNCTHING_CATALOG_EOF
         # a check that only looked at the scheme.
         if [[ "$(jq -rn --argjson d "$st_devices" --arg n "$st_name" \
                  '[$d[$n].addresses[]? | select(startswith("tcp://")) | select(test("[<>]") | not)] | length')" == "0" ]]; then
-            steps+=("Syncthing: device '$st_name' has no usable static address -- put \"tcp://<name>.<tailnet>.ts.net:22000\" beside \"dynamic\" in ~/.config/chezmoi/chezmoi.toml with the real tailnet name from 'tailscale status', or the device is only reachable on the local network")
+            steps+=("Syncthing: device '$st_name' has no usable static address -- put \"tcp://<name>.<tailnet>.ts.net:22000\" beside \"dynamic\" in ~/.config/syncthing-devices.yaml with the real tailnet name from 'tailscale status', or the device is only reachable on the local network")
         fi
     done < <(jq -rn --argjson d "$st_devices" '$d | keys[]')
 

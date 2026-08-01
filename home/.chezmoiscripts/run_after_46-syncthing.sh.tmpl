@@ -87,10 +87,31 @@ CATALOG="$(cat <<'SYNCTHING_CATALOG_EOF'
 {{ .syncthing.folders | toJson }}
 SYNCTHING_CATALOG_EOF
 )"
-DEVICES="$(cat <<'SYNCTHING_DEVICES_EOF'
-{{ if hasKey .syncthing "devices" }}{{ .syncthing.devices | toJson }}{{ else }}{}{{ end }}
-SYNCTHING_DEVICES_EOF
-)"
+# The device map is runtime data, not template data: device IDs are stable
+# identifiers of real machines, the repository is public, and the map lives in
+# a hand-edited per-machine file. /usr/bin/yq by full path on purpose: a
+# python yq (kislyuk) earlier in PATH takes different flags and would fail in
+# confusing ways inside a script that must never fail the apply.
+DEV_MAP="$HOME/.config/syncthing-devices.yaml"
+[[ -f "$DEV_MAP" ]] || bail "no device map at $DEV_MAP; this machine's ID is $myid"
+[[ -x /usr/bin/yq ]] || bail "go-yq is not installed, cannot read the device map"
+DEVICES="$(/usr/bin/yq -o=json '.' "$DEV_MAP" 2>/dev/null || true)"
+if [[ -z "$DEVICES" ]] || ! jq -e 'type == "object"' <<<"$DEVICES" >/dev/null 2>&1; then
+    bail "device map exists but did not parse: $DEV_MAP"
+fi
+
+# Entries of the wrong shape or with a missing field are dropped HERE, once,
+# with a line each -- so that self-matching, the device loop and folder
+# membership below all see the same, valid map. Dropping inside the device
+# loop alone is not enough: a half-valid entry would still be counted as a
+# folder member and every folder would look drifted, with a failing PATCH for
+# a device the daemon was never told about.
+while IFS= read -r bad; do
+    [[ -n "$bad" ]] || continue
+    say "device $bad: entry is missing id or addresses, skipping"
+done < <(jq -rn --argjson d "$DEVICES" \
+    '$d | to_entries[] | select(((.value | type) != "object") or ((.value.id? | type) != "string") or ((.value.addresses? | type) != "array")) | .key')
+DEVICES="$(jq -c 'with_entries(select(((.value | type) == "object") and ((.value.id? | type) == "string") and ((.value.addresses? | type) == "array")))' <<<"$DEVICES")"
 
 # Which machine am I? Answered by matching my own device ID against the map
 # rather than by a name written somewhere. A name would have to be remembered
@@ -100,7 +121,7 @@ SELF="$(jq -rn --argjson d "$DEVICES" --arg id "$myid" \
     '[$d | to_entries[] | select(.value.id == $id) | .key] | first // empty' || true)"
 
 if [[ -z "$SELF" ]]; then
-    say "this machine is not in [data.syncthing.devices] yet; its ID is $myid"
+    say "this machine is not in $DEV_MAP yet; its ID is $myid"
     exit 0
 fi
 
@@ -117,10 +138,8 @@ known_devices="$(api "$BASE/rest/config/devices" | jq -r '.[].deviceID')" \
 
 while IFS= read -r name; do
     [[ -n "$name" ]] || continue
-    # A hand-written map entry of the wrong shape -- `laptop = "ID"` instead of
-    # `laptop = { id = "ID" }` -- makes jq exit non-zero here. That edit is what
-    # the README asks the user to make on every machine, so it is a likely
-    # mistake, and it must cost that one device rather than the whole apply.
+    # The map was sanitised right after loading, so both reads are on a valid
+    # entry; `|| continue` stays as a belt against the impossible.
     dev_id="$(jq -rn --argjson d "$DEVICES" --arg n "$name" '$d[$n].id')" || continue
     dev_addrs="$(jq -cn --argjson d "$DEVICES" --arg n "$name" '$d[$n].addresses')" || continue
 

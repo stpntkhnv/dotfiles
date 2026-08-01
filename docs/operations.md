@@ -119,7 +119,8 @@ flowchart TD
 | `zen` | Обработчик `x-scheme-handler/https` — Junction | Если не Junction, но пакет `junction` есть — скрипт сам, без вопроса, выполняет `xdg-mime default $junction_id x-scheme-handler/http x-scheme-handler/https` (единственная строка во всём файле, которая что-то меняет, а не только читает — см. вступление раздела «Что ставится и что меняется» ниже) и печатает «Link handler reclaimed from the browser: $junction_id»; если пакета `junction` нет — «Links: Junction is not the default https handler and the package is missing» ([isolation-links.md](isolation-links.md)) |
 | `syncthing` | Конфиг демона существует (`syncthing paths`) | «Syncthing: no configuration yet -- run 'chezmoi apply' once the service has started» |
 | `syncthing` | `syncthing.service` активен | «Syncthing: the user service is not running -- 'systemctl --user enable --now syncthing.service'» |
-| `syncthing` | Эта машина есть в `[data.syncthing.devices]` | Полный текст, с готовым фрагментом TOML — сноска (†) под таблицей |
+| `syncthing` | Эта машина есть в карте устройств `~/.config/syncthing-devices.yaml` | Полный текст, с готовым скелетом записи — сноска (†) под таблицей |
+| `syncthing` | Карта устройств читаема: `go-yq` установлен, файл парсится | «Syncthing: go-yq is not installed, the device map cannot be read -- 'chezmoi apply' should install it» либо «Syncthing: device map exists but did not parse -- fix ~/.config/syncthing-devices.yaml» |
 | `syncthing` | Каждое устройство из каталога папок имеет ID в карте | «Syncthing: device '…' is named in the catalogue but has no ID in the map -- run 'chezmoi apply' on it and copy the ID it prints» |
 | `syncthing` | Каждая папка, где участвует эта машина, реально настроена в демоне | «Syncthing: folder '…' is not configured -- run 'chezmoi apply'» |
 | `syncthing` | Каждое чужое устройство хоть раз было на связи (`lastSeen`) | «Syncthing: device '…' has never been seen -- it has to add this machine's ID too (paired from one side only)» |
@@ -129,15 +130,16 @@ flowchart TD
 | `syncthing` | Путь хранилища `kb` совпадает с тем, что видит `claudefiles` (`~/.config/claudefiles/secrets.json`) | «Syncthing: claudefiles syncs the vault at … but the catalogue syncs … -- make them the same» |
 | — (все включённые контексты) | Сокет `~/.local/share/wsproxy/<контекст>/socks.sock` существует, по одному на каждую запись `contexts:` | «Proxy <контекст>: no socket -- start the container ('distrobox enter <контекст> -- true') and check wsproxy-bridge.service inside it» ([isolation-network.md](isolation-network.md)) |
 
-(†) «Syncthing: this machine is not in the device map -- add to
-~/.config/chezmoi/chezmoi.toml under [data.syncthing.devices]: thismachine =
-{ id = "<ID>", addresses = ["dynamic", "tcp://<name>.<tailnet>.ts.net:22000"] },
-then add the same line on every other machine and run 'chezmoi apply' there
-too»
+(†) «Syncthing: this machine is not in the device map -- create
+~/.config/syncthing-devices.yaml with:  <name>:  id: "<ID>"  addresses:
+["dynamic", "tcp://<host>.<tailnet>.ts.net:22000"]  -- where <name> is one
+of the catalogue device names (desktop | laptop | phone; a made-up name
+silently gets no folders); then 'chezmoi apply' here and add the same entry
+on every other machine»
 
 (‡) «Syncthing: device '…' has no usable static address -- put
 "tcp://<name>.<tailnet>.ts.net:22000" beside "dynamic" in
-~/.config/chezmoi/chezmoi.toml with the real tailnet name from 'tailscale
+~/.config/syncthing-devices.yaml with the real tailnet name from 'tailscale
 status', or the device is only reachable on the local network»
 
 Полное объяснение причин каждой из строк про Zen — в

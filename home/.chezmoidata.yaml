@@ -697,6 +697,10 @@ features:
     default: true
     pacman:
       - curl
+      # go-yq reads ~/.config/syncthing-devices.yaml at apply time: the device
+      # map is per-machine runtime data, not template data. Full-path /usr/bin/yq
+      # in the scripts, so a stray python yq in PATH cannot shadow it.
+      - go-yq
       - syncthing
 
   - key: obsidian
