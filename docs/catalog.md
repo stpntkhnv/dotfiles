@@ -27,7 +27,7 @@
 | `docker` | Docker + lazydocker | host | по выбору | 4 | [dev-tools.md](dev-tools.md) |
 | `greeter` | Login screen: DMS greeter on greetd | host | галочка стоит | 2 | [greeter.md](greeter.md) |
 | `go` | Go | both | по выбору | 1 | [dev-tools.md](dev-tools.md) |
-| `dotnet` | .NET SDK + ASP.NET, freetds, devtunnel | both | галочка стоит | 8 | [dev-tools.md](dev-tools.md) |
+| `dotnet` | .NET SDK + ASP.NET, freetds | both | галочка стоит | 7 | [dev-tools.md](dev-tools.md) |
 | `rider` | JetBrains Rider | both | галочка стоит | 1 | [dev-tools.md](dev-tools.md) |
 | `db-tools` | DB clients: DBeaver (GUI), lazysql, usql, sqlcmd (TUI) | both | галочка стоит | 4 | [dev-tools.md](dev-tools.md) |
 | `api-tools` | API clients: Bruno (GUI), posting (TUI) | both | галочка стоит | 2 | [dev-tools.md](dev-tools.md) |

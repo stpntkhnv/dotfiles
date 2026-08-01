@@ -554,7 +554,7 @@ features:
       - go
 
   - key: dotnet
-    label: ".NET SDK + ASP.NET, freetds, devtunnel"
+    label: ".NET SDK + ASP.NET, freetds"
     scope: both
     default: true
     pacman:
@@ -562,10 +562,6 @@ features:
       - aspnet-targeting-pack
       - dotnet-sdk
       - freetds
-    aur:
-      # Not `devtunnel`: no such package in the AUR any more, which is what the
-      # old install script tripped over.
-      - devtunnel-cli-bin
     dotnet:
       - dotnet-ef
       - csharpier

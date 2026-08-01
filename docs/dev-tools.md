@@ -127,7 +127,7 @@ curl -fsSL https://aka.ms/install-azd.sh | bash
 | `vscode` | AUR: `visual-studio-code-bin` | `.config/Code/User/settings.json`, `.config/Code/User/keybindings.json`, `.config/Code/User/extensions.txt`, `.config/code-flags.conf` | `81-vscode-extensions` |
 | `node` | `nodejs` `npm` | `.npmrc` | — (guard внутри `20-packages`) |
 | `go` | `go` | нет | — |
-| `dotnet` | `aspnet-runtime` `aspnet-targeting-pack` `dotnet-sdk` `freetds` + AUR `devtunnel-cli-bin`; dotnet tool: `dotnet-ef` `csharpier` `dotnet-outdated-tool` | нет своих (`~/.dotnet/tools` в PATH через `.bashrc`, тема [base.md](base.md)) | — |
+| `dotnet` | `aspnet-runtime` `aspnet-targeting-pack` `dotnet-sdk` `freetds`; dotnet tool: `dotnet-ef` `csharpier` `dotnet-outdated-tool` | нет своих (`~/.dotnet/tools` в PATH через `.bashrc`, тема [base.md](base.md)) | — |
 | `rider` | AUR: `rider` (`needs: [dotnet]`) | нет | — |
 | `db-tools` | `dbeaver` + AUR `go-sqlcmd` `lazysql-bin` `usql-bin` | нет | — |
 | `api-tools` | AUR: `bruno-bin` `posting` | нет | — |
@@ -243,7 +243,7 @@ set prefix` трогается только тогда, когда `npm config g
 выполнялся безусловно) переписывал бы его на абсолютный путь — вечная
 рассинхронизация между тем, что пишет chezmoi, и тем, что пишет npm.
 
-## .NET: `tool update`, а не `install`, и `devtunnel-cli-bin`
+## .NET: `tool update`, а не `install`
 
 Три глобальных инструмента (`dotnet-ef`, `csharpier`,
 `dotnet-outdated-tool`) ставятся строкой `dotnet tool update -g
@@ -254,8 +254,10 @@ set prefix` трогается только тогда, когда `npm config g
 `run_onchange_before_20-packages.sh.tmpl`, блок `---- dotnet tools
 ----`).
 
-AUR-пакет для devtunnel называется `devtunnel-cli-bin`, не `devtunnel` —
-разобрано как отдельный обход ниже.
+Туннели наружу — не забота этой фичи: раньше вместе с ней ставился
+`devtunnel-cli-bin` (Microsoft Dev Tunnels CLI из AUR), но он выпилен
+2026-08-01 — сборка из AUR регулярно падала, а ту же задачу закрывает
+уже стоящий Tailscale (фича `tailscale`, [network.md](network.md)).
 
 ## Rider, db-tools, api-tools
 
@@ -385,9 +387,8 @@ chezmoi data | jq -r '.enabled[]' | grep -E '^(neovim|vscode|node|go|dotnet|ride
 пишет в `/usr`, которым владеет root. Разница видна в самом скрипте 20:
 только у вызовов пакетного менеджера есть `sudo` перед командой.
 
-**Почему `azd` и `devtunnel` идут в обход обычных путей установки Arch —
-разобрано ниже, отдельными строками реестра
-[docs/workarounds.md](workarounds.md).**
+**Почему `azd` идёт в обход обычных путей установки Arch — разобрано
+ниже, отдельной строкой реестра [docs/workarounds.md](workarounds.md).**
 
 ## Ссылки
 
@@ -396,8 +397,7 @@ chezmoi data | jq -r '.enabled[]' | grep -E '^(neovim|vscode|node|go|dotnet|ride
   `run_onchange_` и `run_after_`.
 - [base.md](base.md) — `~/.npm-global/bin` и `~/.dotnet/tools` в `PATH`
   через `~/.bashrc`.
-- [docs/workarounds.md](workarounds.md) — обходы `npm config set`,
-  `devtunnel-cli-bin`, `azd`.
+- [docs/workarounds.md](workarounds.md) — обходы `npm config set`, `azd`.
 - ArchWiki, статья «Visual Studio Code», раздел «Launch configuration» —
   <https://wiki.archlinux.org/title/Visual_Studio_Code#Launch_configuration>,
   таблица путей `code-flags.conf` по пакетам.
@@ -405,7 +405,6 @@ chezmoi data | jq -r '.enabled[]' | grep -E '^(neovim|vscode|node|go|dotnet|ride
   цель записи по умолчанию — пользовательский конфиг.
 - `npm/npm#7771`, «`npm config set` always modifies ~/.npmrc» —
   <https://github.com/npm/npm/issues/7771>.
-- AUR, `devtunnel-cli-bin` — <https://aur.archlinux.org/packages/devtunnel-cli-bin>.
 - Microsoft Learn, «Install or update the Azure Developer CLI» —
   <https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd>,
   скрипт `curl -fsSL https://aka.ms/install-azd.sh | bash` как
