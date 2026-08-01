@@ -174,9 +174,10 @@ contexts:
 # 41), поэтому он не совпадёт с ними, сколько бы работ ни завелось.
 #
 # В папку закладок home приезжает общий список `bookmarks:` плюс то, что ниже.
-# А вот плитки-Essentials собираются ТОЛЬКО из списка ниже -- по прямому
-# решению владельца: в плитках home один YouTube, почта и календарь живут в
-# папке на панели.
+# А вот плитки-Essentials собираются ТОЛЬКО из списка ниже. Gmail поэтому
+# встречается и там и там намеренно: из общего списка он попадает в папку, а
+# строка ниже делает из него ещё и плитку; политика закладок сверяет по адресу,
+# так что дубля на панели не будет.
 plain_context:
   name: home
   icon: chill
@@ -184,6 +185,14 @@ plain_context:
   bookmarks:
     - title: YouTube
       url: https://www.youtube.com
+    - title: Claude
+      url: https://claude.ai/new
+    - title: Gmail
+      url: https://mail.google.com
+    - title: DeepL
+      url: https://www.deepl.com/translator
+    - title: Bitwarden
+      url: https://vault.bitwarden.com
 
 # What Syncthing keeps in step between machines. One entry is one Syncthing
 # folder; `id` is what has to be typed identically on the phone, so it is
