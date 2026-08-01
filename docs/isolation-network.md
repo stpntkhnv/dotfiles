@@ -53,6 +53,9 @@ VPN, если он есть.
   под защитой `command -v`): фича `container-base` поставила бы их только
   на шаге 20, слишком поздно для моста на шаге 15. До 1 августа 2026 скрипт
   был `after`-36 — мост поднимался последним, после всей установки пакетов.
+  Кроме юнитов скрипт пишет `/etc/gai.conf` c единственной строкой
+  `precedence ::ffff:0:0/96 100` — «резолвить имена в IPv4-адреса раньше
+  IPv6»; зачем это мосту — в шаге 5 раздела «Путь запроса» ниже.
 
 Третий скрипт держит мосты живыми между правками:
 `run_after_35-bridges-up.sh.tmpl`, только хост, без `onchange` — то есть на
@@ -170,6 +173,13 @@ sequenceDiagram
    расширением на стороне браузера — [isolation-browser.md](isolation-browser.md))
    и открывает исходящее TCP-соединение уже из [netns](glossary.md#network-namespace)
    контейнера — его маршруты, его DNS, его VPN, если есть ([killswitch.md](killswitch.md)).
+   Резолв здесь настроен отдавать IPv4-адрес первым: `/etc/gai.conf`
+   (`precedence ::ffff:0:0/96 100`, пишет тот же скрипт 15). Без этого имя
+   `localhost` резолвится в `::1` раньше `127.0.0.1`, а `microsocks` пробует
+   только первый адрес из списка, без отката на второй — и OAuth-callback
+   CLI-инструментов (`claude`, `codex` слушают только `127.0.0.1:<порт>`)
+   умирал с «Unable to connect» ровно на последнем шаге логина. Подробности —
+   в [реестре обходов](workarounds.md).
 
 `wsproxy-bridge.service` требует `wsproxy-socks.service` (`Requires=`, `After=`
 в `run_onchange_before_15-wsproxy-container.sh.tmpl`, юнит `wsproxy-bridge.service`) — мост не поднимется
@@ -247,6 +257,7 @@ UID `1000`, и `open()` файла с `mode=600`, принадлежащего �
 | Юнит пользователя | `~/.config/systemd/user/wsproxy-<контекст>.service` | Хост | `run_onchange_after_34-wsproxy-host.sh.tmpl` |
 | Системный юнит | `/etc/systemd/system/wsproxy-socks.service` | Контейнер | `run_onchange_before_15-wsproxy-container.sh.tmpl` |
 | Системный юнит | `/etc/systemd/system/wsproxy-bridge.service` | Контейнер | `run_onchange_before_15-wsproxy-container.sh.tmpl` |
+| Порядок резолва | `/etc/gai.conf` (IPv4 раньше IPv6) | Контейнер | `run_onchange_before_15-wsproxy-container.sh.tmpl` |
 | Список контекстов и портов | `contexts:` в `home/.chezmoidata.yaml` | Хост, источник данных | Правится руками |
 
 Пакеты `socat` (хост и контейнер) и `microsocks` (контейнер) отдельно не
@@ -366,6 +377,7 @@ root контейнера — убить его снаружи от обычно
 | После `chezmoi apply` мост для контекста не поднялся, но команда завершилась без ошибки | Контейнер собран до появления тома `/var/lib/wsproxy` в `distrobox.ini.tmpl`: скрипт 15 печатает `!! /var/lib/wsproxy is not mounted...` и выходит кодом `0`, ничего не устанавливая — `run_onchange` не считает это сбоем | Пересобрать контейнер: `distrobox rm <контекст> && distrobox assemble create --name <контекст> --file ~/.config/distrobox/distrobox.ini`, затем `chezmoi apply` заново |
 | Контекст переименовали или поменяли ему порт, а браузер всё ещё лезет на старый порт молча — без ошибки, но и без ответа | Прунинг в скрипте 34 определяет «устаревшее» по имени юнита. Если поменять **порт** у контекста, оставив имя тем же, `wsproxy-<имя>.service` не признаётся устаревшим и не проходит через `disable --now` — файл юнита перезаписывается новым портом, но **уже запущенный** процесс `socat` не перезапускается: `systemctl --user enable --now` на уже активном юните не делает `restart`. Проверено воспроизведением на этой машине: после подмены `ExecStart` в тестовом юните и повторного `enable --now` `MainPID` не поменялся, хотя `systemctl show` уже показывает новую команду запуска | `systemctl --user restart wsproxy-<контекст>.service` вручную после любой правки порта существующего контекста — `chezmoi apply` сам этого не сделает |
 | Все юниты `wsproxy-*` (и `zenopen-*`) разом «failed» или стоят, вкладки всех контекстов без сети | Снос и пересоздание контейнеров остановили юниты, а скрипт 34 — `onchange`: текст не менялся, `enable --now` не перевыполнился. «failed» вместо «inactive» — socat выходит кодом 143 на SIGTERM; с 2026-08-01 юниты несут `SuccessExitStatus=143` (случай разобран в [isolation-links.md](isolation-links.md), «Когда сломалось») | `chezmoi apply` — скрипт 35 (`run_after_35-bridges-up.sh.tmpl`) стартует лежащие юниты на каждом применении; руками — `systemctl --user start wsproxy-<контекст>.service` по всем контекстам, проверка `ss -ltn \| grep -E ':1108[0-9]'` |
+| Логин CLI-инструмента (`claude`, `codex`) в браузере проходит, но редирект на `http://localhost:<порт>` даёт «Unable to connect» | В контейнере нет `/etc/gai.conf` (собран до 2026-08-01) или `wsproxy-socks.service` не перезапускался после его появления: `localhost` резолвится в `::1` первым, `microsocks` пробует только первый адрес, а CLI слушает только `127.0.0.1` | В контейнере: `getent ahosts localhost \| head -1` — если первым `::1`, прогнать `chezmoi apply` (скрипт 15 запишет `gai.conf`) и `sudo systemctl restart wsproxy-socks.service`; страницу логина в браузере перезагрузить |
 | Юнит `wsproxy-<имя>.service` исчез из списка (переименование/удаление контекста), но что-то по-прежнему слушает его старый порт | Прунинг гасит и удаляет юнит, но `systemctl --user disable --now "$base" 2>/dev/null \|\| true` глотает ошибку остановки; `rm -f` при этом всё равно выполняется. Если `disable --now` не смог реально остановить процесс, осиротевший `socat` остаётся висеть на порту без какого-либо юнита, который его отслеживает | `ss -ltnp \| grep <порт>` — найти PID напрямую и убить руками; затем `chezmoi apply` повторно, чтобы юниты были созданы заново |
 
 ## Почему именно так

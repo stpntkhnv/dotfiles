@@ -43,6 +43,16 @@ if ! command -v microsocks &>/dev/null || ! command -v socat &>/dev/null; then
     sudo pacman -Sy --noconfirm --needed socat microsocks
 fi
 
+# OAuth callbacks from CLI tools (claude, codex) land on http://localhost:<port>
+# inside this netns. The browser hands the *name* localhost to microsocks
+# (proxyDNS in context-proxy), glibc resolves it ::1-first per RFC 6724, and
+# microsocks tries only the first address with no fallback — while the CLIs
+# listen on 127.0.0.1 only. Connection refused, login never completes. gai.conf
+# flips the ordering to IPv4-first for the whole container; its only egress is
+# an IPv4 SOCKS proxy anyway, so nothing is lost.
+echo "==> Preferring IPv4 in getaddrinfo (gai.conf)..."
+printf 'precedence ::ffff:0:0/96 100\n' | sudo tee /etc/gai.conf >/dev/null
+
 echo "==> Installing the browser proxy units..."
 
 sudo tee /etc/systemd/system/wsproxy-socks.service >/dev/null <<'UNIT'
