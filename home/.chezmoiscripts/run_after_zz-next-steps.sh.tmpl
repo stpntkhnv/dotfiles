@@ -7,14 +7,25 @@ set -euo pipefail
 
 steps=()
 
+{{- if eq .env "host" }}
 # The one non-local check in this file: ask GitHub whether our key is
 # actually registered. accept-new also seeds known_hosts on a fresh box, so
 # the first real git push does not stop at a host-key prompt. When offline
 # the step shows up spuriously -- harmless, it disappears on the next apply.
+# Host only: in a container the honest advice is not "register this key" but
+# "restore the context's key from the vault" -- the block below says exactly
+# that, and registering a fresh key would resurrect the old re-registration
+# pain this scheme removes.
 if ! ssh -T -o BatchMode=yes -o ConnectTimeout=4 -o StrictHostKeyChecking=accept-new \
         git@github.com 2>&1 | grep -q "successfully authenticated"; then
     steps+=("GitHub SSH: key not registered -- 'cat ~/.ssh/id_ed25519.pub', paste at https://github.com/settings/keys")
 fi
+{{- end }}
+{{- if eq .env "container" }}
+if [[ ! -f "$HOME/.ssh/id_ed25519" || ! -f "$HOME/.ssh/id_rsa" ]]; then
+    steps+=("SSH: keys for this context live in the KeePassXC vault -- run 'ssh-restore <context>' on the host (docs/secrets.md)")
+fi
+{{- end }}
 {{ if has "claude" .enabled }}
 [[ -f "$HOME/.claude/.credentials.json" ]] || \
     steps+=("Claude Code: not logged in -- run 'claude', pick 'Log in' (browser opens claude.ai; /login if you skipped it)")

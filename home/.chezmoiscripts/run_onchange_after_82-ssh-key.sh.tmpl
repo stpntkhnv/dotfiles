@@ -4,6 +4,15 @@ set -euo pipefail
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 
+{{ if eq .env "container" -}}
+# Inside a container a freshly generated key would be a key no service has
+# ever seen: it looks like a fix and silently brings back the old pain of
+# re-registering public keys after every container rebuild. Keys for a work
+# context are restored from the vault instead, from the host.
+if [[ ! -f "$HOME/.ssh/id_ed25519" || ! -f "$HOME/.ssh/id_rsa" ]]; then
+    echo "==> SSH keys for this context live in the KeePassXC vault: run 'ssh-restore <context>' on the host."
+fi
+{{- else }}
 generated=false
 
 if [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then
@@ -38,3 +47,4 @@ Add RSA to:     https://dev.azure.com/<org>/_usersSettings/keys
 =========================================
 EOF
 fi
+{{- end }}

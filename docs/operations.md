@@ -87,12 +87,14 @@ flowchart TD
 единственной поправкой: переменные вида `$ext`, `$st_name` заменены на то,
 что они означают.
 
-**Проверки без привязки к окружению** (выполняются что на хосте, что в
-контейнере, если фича включена):
+**Общие проверки** (большинство выполняется что на хосте, что в контейнере,
+если фича включена; у двух первых строк окружение указано явно — они
+разведены по env намеренно, см. сами строки):
 
 | Фича | Проверяет | Сообщение и что сделать |
 |---|---|---|
-| — (всегда) | `ssh -T git@github.com` отвечает «successfully authenticated» | «GitHub SSH: key not registered -- 'cat ~/.ssh/id_ed25519.pub', paste at https://github.com/settings/keys» |
+| — (только хост) | `ssh -T git@github.com` отвечает «successfully authenticated» | «GitHub SSH: key not registered -- 'cat ~/.ssh/id_ed25519.pub', paste at https://github.com/settings/keys»; в контейнере этот шаг не показывается намеренно — совет зарегистрировать свежий ключ там вредит, см. строку ниже |
+| — (только контейнер) | `~/.ssh/id_ed25519` и `~/.ssh/id_rsa` существуют | «SSH: keys for this context live in the KeePassXC vault -- run 'ssh-restore <context>' on the host (docs/secrets.md)» |
 | `claude` | `~/.claude/.credentials.json` существует | «Claude Code: not logged in -- run 'claude', pick 'Log in' (browser opens claude.ai; /login if you skipped it)» |
 | `claude` | `HEAD` клона `~/.local/share/claudefiles` совпадает с `~/.config/claudefiles/last-applied-head` | «Claude: claudefiles setup is pending -- run: ~/.local/share/claudefiles/setup.sh» — `setup.sh` больше не запускается из `apply` автоматически, только руками ([agents.md](agents.md)) |
 | `codex` | `~/.codex/auth.json` существует | «Codex: not logged in -- 'codex login' (browser OAuth via chatgpt.com) or 'codex login --api-key <key>'» |

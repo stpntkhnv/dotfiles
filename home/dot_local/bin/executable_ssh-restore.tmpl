@@ -1,0 +1,83 @@
+#!/bin/bash
+# Managed by chezmoi -- home/dot_local/bin/executable_ssh-restore.tmpl
+#
+# Restores a work context's SSH key pair from the KeePassXC vault into the
+# container's home after the container was recreated. The vault entries are a
+# NAMING CONTRACT (see docs/secrets.md): "SSH <ctx> github (ed25519)" carries
+# attachment id_ed25519, "SSH <ctx> azure (rsa)" carries id_rsa. Public keys
+# are not stored: ssh-keygen -y derives them, which doubles as proof that the
+# exported private key is intact and the password was right.
+#
+# Contexts are baked in at render time from `contexts:` in .chezmoidata.yaml,
+# the same single source of truth the aliases and bridges render from.
+set -euo pipefail
+
+DB="$HOME/Documents/Passwords/personal.kdbx"
+contexts=({{ range .contexts }}{{ .name | quote }} {{ end }})
+
+# The file is visible from inside containers through the mounted host home,
+# but the vault and keepassxc-cli live on the host: refuse early and clearly.
+if [[ -e /run/host ]]; then
+    echo "ssh-restore: this is a container; run me on the host" >&2
+    exit 1
+fi
+
+force=0
+[[ "${1:-}" == "-f" ]] && { force=1; shift; }
+ctx="${1:-}"
+
+usage() {
+    echo "usage: ssh-restore [-f] <context>   (contexts: ${contexts[*]})" >&2
+    exit 1
+}
+[[ -n "$ctx" && $# -eq 1 ]] || usage
+ok=0; for c in "${contexts[@]}"; do [[ "$c" == "$ctx" ]] && ok=1; done
+(( ok )) || usage
+
+dest="$HOME/homes/$ctx/.ssh"
+targets=(id_ed25519 id_ed25519.pub id_rsa id_rsa.pub)
+
+# Never overwrite silently: a live key pair may be registered with services
+# under this exact fingerprint. Checked BEFORE the tool/db checks and BEFORE
+# the password prompt, so a mistaken invocation costs nothing anywhere.
+if (( ! force )); then
+    existing=()
+    for t in "${targets[@]}"; do [[ -e "$dest/$t" ]] && existing+=("$dest/$t"); done
+    if (( ${#existing[@]} )); then
+        echo "ssh-restore: already present (use -f to overwrite):" >&2
+        printf '  %s\n' "${existing[@]}" >&2
+        exit 1
+    fi
+fi
+
+command -v keepassxc-cli >/dev/null 2>&1 \
+    || { echo "ssh-restore: keepassxc-cli is missing (feature keepassxc)" >&2; exit 1; }
+[[ -f "$DB" ]] || { echo "ssh-restore: no database at $DB" >&2; exit 1; }
+
+read -rs -p "KeePassXC master password: " pw; echo
+
+# Staged: everything lands in a temp dir first; only a fully verified set is
+# moved into place. Any failure or Ctrl-C BEFORE the final mv leaves the
+# target untouched; the final four-file mv itself is one short command, not an
+# atomic transaction -- if it is interrupted, a repeat run with -f heals.
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+export_one() {  # entry attachment
+    printf '%s\n' "$pw" | keepassxc-cli attachment-export --quiet \
+        "$DB" "$1" "$2" "$tmp/$2" \
+        || { echo "ssh-restore: export failed for entry '$1' (attachment $2)" >&2; exit 1; }
+}
+export_one "SSH $ctx github (ed25519)" id_ed25519
+export_one "SSH $ctx azure (rsa)"      id_rsa
+
+# 600 before -y: ssh-keygen refuses to read an over-permissive private key.
+chmod 600 "$tmp/id_ed25519" "$tmp/id_rsa"
+ssh-keygen -y -f "$tmp/id_ed25519" > "$tmp/id_ed25519.pub"
+ssh-keygen -y -f "$tmp/id_rsa"     > "$tmp/id_rsa.pub"
+chmod 644 "$tmp/id_ed25519.pub" "$tmp/id_rsa.pub"
+
+mkdir -p "$dest"
+chmod 700 "$dest"
+mv -f "$tmp/id_ed25519" "$tmp/id_ed25519.pub" "$tmp/id_rsa" "$tmp/id_rsa.pub" "$dest/"
+echo "ssh-restore: $ctx keys restored to $dest"

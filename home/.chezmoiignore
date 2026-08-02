@@ -4,9 +4,10 @@
    are in a container". The old host/container split was exactly what stopped
    one program from reaching both environments.
 
-   One entry at the bottom carries an environment test on top of the feature
-   one -- `work`. It is a command that would break or need its own setup
-   inside a container; the block says why in its own comment.
+   Two entries at the bottom carry an environment test on top of the feature
+   one -- `work` and `ssh-restore`. Each is a command that would break or
+   need its own setup inside a container; each block says why in its own
+   comment.
 
    Scripts no longer appear here: they live in .chezmoiscripts/, are not
    targets, and disable themselves in-template (`exit 0` at the top). The
@@ -77,4 +78,12 @@ bin/update-ziti-hosts.sh
      the first run. */}}
 {{ if or (not (has "herdr" .enabled)) (ne .env "host") }}
 .local/bin/work
+{{ end }}
+
+{{/* Host-only like `work` above, and for the same shape of reason: the
+     restore talks to keepassxc-cli and the vault file, both of which live on
+     the host; inside a container it would die on the first call. The script
+     additionally refuses at runtime when it sees /run/host. */}}
+{{ if or (not (has "keepassxc" .enabled)) (ne .env "host") }}
+.local/bin/ssh-restore
 {{ end }}

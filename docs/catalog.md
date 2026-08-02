@@ -40,7 +40,7 @@
 | `ziti` | OpenZiti edge tunnel | both | по выбору | 1 | [network.md](network.md) |
 | `killswitch` | Kill-switch: drop egress that bypasses the VPN | container | по выбору | 0 | [killswitch.md](killswitch.md) |
 | `voice` | Voice input (Handy, offline) | host | по выбору | 2 | [voice.md](voice.md) |
-| `syncthing` | Syncthing: notes and phone media sync | host | галочка стоит | 2 | [sync.md](sync.md) |
+| `syncthing` | Syncthing: notes and phone media sync | host | галочка стоит | 3 | [sync.md](sync.md) |
 | `obsidian` | Obsidian (notes editor) | host | галочка стоит | 1 | [sync.md](sync.md) |
 | `wallpapers` | Wallpapers into ~/Pictures/wallpapers | host | галочка стоит | 0 | [desktop.md](desktop.md) |
 | `bluetooth-fix` | Fix for cheap USB Bluetooth dongle (10d7:b012) | host | по выбору | 0 | [hardware.md](hardware.md) |
