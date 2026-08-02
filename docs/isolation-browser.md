@@ -202,6 +202,11 @@ Zen.
   поэтому он просто есть везде и заметен только там, где открыт YouTube.
 - **User-Agent Switcher and Manager** — подмена агента браузера для сайтов,
   пускающих только «из Edge». Молчит, пока не попросят кнопкой на панели.
+  Тонкость на будущее: для веб-клиента Windows App / AVD
+  (`windows.cloud.microsoft`) подменять надо не на Edge, а на **Firefox на
+  Windows** — иначе серый экран вместо рабочего стола. Разбор — строка в
+  [реестре обходов](workarounds.md) и
+  [issues/2026-08-02-avd-webclient-firefox-webcodecs.md](issues/2026-08-02-avd-webclient-firefox-webcodecs.md).
 - **Consent-O-Matic** — сам отвечает на GDPR-баннеры, причём отказом, а не
   согласием. Расширение исследователей Орхусского университета.
 - **Return YouTube Dislike** — возвращает счётчик дизлайков на YouTube.
