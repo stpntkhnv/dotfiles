@@ -1,0 +1,33 @@
+{{- /* Отдаёт тройку "имя цвет-фона цвет-текста" для плашки контекста.
+       Имя: host вне контейнера, иначе name из /run/.containerenv; если файла
+       нет или name пуст -- unknown, что дальше даст maroon: сломанный
+       контейнер должен быть виден, а не ронять apply и не притворяться
+       хостом. Цвет фона: host -- sky (терминальный аналог cyan домашнего
+       спейса); контекст из каталога -- его цвет из ротации context_palette,
+       переведённый в имена Catppuccin Latte (в ней нет purple и orange);
+       контейнер вне каталога -- maroon, отдельное видимое состояние.
+       Цвет текста: единого цвета на семи пастельных фонах Latte не
+       существует, поэтому светлый base -- на тёмных заливках, тёмный text --
+       на светлых (пары мерились по контрасту).
+       Вызов: includeTemplate "context-badge" (dict "root" .)
+       Ключ "name" подменяет определение имени -- для проверок рендера. */ -}}
+{{- $root := .root -}}
+{{- $name := "host" -}}
+{{- if hasKey . "name" -}}
+{{- $name = .name -}}
+{{- else if eq $root.env "container" -}}
+{{- $name = output "sh" "-c" ". /run/.containerenv 2>/dev/null; printf %s \"${name:-unknown}\"" | trim -}}
+{{- if not $name }}{{ $name = "unknown" }}{{ end -}}
+{{- end -}}
+{{- $latte := dict "blue" "blue" "green" "green" "purple" "mauve" "orange" "peach" "red" "red" "yellow" "yellow" "pink" "pink" -}}
+{{- $color := "sky" -}}
+{{- if ne $name "host" -}}
+{{- $color = "maroon" -}}
+{{- range $i, $c := $root.contexts -}}
+{{- if eq $c.name $name -}}
+{{- $color = index $latte (index $root.context_palette (mod $i (len $root.context_palette))) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $fg := ternary "text" "base" (has $color (list "sky" "yellow" "peach" "pink")) -}}
+{{- printf "%s %s %s" $name $color $fg -}}

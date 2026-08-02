@@ -6,7 +6,8 @@ covers:
     - home/dot_bash_profile
     - home/dot_profile
     - home/dot_gitconfig.tmpl
-    - home/dot_config/starship.toml
+    - home/dot_config/starship.toml.tmpl
+    - home/.chezmoitemplates/context-badge
 ---
 
 # Базис: что стоит на любой машине
@@ -283,12 +284,27 @@ git спросит пароль снова, если между двумя об�
 перезагрузка.
 
 `starship.toml` определяет вид самого приглашения: палитра — Catppuccin
-Latte (`palettes.latte`), формат строки — каталог, ветка и статус git,
-затем чипы версии рантайма (`dotnet`, `nodejs`, `python`, `rust`, `golang`,
-`c` — показывается только тот, что относится к текущему каталогу),
+Latte (`palettes.latte`), формат строки — плашка контекста, каталог, ветка и
+статус git, затем чипы версии рантайма (`dotnet`, `nodejs`, `python`, `rust`,
+`golang`, `c` — показывается только тот, что относится к текущему каталогу),
 заполнитель `$fill` и время выполнения последней команды при
-`cmd_duration.min_time = 500`. Файл ставится без единого `{{ }}` —
-обычный, не шаблонный конфиг, копируется как есть на любую машину.
+`cmd_duration.min_time = 500`.
+
+Первая секция строки — плашка контекста: на хосте это `host` на фоне `sky`
+(тот же cyan-эквивалент, что зарезервирован за `home` и вынут из ротации
+`context_palette:` в браузере — см. [isolation.md](isolation.md)); в
+контейнере рабочего контекста — имя контекста на фоне его цвета из
+`context_palette:` по индексу в `contexts:`, переведённому в имена палитры
+Catppuccin Latte (`purple` → `mauve`, `orange` → `peach`, остальные пять
+цветов совпадают по имени с палитрой); в контейнере, которого нет в
+`contexts:`, — его имя на фоне `maroon`, отдельное видимое состояние
+сломанной установки. Имя контейнера читается из `/run/.containerenv` заново
+при каждом `chezmoi apply` через сниппет
+`home/.chezmoitemplates/context-badge` — он же решает, какое из трёх
+состояний показать. Из-за этого `starship.toml.tmpl` — шаблон, а не готовый
+конфиг: он рендерится на каждом apply, и в свежем контейнере до первого
+`chezmoi apply` файла `~/.config/starship.toml` ещё нет вовсе, поэтому и
+плашки нет.
 
 ## Что ставится и что меняется
 
@@ -301,7 +317,7 @@ Latte (`palettes.latte`), формат строки — каталог, ветк
 | `~/.bash_profile` | подключает `.bashrc` для bash login-оболочки | этап «Файлы» |
 | `~/.profile` | дописывает `~/.local/bin` в конец `PATH` для входов, не проходящих через `.bash_profile` | этап «Файлы» |
 | `~/.gitconfig` | `user.name`/`user.email` (из `chezmoi init`), `core.autocrlf`, `credential.helper=cache`, `credential.useHttpPath` | этап «Файлы»; имя и почта — при `chezmoi init` |
-| `~/.config/starship.toml` | вид приглашения, палитра Catppuccin Latte | этап «Файлы» |
+| `~/.config/starship.toml` | вид приглашения — плашка контекста и палитра Catppuccin Latte | этап «Файлы» каждого `chezmoi apply` |
 | `NetworkManager.service`, `bluetooth.service`, `ufw.service` | `systemctl enable` (без `--now`) | `run_onchange_before_30-system.sh.tmpl`, только хост — разбор в [keyboard.md](keyboard.md) |
 
 ## Как проверить

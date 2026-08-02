@@ -1,3 +1,7 @@
+{{- $badge := includeTemplate "context-badge" (dict "root" .) | trim -}}
+{{- $ctx := index (splitList " " $badge) 0 -}}
+{{- $ctxColor := index (splitList " " $badge) 1 -}}
+{{- $ctxFg := index (splitList " " $badge) 2 -}}
 "$schema" = 'https://starship.rs/config-schema.json'
 # Starship prompt - Catppuccin Latte (light). Requires a Nerd Font.
 # Docs: https://starship.rs/config/
@@ -6,7 +10,7 @@ palette = "latte"
 add_newline = true
 
 # Пустая строка между плашкой и строкой ввода: курсор не липнет к индикатору.
-format = "[](fg:surface2)$directory[](fg:surface2 bg:surface1)$git_branch$git_status[](fg:surface1 bg:surface0)$dotnet$nodejs$python$rust$golang$c[](fg:surface0)$fill$cmd_duration\n\n$character "
+format = "[](fg:{{ $ctxColor }})[ {{ $ctx }} ](fg:{{ $ctxFg }} bg:{{ $ctxColor }})[](fg:{{ $ctxColor }} bg:surface2)$directory[](fg:surface2 bg:surface1)$git_branch$git_status[](fg:surface1 bg:surface0)$dotnet$nodejs$python$rust$golang$c[](fg:surface0)$fill$cmd_duration\n\n$character "
 
 [palettes.latte]
 rosewater = "#dc8a78"
