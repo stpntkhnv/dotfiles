@@ -1,7 +1,7 @@
 {{- $badge := includeTemplate "context-badge" (dict "root" .) | trim -}}
 {{- $ctx := index (splitList " " $badge) 0 -}}
-{{- $herdr := has "herdr" .enabled }}
-{{- $tmux := has "tmux" .enabled }}
+{{- $herdr := has "herdr" .enabled -}}
+{{- $tmux := has "tmux" .enabled -}}
 [[ $- != *i* ]] && return
 
 alias ls='ls --color=auto'
