@@ -66,7 +66,7 @@ MANIFEST
 # looks. plain_context sits outside the rotation for that reason.
 cat > "$BUILD/background.js" <<EOF
 const CONTEXTS = [
-{{- $palette := list "blue" "green" "purple" "orange" "red" "yellow" "pink" }}
+{{- $palette := .context_palette }}
 {{- range $i, $c := .contexts }}
   { name: {{ $c.name | quote }}, port: {{ $c.socks }}, color: "{{ index $palette (mod $i (len $palette)) }}", icon: "briefcase" },
 {{- end }}
