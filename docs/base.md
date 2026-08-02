@@ -313,7 +313,7 @@ Catppuccin Latte (`purple` → `mauve`, `orange` → `peach`, остальные
 | Пакеты `core` (21) | `pacman -Syu --noconfirm --needed <список>` | `run_onchange_before_20-packages.sh.tmpl`, всегда, хост и контейнер |
 | Пакеты `shell` (9) | там же | там же, хост и контейнер |
 | Пакеты `host-base` (12) | там же | там же, только хост |
-| `~/.bashrc` | PATH, алиасы `ls`/`grep`, plain `PS1` как запасной вариант, контекстные алиасы (см. [multiplexer.md](multiplexer.md)), инициализация `starship`/`zoxide`/`fzf`, алиасы `eza`, `bat` как `MANPAGER`, тема Nord для `fzf` | этап «Файлы» каждого `chezmoi apply`, хост и контейнер |
+| `~/.bashrc` | PATH, алиасы `ls`/`grep`, plain `PS1` с именем контекста как запасной вариант, контекстные алиасы (см. [multiplexer.md](multiplexer.md)), инициализация `starship`/`zoxide`/`fzf`, алиасы `eza`, `bat` как `MANPAGER`, тема Nord для `fzf` | этап «Файлы» каждого `chezmoi apply`, хост и контейнер |
 | `~/.bash_profile` | подключает `.bashrc` для bash login-оболочки | этап «Файлы» |
 | `~/.profile` | дописывает `~/.local/bin` в конец `PATH` для входов, не проходящих через `.bash_profile` | этап «Файлы» |
 | `~/.gitconfig` | `user.name`/`user.email` (из `chezmoi init`), `core.autocrlf`, `credential.helper=cache`, `credential.useHttpPath` | этап «Файлы»; имя и почта — при `chezmoi init` |
@@ -340,7 +340,7 @@ $ chezmoi execute-template < home/dot_bashrc.tmpl | head -12
 
 alias ls='ls --color=auto'
 alias grep='grep --color=auto'
-PS1='[\u@\h \W]\$ '
+PS1='[host \u@\h \W]\$ '
 
 # ~/.local/bin holds claude (native install) and distrobox-exported bins;
 # bash never reads ~/.profile (bash_profile shadows it), so add it here.

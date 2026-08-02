@@ -1,10 +1,12 @@
+{{- $badge := includeTemplate "context-badge" (dict "root" .) | trim -}}
+{{- $ctx := index (splitList " " $badge) 0 -}}
 {{- $herdr := has "herdr" .enabled }}
 {{- $tmux := has "tmux" .enabled }}
 [[ $- != *i* ]] && return
 
 alias ls='ls --color=auto'
 alias grep='grep --color=auto'
-PS1='[\u@\h \W]\$ '
+PS1='[{{ $ctx }} \u@\h \W]\$ '
 
 # ~/.local/bin holds claude (native install) and distrobox-exported bins;
 # bash never reads ~/.profile (bash_profile shadows it), so add it here.
