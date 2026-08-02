@@ -18,7 +18,7 @@ steps=()
 # pain this scheme removes.
 if ! ssh -T -o BatchMode=yes -o ConnectTimeout=4 -o StrictHostKeyChecking=accept-new \
         git@github.com 2>&1 | grep -q "successfully authenticated"; then
-    steps+=("GitHub SSH: key not registered -- 'cat ~/.ssh/id_ed25519.pub', paste at https://github.com/settings/keys")
+    steps+=("GitHub SSH: key not registered -- 'cat ~/.ssh/id_ed25519.pub', paste at https://github.com/settings/keys; if this machine was REINSTALLED, the old, already-registered keys are in the vault instead: 'ssh-restore -f host', then 'chezmoi apply' (docs/install.md)")
 fi
 {{- end }}
 {{- if eq .env "container" }}
@@ -57,7 +57,7 @@ fi
 {{- end }}
 {{- if has "ziti" .enabled }}
 if [[ -z "$(ls -A /opt/openziti/etc/identities 2>/dev/null)" ]]; then
-    steps+=("OpenZiti: no identity -- copy the JSON to /opt/openziti/etc/identities/ and 'sudo systemctl start ziti-edge-tunnel'")
+    steps+=("OpenZiti: no identity -- 'sudo cp <your-identity>.json /opt/openziti/etc/identities/ && sudo systemctl start ziti-edge-tunnel' (the JSON comes from whoever runs your Ziti network; docs/network.md)")
 fi
 {{- end }}
 {{- if has "voice" .enabled }}
@@ -157,7 +157,7 @@ if [[ "$(xdg-mime query default x-scheme-handler/https 2>/dev/null)" != *[Jj]unc
         xdg-mime default "$junction_id" x-scheme-handler/http x-scheme-handler/https
         echo "==> Link handler reclaimed from the browser: $junction_id"
     else
-        steps+=("Links: Junction is not the default https handler and the package is missing")
+        steps+=("Links: Junction is not the default https handler and the package is missing -- 'sudo pacman -S junction', then 'chezmoi apply' (it reclaims the handler)")
     fi
 fi
 {{- end }}
@@ -327,7 +327,7 @@ SYNCTHING_CATALOG_EOF
         [[ -z "$st_vault" ]] && st_vault="$HOME/Documents/Notes/kb"
         st_kb="$HOME/$(jq -rn --argjson c "$st_catalog" '$c[] | select(.id == "kb") | .path' || true)"
         if [[ "${st_vault%/}" != "$st_kb" ]]; then
-            steps+=("Syncthing: claudefiles syncs the vault at $st_vault but the catalogue syncs $st_kb -- make them the same")
+            steps+=("Syncthing: claudefiles syncs the vault at $st_vault but the catalogue syncs $st_kb -- edit kb.vault_path in ~/.config/claudefiles/secrets.json to match the catalogue path, then rerun ~/.local/share/claudefiles/setup.sh")
         fi
     fi
 fi

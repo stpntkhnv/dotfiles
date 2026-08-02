@@ -11,8 +11,12 @@
 # Contexts are baked in at render time from `contexts:` in .chezmoidata.yaml,
 # the same single source of truth the aliases and bridges render from.
 set -euo pipefail
+{{- range .contexts }}{{ if eq .name "host" }}{{ fail "context name 'host' is reserved by ssh-restore (it addresses ~/.ssh of the host itself); pick another name in .chezmoidata.yaml" }}{{ end }}{{ end }}
 
 DB="$HOME/Documents/Passwords/personal.kdbx"
+# `host` is a reserved extra target on top of the catalogue contexts: it
+# restores the host's own pair into ~/.ssh (the reinstall path, see
+# docs/install.md). The render-time guard above keeps the name free.
 contexts=({{ range .contexts }}{{ .name | quote }} {{ end }})
 
 # The file is visible from inside containers through the mounted host home,
@@ -27,14 +31,18 @@ force=0
 ctx="${1:-}"
 
 usage() {
-    echo "usage: ssh-restore [-f] <context>   (contexts: ${contexts[*]})" >&2
+    echo "usage: ssh-restore [-f] <target>   (targets: host ${contexts[*]})" >&2
     exit 1
 }
 [[ -n "$ctx" && $# -eq 1 ]] || usage
-ok=0; for c in "${contexts[@]}"; do [[ "$c" == "$ctx" ]] && ok=1; done
+ok=0; for c in "${contexts[@]}" host; do [[ "$c" == "$ctx" ]] && ok=1; done
 (( ok )) || usage
 
-dest="$HOME/homes/$ctx/.ssh"
+if [[ "$ctx" == "host" ]]; then
+    dest="$HOME/.ssh"
+else
+    dest="$HOME/homes/$ctx/.ssh"
+fi
 targets=(id_ed25519 id_ed25519.pub id_rsa id_rsa.pub)
 
 # Never overwrite silently: a live key pair may be registered with services

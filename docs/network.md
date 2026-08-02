@@ -153,7 +153,7 @@ run_after_zz-next-steps.sh», и там действительно:
 
 ```sh
 if [[ -z "$(ls -A /opt/openziti/etc/identities 2>/dev/null)" ]]; then
-    steps+=("OpenZiti: no identity -- copy the JSON to /opt/openziti/etc/identities/ and 'sudo systemctl start ziti-edge-tunnel'")
+    steps+=("OpenZiti: no identity -- 'sudo cp <your-identity>.json /opt/openziti/etc/identities/ && sudo systemctl start ziti-edge-tunnel' (the JSON comes from whoever runs your Ziti network; docs/network.md)")
 fi
 ```
 
