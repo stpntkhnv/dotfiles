@@ -54,7 +54,7 @@ flowchart TD
         KCOUNT -->|"ровно одно,<br/>это linux"| NOPEN["nvidia-open<br/>(готовый модуль)"]
         KCOUNT -->|"иначе"| NDKMS["nvidia-open-dkms<br/>+ заголовки каждого ядра"]
 
-        S30["30-system<br/>третья часть скрипта"] --> ZCONF["/etc/systemd/zram-generator.conf<br/>меняет только compression-algorithm"]
+        S30["30-system<br/>третья часть скрипта"] --> ZCONF["/etc/systemd/zram-generator.conf<br/>zram-size = ram / 2, zstd"]
         S30 --> SVC["enable_unit:<br/>sddm · NetworkManager · bluetooth ·<br/>ufw · timesyncd · fstrim.timer<br/>+ по фиче: cups.socket, tailscaled, docker.socket"]
         S30 --> PODSOCK["podman.socket — user-юнит,<br/>systemctl --user enable --now,<br/>мимо enable_unit (distrobox, always)"]
         SVC -->|"исключение 1"| TSNOW["tailscaled:<br/>ещё и явный systemctl start"]
@@ -179,50 +179,48 @@ error: package 'nvidia-open-dkms' was not found
 Ровно один пакет ядра, и это `linux` — ветка `nvidia-open` сработала,
 подтверждено фактическим составом пакетов на машине.
 
-### zram: меняется только алгоритм сжатия
+### zram: размер `ram / 2` и явный zstd
 
 ```sh
 ZRAM_CONF=/etc/systemd/zram-generator.conf
-if [[ ! -f "$ZRAM_CONF" ]] || ! grep -q 'compression-algorithm = zstd' "$ZRAM_CONF"; then
+if [[ ! -f "$ZRAM_CONF" ]] || ! grep -q 'zram-size = ram / 2' "$ZRAM_CONF"; then
     sudo tee "$ZRAM_CONF" >/dev/null <<'ZRAM'
 [zram0]
+zram-size = ram / 2
 compression-algorithm = zstd
 ZRAM
 fi
 ```
 
-Файл содержит ровно одну настройку помимо секции `[zram0]` — алгоритм
-сжатия. Размер устройства нигде не задан, значит действует значение по
-умолчанию самого `zram-generator`: по `zram-generator.conf(5)`, опция
-`zram-size=` — «Defaults to `min(ram / 2, 4096)`» (мегабайт). Проверено вживую
-2026-07-31 — на машине с 31 ГиБ оперативной памяти получившееся устройство:
-
-```sh
-$ zramctl
-NAME       ALGORITHM DISKSIZE  DATA COMPR TOTAL STREAMS MOUNTPOINT
-/dev/zram0 zstd            4G 62.9M 12.4M 15.8M         [SWAP]
-```
-
-`min(31/2, 4)` ГиБ = `min(15.5, 4)` = `4` ГиБ — ровно то, что показывает
-`DISKSIZE`. Формула по умолчанию подтверждена и результатом на реальном
-железе, а не только текстом мануала.
-
-Этих 4 ГиБ хватает для холостой машины, но не для рабочего режима, который
-она реально несёт: разбор аварии
+Размер задан явно, потому что умолчание самого `zram-generator` (по
+`zram-generator.conf(5)`, опция `zram-size=` — «Defaults to
+`min(ram / 2, 4096)`» мегабайт) на машине с 31 ГиБ оперативной памяти давало
+устройство в 4 ГиБ, и этого дважды не хватило под реальную нагрузку — сессии
+агентов, контейнеры и браузеры одновременно. Первый раз машина зависла
+намертво 30 июля 2026 (разбор:
 [issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md)
-описывает, как эта же машина с теми же 31 ГиБ памяти и тем же сводом
-зависла намертво 30 июля 2026 при нехватке памяти — не притормозила,
-а перестала отвечать целиком, и помогла только перезагрузка кнопкой
-питания. **OOM-killer при этом не сработал ни разу** — ядро вместо того,
-чтобы убить процесс, бесконечно перекладывало страницы в своп и обратно.
-Причина не в самом zram и не в этом документе: в репозитории нет ни
-`earlyoom`, ни `systemd-oomd` — ни один из них не установлен ни одной фичей
-каталога (`grep -rn earlyoom home/` и `grep -rn systemd-oomd home/` не находят
-ничего) и не входит в `home/.chezmoidata.yaml`. Разбор предлагает четыре
-меры (разрешить `kernel.sysrq`, поставить `earlyoom` фичей каталога, поднять
-zram до 12-16 ГиБ, завести `agents.slice` по образцу `browser.slice`
-[browsers.md](browsers.md)) — ни одна из них в репозиторий не попала, это
-предложения из журнала расследования, а не сделанная работа.
+— OOM-killer не сработал ни разу, ядро бесконечно перекладывало страницы,
+помогла только кнопка питания). Второй раз, 2 августа 2026, своп снова
+заполнился до отказа: система ушла в реклейм-трэшинг (45-83% времени
+процессора в ядре, чтение с диска ~2,3 ГБ/с — вытесненные страницы кода
+читались обратно сразу после вытеснения), а браузер, зажатый потолком
+`browser.slice` ([browsers.md](browsers.md)), перестал отвечать, потому что
+при полном свопе его cgroup мог освобождать память только выбрасыванием
+страниц собственного кода. `ram / 2` — те самые 12-16 ГиБ, которые предлагал
+разбор первой аварии.
+
+Из четырёх мер того разбора (разрешить `kernel.sysrq`, поставить `earlyoom`
+фичей каталога, поднять zram до 12-16 ГиБ, завести `agents.slice` по образцу
+`browser.slice`) в репозиторий попала пока только третья — размер zram.
+Общесистемной защиты от исчерпания памяти по-прежнему нет: ни `earlyoom`, ни
+`systemd-oomd` не установлен ни одной фичей каталога (`grep -rn earlyoom
+home/` и `grep -rn systemd-oomd home/` не находят ничего).
+
+Конфиг действует со следующей загрузки: `zram-generator` создаёт устройство
+при старте системы, а уже созданное `chezmoi apply` не трогает. Применить
+вживую можно, освободив устройство руками — `swapoff /dev/zram0 && systemctl
+restart systemd-zram-setup@zram0` (об этом же говорит комментарий в конце
+блока zram в самом скрипте).
 
 ### Сервисы: полный список и два отступления от «без `--now`»
 
@@ -392,8 +390,8 @@ sudo systemctl stop bluetooth && sudo modprobe -r btusb && sudo modprobe btusb &
 |---|---|---|
 | Пакеты `nvidia-utils`, `libva-nvidia-driver`, `vulkan-icd-loader` + (`nvidia-open` или `nvidia-open-dkms` и заголовки ядер) | хост, pacman | `35-nvidia`, только если `data.nvidia_driver = true` и ICD ещё нет |
 | `data.nvidia_driver` | `~/.config/chezmoi/chezmoi.toml`, поле `[data]` | пересчитывается на каждом `chezmoi init` по живому состоянию железа, не хранится как обычная фича |
-| `/etc/systemd/zram-generator.conf` | вне дома | `30-system`, если строки `compression-algorithm = zstd` ещё нет |
-| Устройство `/dev/zram0`, 4 ГиБ на этой машине | ядро, через `zram-generator` | создаётся при загрузке из конфига выше, chezmoi его не трогает напрямую |
+| `/etc/systemd/zram-generator.conf` | вне дома | `30-system`, если строки `zram-size = ram / 2` ещё нет |
+| Устройство `/dev/zram0`, `ram / 2` — 15,6 ГиБ на этой машине | ядро, через `zram-generator` | создаётся при загрузке из конфига выше, chezmoi его не трогает напрямую |
 | Юниты `sddm.service`\*, `NetworkManager.service`, `bluetooth.service`, `ufw.service`, `systemd-timesyncd.service`, `fstrim.timer` | системные | `30-system`: `enable`, без `--now`, при каждом прогоне |
 | Юнит `cups.socket` | системный | `30-system`, если выбрана `printing`: `enable`, без `--now` |
 | Юнит `tailscaled.service` | системный | `30-system`, всегда (`tailscale` — `always: true`): `enable` + явный `start` |
@@ -426,18 +424,21 @@ $ ls /dev/nvidiactl /usr/share/vulkan/icd.d/nvidia_icd.json
 /dev/nvidiactl  /usr/share/vulkan/icd.d/nvidia_icd.json
 ```
 
-zram:
+zram (этот блок снят позже остальных, 2026-08-02, сразу после поднятия
+размера до `ram / 2`):
 
 ```sh
 $ cat /etc/systemd/zram-generator.conf
+# Managed by chezmoi -- .chezmoiscripts/run_onchange_before_30-system.sh
 [zram0]
+zram-size = ram / 2
 compression-algorithm = zstd
 $ zramctl
-NAME       ALGORITHM DISKSIZE  DATA COMPR TOTAL STREAMS MOUNTPOINT
-/dev/zram0 zstd            4G 62.9M 12.4M 15.8M         [SWAP]
+NAME       ALGORITHM DISKSIZE DATA COMPR TOTAL STREAMS MOUNTPOINT
+/dev/zram0 zstd         15.6G   4K   64B   20K         [SWAP]
 $ cat /proc/swaps
 Filename                                Type            Size            Used            Priority
-/dev/zram0                              partition       4194300         67848           100
+/dev/zram0                              partition       16388604        0               100
 ```
 
 Сервисы:
@@ -500,7 +501,7 @@ Controller F4:4E:FC:51:C5:AA tsikhanau-pc [default]
 | Сетевой принтер не виден | Правило `mdns` не открыто в `ufw`, либо принтер сетевой, а не USB | Разобрано в [network.md](network.md#когда-сломалось) |
 | Bluetooth: «no adapters found», хотя донгл виден в системе | `enable_autosuspend=0` ещё не применился (машина не перезагружалась после `chezmoi apply` с этой фичой) | `cat /etc/modprobe.d/btusb.conf` — если строка уже там, но не подействовала: `sudo systemctl stop bluetooth && sudo modprobe -r btusb && sudo modprobe btusb && sudo systemctl start bluetooth` (команда из вывода самого скрипта) |
 | Тот же симптом на другом донгле (не `10d7:b012`) | Правило udev жёстко привязано к `idVendor`/`idProduct` этого конкретного устройства и на другой донгл не сработает | Добавить отдельное правило udev для нового `idVendor:idProduct`, по образцу существующего |
-| Рабочий стол виснет намертво при нехватке памяти (не тормозит — не отвечает совсем), помогает только перезагрузка кнопкой | В репозитории нет общесистемной защиты от исчерпания памяти: ни `earlyoom`, ни `systemd-oomd` не ставит ни одна фича каталога, а zram оставлен на умолчании (4 ГиБ на 31 ГиБ памяти) — подробный разбор живого случая в [issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md) | Ничего в каталоге фич это не чинит сейчас; меры из разбора (`earlyoom`, больший zram, `agents.slice`, разрешённый `kernel.sysrq`) не реализованы — только предложены |
+| Рабочий стол виснет намертво при нехватке памяти (не тормозит — не отвечает совсем), помогает только перезагрузка кнопкой | В репозитории нет общесистемной защиты от исчерпания памяти: ни `earlyoom`, ни `systemd-oomd` не ставит ни одна фича каталога — подробный разбор живого случая в [issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md) | Из мер того разбора сделан только больший zram (`ram / 2`, см. раздел про zram); `earlyoom`, `agents.slice` и разрешённый `kernel.sysrq` не реализованы — только предложены |
 
 ## Почему именно так
 
@@ -542,36 +543,33 @@ linux-firmware mkinitcpio linux amd-ucode`) — значит `lspci` был га
 отложить, а команда, которая меняет таблицы ядра тут же). У всех остальных
 юнитов такой немедленной зависимости нет.
 
-### zram: почему меняют только алгоритм, а не размер
+### zram: почему `ram / 2`, а не умолчание и не вся память
 
-Формула размера по умолчанию (`min(ram/2, 4096)` МБ,
+Умолчание генератора (`min(ram/2, 4096)` МБ,
 [zram-generator.conf(5)](https://man.archlinux.org/man/zram-generator.conf.5))
-на этой машине даёт 4 ГиБ при 31 ГиБ оперативной памяти. Это разумный размер
-для холостой задачи — быстрый сжатый своп без лишней настройки — но не
-проверка на реальный рабочий режим этой машины: авария 30 июля 2026
-([issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md))
-показала, что тех же 4 ГиБ не хватает, когда одновременно заняты несколько
-сессий агентов, контейнеры distrobox и браузеры — запас кончается, а
-защиты в виде `earlyoom`/`systemd-oomd` в репозитории нет (см. «Когда
-сломалось» выше), так что машина не деградирует плавно, а виснет целиком.
+— разумный размер для холостой машины, но рабочий режим этой машины —
+несколько сессий агентов, контейнеры distrobox, SQL Server и браузеры
+одновременно — дважды съедал эти 4 ГиБ до дна, см. хронику в разделе «zram»
+выше. Верхняя граница тоже выбрана не случайно: `zram-size = ram` формально
+допустим, но своп такого размера, заполненный плохо сжимаемыми данными,
+сам съест значительную часть оперативной памяти (zram хранит сжатые страницы
+в ней же). `ram / 2` — середина: втрое больше запаса, чем было, и при этом
+даже полностью забитое устройство при обычном для zstd сжатии ~3:1 занимает
+порядка 5 ГиБ реальной памяти.
 
-С алгоритмом сложнее, и здесь комментарий скрипта отстал от жизни. Он
-объясняет строку `compression-algorithm = zstd` тем, что `zstd` даёт заметно
-лучшее сжатие, чем `lzo-rle` по умолчанию, ценой процессора, которая рядом со
-свопом на диск не имеет значения. Довод сам по себе верен, а вот «по
-умолчанию» на этой машине уже не `lzo-rle`:
+Строка `compression-algorithm = zstd` — страховка, а не действующая
+настройка: ядро этой машины само собрано с `zstd` как умолчанием, так что
+сегодня строка ничего не меняет — она фиксирует выбор на случай, если
+умолчание ядра однажды уедет:
 
 ```
 $ zcat /proc/config.gz | grep CONFIG_ZRAM_DEF_COMP=
 CONFIG_ZRAM_DEF_COMP="zstd"
 ```
 
-То есть ядро, с которым машина живёт, само по себе собрано с `zstd` как
-умолчанием, и строка в конфиге сейчас ничего не меняет. Смысл у неё остаётся,
-но другой, чем написано в комментарии: это явная привязка к конкретному
-алгоритму на случай, если умолчание ядра однажды уедет обратно. Проверить,
-вернулся ли исходный довод в силу, можно той же командой выше: если она
-однажды покажет не `zstd`, строка снова начнёт что-то менять.
+Если эта команда однажды покажет не `zstd`, строка снова начнёт что-то
+менять — довод «zstd жмёт заметно лучше `lzo-rle`, а цена процессора рядом
+со свопом на диск не имеет значения» вернётся в силу.
 
 ## Ссылки
 
@@ -612,5 +610,7 @@ CONFIG_ZRAM_DEF_COMP="zstd"
 - [issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md) —
   разбор аварии: машина зависла от нехватки памяти, OOM-killer не сработал ни
   разу, своп в 4 ГиБ по умолчанию не был проверкой на реальный рабочий режим.
+  После повторения 2 августа 2026 размер поднят до `ram / 2` — см. раздел про
+  zram выше.
 - [browsers.md](browsers.md) — `browser.slice`, на который тот же разбор
   ссылается как на образец для предложенного, но не сделанного `agents.slice`.

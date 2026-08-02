@@ -78,16 +78,24 @@ fi
 # with plenty of RAM it is far faster and saves SSD writes. zram-generator
 # creates the device from this config, no unit to enable.
 #
-# Size is left at the default (min(ram/2, 4G)); only the compressor is set,
-# because zstd gives a noticeably better ratio than the lzo-rle default at a
-# cost that is irrelevant next to swapping to disk.
+# zram-size is set explicitly because the generator's default (min(ram/2, 4G))
+# gave 4 GiB on a 31 GiB machine, and that ran out twice under the real
+# workload of this machine -- agent sessions + containers + browsers; see
+# docs/issues/2026-07-30-desktop-hang-out-of-memory.md. ram / 2 is the size
+# that investigation proposed. compression-algorithm pins zstd explicitly so
+# the choice survives a change of the kernel's own default (the current kernel
+# already defaults to zstd, so today the line changes nothing).
+#
+# The config takes effect on the next boot; to apply it live, free the device
+# first: swapoff /dev/zram0 && systemctl restart systemd-zram-setup@zram0.
 ZRAM_CONF=/etc/systemd/zram-generator.conf
 
-if [[ ! -f "$ZRAM_CONF" ]] || ! grep -q 'compression-algorithm = zstd' "$ZRAM_CONF"; then
+if [[ ! -f "$ZRAM_CONF" ]] || ! grep -q 'zram-size = ram / 2' "$ZRAM_CONF"; then
     echo "==> Configuring zram swap"
     sudo tee "$ZRAM_CONF" >/dev/null <<'ZRAM'
 # Managed by chezmoi -- .chezmoiscripts/run_onchange_before_30-system.sh
 [zram0]
+zram-size = ram / 2
 compression-algorithm = zstd
 ZRAM
 fi
