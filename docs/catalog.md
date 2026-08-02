@@ -4,7 +4,7 @@
      Источник: home/.chezmoidata.yaml и шапки covers в docs/*.md
      Пересобрать: tools/gen-catalog.sh -->
 
-Все 36 фич каталога. Столбец «Документ» ведёт в подробное описание.
+Все 37 фич каталога. Столбец «Документ» ведёт в подробное описание.
 
 | Фича | Что это | Где | Как включается | Пакетов | Документ |
 |---|---|---|---|---|---|
@@ -12,6 +12,7 @@
 | `shell` | Shell: starship, eza, bat, fzf, zoxide, ripgrep, fd | both | всегда | 9 | [base.md](base.md) |
 | `container-base` | Container plumbing | container | всегда | 11 | [containers.md](containers.md) |
 | `host-base` | Host essentials: network, Bluetooth, firewall, zram | host | всегда | 12 | [base.md](base.md) |
+| `earlyoom` | earlyoom: kill one process instead of hanging the machine | host | всегда | 1 | [hardware.md](hardware.md) |
 | `desktop` | Desktop: niri + DankMaterialShell | host | всегда | 32 | [desktop.md](desktop.md) |
 | `tailscale` | Tailscale VPN | host | всегда | 1 | [network.md](network.md) |
 | `distrobox` | distrobox + podman | host | всегда | 2 | [containers.md](containers.md) |

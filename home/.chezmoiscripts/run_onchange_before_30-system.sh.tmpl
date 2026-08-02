@@ -130,6 +130,7 @@ enable_unit bluetooth.service           # host-base
 enable_unit ufw.service                 # host-base
 enable_unit systemd-timesyncd.service   # base install
 enable_unit fstrim.timer                # weekly SSD trim, util-linux
+enable_unit earlyoom.service            # earlyoom (always)
 
 # ufw ships with no rules and denies nothing until enabled. Default-deny
 # inbound with outbound allowed is the sane desktop posture; add per-service

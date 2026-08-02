@@ -359,6 +359,19 @@ features:
       - xdg-utils
       - zram-generator
 
+  # Last-resort guard for the whole machine: when both available RAM and free
+  # swap drop below 10%, earlyoom kills the fattest process instead of letting
+  # the kernel thrash forever. The 2026-07-30 hang ended with the power button
+  # precisely because nothing played this role -- see
+  # docs/issues/2026-07-30-desktop-hang-out-of-memory.md. Package defaults are
+  # left as is; the unit is enabled by 30-system.
+  - key: earlyoom
+    label: "earlyoom: kill one process instead of hanging the machine"
+    scope: host
+    always: true
+    pacman:
+      - earlyoom
+
   # -------------------------------------------------------------- desktop ---
   # Host only and unconditional: without this there is nothing to log into on
   # a bare machine. The Nerd font is not optional -- without it starship and

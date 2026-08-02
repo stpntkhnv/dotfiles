@@ -79,7 +79,7 @@ covers:
 ## Железо
 
 - [`hardware.md`](hardware.md) — принтеры, известный баг Bluetooth-донгла,
-  настройки NVIDIA и zram.
+  настройки NVIDIA, zram и сторож памяти earlyoom.
 
 ## Эксплуатация
 

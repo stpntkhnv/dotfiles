@@ -1,17 +1,17 @@
 ---
 covers:
-  features: [printing, bluetooth-fix]
+  features: [printing, bluetooth-fix, earlyoom]
   paths:
     - home/.chezmoiscripts/run_onchange_before_35-nvidia.sh.tmpl
     - home/.chezmoiscripts/run_onchange_before_50-bluetooth.sh.tmpl
     - home/.chezmoiscripts/run_onchange_before_30-system.sh.tmpl
 ---
 
-# Железо: NVIDIA, zram, сервисы, печать и Bluetooth-донгл
+# Железо: NVIDIA, zram, earlyoom, сервисы, печать и Bluetooth-донгл
 
 ## Что это даёт
 
-Пять разных, не связанных друг с другом вещей, которые тем не менее решает
+Шесть разных, не связанных друг с другом вещей, которые тем не менее решает
 один и тот же слой репозитория:
 
 - **Карта NVIDIA** получает рабочий драйвер и Vulkan сама, без ручного
@@ -20,6 +20,10 @@ covers:
 - **Своп** (память на диске, куда сбрасывается то, что не поместилось в
   оперативную) живёт сжатым прямо в оперативной памяти (zram), а не на диске —
   быстрее и не изнашивает SSD.
+- **Исчерпание памяти** перестаёт вешать машину намертво: сторож `earlyoom`
+  при почти полном исчерпании и памяти, и свопа убивает самый прожорливый
+  процесс — вместо бесконечного зависания, которое лечится только кнопкой
+  питания.
 - **Фоновые сервисы** (сеть, Bluetooth, файрвол, синхронизация времени,
   еженедельная чистка SSD) включаются сами при первой настройке, чтобы не
   держать в голове чеклист «что ещё нужно включить руками».
@@ -55,7 +59,7 @@ flowchart TD
         KCOUNT -->|"иначе"| NDKMS["nvidia-open-dkms<br/>+ заголовки каждого ядра"]
 
         S30["30-system<br/>третья часть скрипта"] --> ZCONF["/etc/systemd/zram-generator.conf<br/>zram-size = ram / 2, zstd"]
-        S30 --> SVC["enable_unit:<br/>sddm · NetworkManager · bluetooth ·<br/>ufw · timesyncd · fstrim.timer<br/>+ по фиче: cups.socket, tailscaled, docker.socket"]
+        S30 --> SVC["enable_unit:<br/>sddm · NetworkManager · bluetooth ·<br/>ufw · timesyncd · fstrim.timer · earlyoom<br/>+ по фиче: cups.socket, tailscaled, docker.socket"]
         S30 --> PODSOCK["podman.socket — user-юнит,<br/>systemctl --user enable --now,<br/>мимо enable_unit (distrobox, always)"]
         SVC -->|"исключение 1"| TSNOW["tailscaled:<br/>ещё и явный systemctl start"]
         SVC -->|"исключение 2"| UFWNOW["ufw --force enable:<br/>действует сейчас, не после ребута"]
@@ -211,16 +215,36 @@ fi
 
 Из четырёх мер того разбора (разрешить `kernel.sysrq`, поставить `earlyoom`
 фичей каталога, поднять zram до 12-16 ГиБ, завести `agents.slice` по образцу
-`browser.slice`) в репозиторий попала пока только третья — размер zram.
-Общесистемной защиты от исчерпания памяти по-прежнему нет: ни `earlyoom`, ни
-`systemd-oomd` не установлен ни одной фичей каталога (`grep -rn earlyoom
-home/` и `grep -rn systemd-oomd home/` не находят ничего).
+`browser.slice`) в репозитории теперь две: размер zram и `earlyoom`
+(следующий раздел). `kernel.sysrq` и `agents.slice` не реализованы — только
+предложены.
 
 Конфиг действует со следующей загрузки: `zram-generator` создаёт устройство
 при старте системы, а уже созданное `chezmoi apply` не трогает. Применить
 вживую можно, освободив устройство руками — `swapoff /dev/zram0 && systemctl
 restart systemd-zram-setup@zram0` (об этом же говорит комментарий в конце
 блока zram в самом скрипте).
+
+### earlyoom: убить один процесс вместо зависания всей машины
+
+Фича `earlyoom` (`scope: host`, `always: true`) ставит одноимённый пакет, а
+`30-system` включает `earlyoom.service` через общий `enable_unit`. Настройки
+пакета не трогаются: демон с умолчаниями срабатывает, когда **одновременно**
+доступная память и свободный своп падают ниже 10%, и убивает процесс с
+наибольшим потреблением памяти. Это последний рубеж: система теряет один
+процесс, но остаётся живой — вместо июльского сценария, где ядро бесконечно
+перекладывало страницы и помогла только кнопка питания.
+
+Границу применимости важно понимать: earlyoom смотрит на `MemAvailable` всей
+системы. Трэшинг 2 августа 2026 (см. раздел про zram выше) он не поймал бы и
+не должен был — своп тогда был в нуле, но доступной памяти ядро показывало
+ещё ~15 ГиБ кэша, и глобального исчерпания не было. От того сценария
+защищает больший zram; earlyoom — от сценария 30 июля, когда кончается всё.
+
+На этой машине пакет и юнит появились руками 30 июля 2026 около 18:53 — по
+времени сразу после той аварии — и до 2 августа жили мимо репозитория:
+переустановку машины такой сторож не пережил бы. Фича каталога закрывает
+ровно этот зазор.
 
 ### Сервисы: полный список и два отступления от «без `--now`»
 
@@ -240,7 +264,7 @@ everything comes up on the next boot». Полный список того, чт
 - всегда: `sddm.service` (только если `display-manager.service` ещё ничем не
   занят — иначе занял `greetd`, см. ниже), `NetworkManager.service`,
   `bluetooth.service`, `ufw.service`, `systemd-timesyncd.service`,
-  `fstrim.timer`;
+  `fstrim.timer`, `earlyoom.service`;
 - по фиче `printing`: `cups.socket`;
 - по фиче `tailscale` (`always: true`, см. [network.md](network.md)):
   `tailscaled.service`;
@@ -270,9 +294,10 @@ user-юнит rootless podman (ветка `{{- if has "distrobox" .enabled }}`, 
 Комментарий отдельно объясняет, почему `set -e` в начале скрипта не рискует
 уронить весь `apply` на первом же `enable_unit`: «Every unit below is backed
 by a package in the catalogue — `systemctl enable` on a missing unit fails».
-Действительно, все шесть безусловных юнитов приходят пакетами из каталога
+Действительно, все семь безусловных юнитов приходят пакетами из каталога
 или напрямую из `base`: `NetworkManager.service`/`bluetooth.service`/
-`ufw.service`/`sddm.service` — из фич `host-base`/`desktop`, а
+`ufw.service`/`sddm.service`/`earlyoom.service` — из фич
+`host-base`/`desktop`/`earlyoom`, а
 `systemd-timesyncd.service` (пакет `systemd`) и `fstrim.timer` (пакет
 `util-linux`) в каталоге вообще не упомянуты — оба входят транзитивно вместе
 с метапакетом `base`, тем же путём, что и `kbd` в [keyboard.md](keyboard.md)
@@ -392,7 +417,8 @@ sudo systemctl stop bluetooth && sudo modprobe -r btusb && sudo modprobe btusb &
 | `data.nvidia_driver` | `~/.config/chezmoi/chezmoi.toml`, поле `[data]` | пересчитывается на каждом `chezmoi init` по живому состоянию железа, не хранится как обычная фича |
 | `/etc/systemd/zram-generator.conf` | вне дома | `30-system`, если строки `zram-size = ram / 2` ещё нет |
 | Устройство `/dev/zram0`, `ram / 2` — 15,6 ГиБ на этой машине | ядро, через `zram-generator` | создаётся при загрузке из конфига выше, chezmoi его не трогает напрямую |
-| Юниты `sddm.service`\*, `NetworkManager.service`, `bluetooth.service`, `ufw.service`, `systemd-timesyncd.service`, `fstrim.timer` | системные | `30-system`: `enable`, без `--now`, при каждом прогоне |
+| Пакет `earlyoom` | хост, pacman | фича `earlyoom`, `always: true` |
+| Юниты `sddm.service`\*, `NetworkManager.service`, `bluetooth.service`, `ufw.service`, `systemd-timesyncd.service`, `fstrim.timer`, `earlyoom.service` | системные | `30-system`: `enable`, без `--now`, при каждом прогоне |
 | Юнит `cups.socket` | системный | `30-system`, если выбрана `printing`: `enable`, без `--now` |
 | Юнит `tailscaled.service` | системный | `30-system`, всегда (`tailscale` — `always: true`): `enable` + явный `start` |
 | Юнит `docker.socket` | системный | `30-system`, если выбрана `docker`: `enable`, без `--now`; сама фича описана в [dev-tools.md](dev-tools.md) |
@@ -462,6 +488,15 @@ $ ls /run/user/1000/podman/podman.sock
 /run/user/1000/podman/podman.sock
 ```
 
+earlyoom (блок снят 2026-08-02, в день оформления фичи; демон на машине
+работал с 30 июля):
+
+```sh
+$ systemctl is-enabled earlyoom.service && systemctl is-active earlyoom.service
+enabled
+active
+```
+
 Печать:
 
 ```sh
@@ -501,7 +536,7 @@ Controller F4:4E:FC:51:C5:AA tsikhanau-pc [default]
 | Сетевой принтер не виден | Правило `mdns` не открыто в `ufw`, либо принтер сетевой, а не USB | Разобрано в [network.md](network.md#когда-сломалось) |
 | Bluetooth: «no adapters found», хотя донгл виден в системе | `enable_autosuspend=0` ещё не применился (машина не перезагружалась после `chezmoi apply` с этой фичой) | `cat /etc/modprobe.d/btusb.conf` — если строка уже там, но не подействовала: `sudo systemctl stop bluetooth && sudo modprobe -r btusb && sudo modprobe btusb && sudo systemctl start bluetooth` (команда из вывода самого скрипта) |
 | Тот же симптом на другом донгле (не `10d7:b012`) | Правило udev жёстко привязано к `idVendor`/`idProduct` этого конкретного устройства и на другой донгл не сработает | Добавить отдельное правило udev для нового `idVendor:idProduct`, по образцу существующего |
-| Рабочий стол виснет намертво при нехватке памяти (не тормозит — не отвечает совсем), помогает только перезагрузка кнопкой | В репозитории нет общесистемной защиты от исчерпания памяти: ни `earlyoom`, ни `systemd-oomd` не ставит ни одна фича каталога — подробный разбор живого случая в [issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md) | Из мер того разбора сделан только больший zram (`ram / 2`, см. раздел про zram); `earlyoom`, `agents.slice` и разрешённый `kernel.sysrq` не реализованы — только предложены |
+| Рабочий стол виснет намертво при нехватке памяти (не тормозит — не отвечает совсем), помогает только перезагрузка кнопкой | earlyoom срабатывает лишь когда почти кончились **и** доступная память, **и** своп (по 10%); трэшинг при формально свободном кэше или давка одного cgroup в собственном потолке (случай 2 августа, раздел про zram) под это не подпадают. Разбор первого случая: [issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md) | `systemctl status earlyoom` — работает ли сторож вообще; из мер разбора сделаны zram `ram / 2` и `earlyoom`, а `agents.slice` и разрешённый `kernel.sysrq` — всё ещё нет |
 
 ## Почему именно так
 
@@ -610,7 +645,7 @@ CONFIG_ZRAM_DEF_COMP="zstd"
 - [issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md) —
   разбор аварии: машина зависла от нехватки памяти, OOM-killer не сработал ни
   разу, своп в 4 ГиБ по умолчанию не был проверкой на реальный рабочий режим.
-  После повторения 2 августа 2026 размер поднят до `ram / 2` — см. раздел про
-  zram выше.
+  После повторения 2 августа 2026 размер поднят до `ram / 2`, а `earlyoom`
+  оформлен фичей каталога — см. разделы про zram и earlyoom выше.
 - [browsers.md](browsers.md) — `browser.slice`, на который тот же разбор
   ссылается как на образец для предложенного, но не сделанного `agents.slice`.
