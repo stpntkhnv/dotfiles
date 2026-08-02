@@ -292,7 +292,7 @@ systemctl --user daemon-reload
 | Слайс Firefox | `~/.config/systemd/user/browser-firefox.slice` | Хост | фича `firefox` |
 | Слайс Chromium | `~/.config/systemd/user/browser-chromium.slice` | Хост | фича `chromium` |
 | Слайс Zen | `~/.config/systemd/user/browser-zen.slice` | Хост | фича `zen` (тема [isolation-browser.md](isolation-browser.md)) |
-| Обёртка запуска | `~/.local/bin/slice-run` (mode 755) | Хост | любая из фич `firefox`, `chromium`, `zen` |
+| Обёртка запуска | `~/.local/bin/slice-run` (mode 755) | Хост | любая из фич `firefox`, `chromium`, `zen`; на хосте также фичи `claude`/`codex` — обёртки агентов в `.bashrc` зовут тот же скрипт ([agents.md](agents.md)) |
 | Ярлык Firefox | `~/.local/share/applications/firefox.desktop` — перекрывает `/usr/share/applications/firefox.desktop` | Хост, в доме | шаблон `firefox.desktop.tmpl`, фича `firefox` |
 | Ярлык Chromium | `~/.local/share/applications/chromium.desktop` — перекрывает `/usr/share/applications/chromium.desktop` | Хост, в доме | шаблон `chromium.desktop.tmpl`, фича `chromium` |
 | Пакет Firefox | `firefox` (pacman) | Хост | фича `firefox` |
@@ -385,7 +385,7 @@ Exec=/home/stsiapan/.local/bin/slice-run browser-firefox.slice /usr/lib/firefox/
 | Браузер не влезает в свой слайс, хотя `.desktop` использует `slice-run` | Браузер запущен не из ярлыка (например, из терминала, из PWA-ярлыка самого браузера, или другим лаунчером), а значит `Exec` этого документа вообще не участвовал | `systemctl --user status <PID>` или `systemd-cgls --user`, посмотреть, в каком слайсе реально оказался процесс; для запуска из терминала — вызвать сам `slice-run <slice> <бинарник>` руками |
 | Один браузер регулярно убивается OOM-killer'ом ядра, пока в системе полно свободной памяти | `MemoryMax` личного слайса браузера меньше, чем ему реально нужно | Поднять число в нужном `.slice`-файле, `chezmoi apply`, перезапустить браузер; проверить, не упирается ли в это же время общий `browser.slice` |
 | Три браузера разом ощутимо тормозят, хотя у каждого личный потолок не превышен | Сработал общий `browser.slice` — сумма личных `MemoryMax` (6+4+4=14G) больше зонтичного (8G) специально | `systemctl --user show browser.slice -p MemoryCurrent` — если число близко к `MemoryMax` зонтика, дело не в отдельном браузере, а в их сумме |
-| Машина виснет намертво от нехватки памяти, а не тормозит | `browser.slice`/`MemoryMax` ограничивает только то, что живёт внутри этого дерева cgroup — процессы браузеров. Раздувание чего угодно за его пределами (сессия агента, разовый инструмент, контейнер) этими потолками никак не сдерживается: разбор аварии 30 июля 2026 ([issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md)) описывает именно такой случай — процесс, вызвавший зависание, не был браузером и не был ни в одном слайсе этого репозитория | Не тема этого документа и не чинится правкой `.slice`-файлов браузеров: смотреть [hardware.md](hardware.md#когда-сломалось), разделы про zram и `earlyoom` — общесистемные меры, добавленные после той аварии |
+| Машина виснет намертво от нехватки памяти, а не тормозит | `browser.slice`/`MemoryMax` ограничивает только то, что живёт внутри этого дерева cgroup — процессы браузеров. Раздувание чего угодно за его пределами этими потолками никак не сдерживается: разбор аварии 30 июля 2026 ([issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md)) описывает именно такой случай — процесс, вызвавший зависание, не был браузером и не был ни в одном слайсе этого репозитория | Не тема этого документа и не чинится правкой `.slice`-файлов браузеров: смотреть [hardware.md](hardware.md#когда-сломалось) (zram, `earlyoom`) и [agents.md](agents.md) — бюджет на `user.slice`, накрывающий агентов и все podman-контейнеры |
 
 ## Почему именно так
 
@@ -432,6 +432,8 @@ earlyoom). Авария 30 июля 2026
 - [hardware.md](hardware.md) — zram и `earlyoom`, общесистемные меры против
   нехватки памяти, на фоне которых эти слайсы — локальная мера только для
   браузеров.
+- [agents.md](agents.md) — тот же двухступенчатый приём для агентов и
+  podman-контейнеров: бюджет на `user.slice` пользовательского менеджера.
 - [issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md) —
   авария, которую `browser.slice` не мог предотвратить: причина лежала за
   пределами любого слайса этого репозитория.

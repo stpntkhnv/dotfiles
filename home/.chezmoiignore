@@ -60,11 +60,24 @@ Pictures/**
 .local/share/applications/zen.desktop
 {{ end }}
 
-{{/* The umbrella and the launcher helper belong to whichever browsers exist,
-     so they only go away when none of them do. */}}
+{{/* The browser umbrella belongs to whichever browsers exist, so it only
+     goes away when none of them do. */}}
 {{ if and (not (has "firefox" .enabled)) (not (has "chromium" .enabled)) (not (has "zen" .enabled)) }}
 .config/systemd/user/browser.slice
+{{ end }}
+
+{{/* slice-run serves two masters: the browser launchers (any browser feature)
+     and the host-side claude/codex wrappers in .bashrc. It only goes away
+     when nobody is left to call it. */}}
+{{ if and (not (has "firefox" .enabled)) (not (has "chromium" .enabled)) (not (has "zen" .enabled)) (or (ne .env "host") (and (not (has "claude" .enabled)) (not (has "codex" .enabled)))) }}
 .local/bin/slice-run
+{{ end }}
+
+{{/* The agents/containers memory budget caps the HOST's podman tree and host
+     agent sessions. Inside a container the same drop-in would cap the
+     container's own user manager -- meaningless nesting. */}}
+{{ if ne .env "host" }}
+.config/systemd/user/user.slice.d/**
 {{ end }}
 
 {{ if not (has "ziti" .enabled) }}

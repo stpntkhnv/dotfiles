@@ -3,6 +3,7 @@ covers:
   features: [claude, codex]
   paths:
     - home/.chezmoiexternal.toml.tmpl
+    - home/dot_config/systemd/user/user.slice.d/50-agents-budget.conf
 ---
 
 # Агенты в терминале: Claude Code и Codex
@@ -181,6 +182,66 @@ dotfiles), но этот репозиторий его больше не выз�
 самой базы, браузерных расширений и почему туда в принципе нечего
 подключать из терминала — [secrets.md](secrets.md).
 
+### Бюджет памяти: потолок на агентов и контейнеры разом
+
+2 августа 2026 агентская сессия в контейнере `digi3` запустила Aspire
+AppHost — dotnet, десяток узлов MSBuild, контейнеры SQL Server и Azurite —
+и съела своп машины до дна; рабочий стол ушёл в реклейм-трэшинг (подробная
+хроника — [hardware.md](hardware.md), раздел про zram). С тех пор у всей
+агентской машинерии есть общий потолок памяти, устроенный так.
+
+Rootless podman сам кладёт каждый контейнер (scope `libpod-*`) под слайс
+`user.slice` **пользовательского** менеджера systemd — не путать с
+одноимённым системным слайсом. Проверено на этой машине 2026-08-02: в
+`/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/user.slice/`
+лежат только scope'ы `libpod-*`, `libpod-conmon-*` и `podman-pause` —
+терминалы живут в `app.slice`, браузеры в `browser.slice`
+([browsers.md](browsers.md)). Поэтому бюджет вешается прямо на этот слайс,
+дроп-ином `~/.config/systemd/user/user.slice.d/50-agents-budget.conf`:
+
+```ini
+[Slice]
+MemoryHigh=12G
+MemoryMax=16G
+```
+
+Семантика двухступенчатая, та же, что у браузерных слайсов: за `MemoryHigh`
+ядро начинает тормозить и выжимать память только этого поддерева (спящие
+страницы уезжают в zram — деградация мягкая, пока своп жив), за `MemoryMax`
+OOM-killer убивает самый жирный процесс **внутри** поддерева, не трогая
+остальную машину. Пик до введения потолка — 22,8 ГиБ в день аварии.
+
+Сессии агентов, запущенные на самом хосте, туда заводят функции-обёртки в
+`.bashrc` (блок `{{ if eq .env "host" }}`, по фичам `claude`/`codex`):
+
+```sh
+claude() { slice-run user-agents.slice claude "$@"; }
+codex()  { slice-run user-agents.slice codex "$@"; }
+```
+
+`user-agents.slice` за счёт дефисной нотации systemd — ребёнок того же
+`user.slice`, так что бюджет один на всех: один агент может занять его
+целиком, пятеро — делят между собой, отдельной ручки «на сессию» нет
+намеренно. Механика самого `slice-run` (явное имя юнита, `exec
+systemd-run --scope`) разобрана в [browsers.md](browsers.md); рекурсии в
+обёртке нет — `systemd-run` запускает бинарник по PATH, функции оболочки в
+новый scope не переезжают. Сессиям внутри контейнеров обёртка не нужна и не
+достаётся (блок хостовый): их cgroup — это cgroup контейнера, уже под
+зонтиком.
+
+Почему бюджет не на отдельном красивом `agents.slice`: перенаправить туда
+podman целиком нечем. Глобальной опции `cgroup_parent` в `containers.conf`
+нет — есть только флаг `--cgroup-parent` на отдельный контейнер, а
+контейнеры, которые Aspire создаёт через `podman.socket` хоста
+([containers.md](containers.md)), никаким флагом distrobox не достать.
+Бюджет положен туда, где контейнеры уже есть.
+
+Дроп-ин разворачивается только на хосте (`.chezmoiignore`: внутри контейнера
+тот же файл ограничивал бы user-менеджер самого контейнера — бессмысленная
+вложенность), а `run_onchange_after_33-browser-slices.sh.tmpl` делает
+`systemctl --user daemon-reload` при его изменении — тем же механизмом
+хэшей, что и для браузерных слайсов.
+
 ## Что ставится и что меняется
 
 | Что | Куда | Чем | Условие |
@@ -191,6 +252,8 @@ dotfiles), но этот репозиторий его больше не выз�
 | Строка «claudefiles setup is pending» в чеклисте | вывод `chezmoi apply` | `run_after_zz-next-steps.sh.tmpl` | фича `claude`, пока `HEAD` клона не совпал с `last-applied-head` |
 | Файл состояния | `~/.config/claudefiles/last-applied-head` | сам `setup.sh` (код `claudefiles`, не этого репозитория) | в конце успешного ручного прогона |
 | Всё, что кладёт `setup.sh` (`~/.claude`, возможно `~/.claude-super`, MCP, плагины, скиллы) | вне этого репозитория | `claudefiles/setup.sh`, запускается руками | не покрывается этим документом — граница ответственности другого репозитория |
+| Дроп-ин `50-agents-budget.conf` (`MemoryHigh=12G`, `MemoryMax=16G` на `user.slice`) | `~/.config/systemd/user/user.slice.d/` | этап «Файлы» | только хост (`.chezmoiignore`) |
+| Функции-обёртки `claude`/`codex` → `slice-run user-agents.slice` | `~/.bashrc`, хостовый блок | этап «Файлы» | хост и включённая фича `claude`/`codex` соответственно |
 
 ## Как проверить
 
@@ -211,6 +274,18 @@ pending» с командой запуска; проверить это, нич�
 рендером чеклиста: `chezmoi execute-template <
 home/.chezmoiscripts/run_after_zz-next-steps.sh.tmpl | grep -A3 claudefiles`.
 
+Бюджет памяти:
+
+```bash
+systemctl --user show user.slice -p MemoryHigh -p MemoryMax -p MemoryCurrent
+type claude
+```
+
+Ожидаемо: `MemoryHigh=12884901888` и `MemoryMax=17179869184` (12 и 16 ГиБ в
+байтах) после `daemon-reload`; `type claude` на хосте отвечает «claude is a
+function», а внутри контейнера — путь к бинарнику. Живой расход поддерева —
+`MemoryCurrent` там же или `systemd-cgtop --user` (интерактивно).
+
 ## Когда сломалось
 
 | Симптом | Причина | Что делать |
@@ -220,6 +295,9 @@ home/.chezmoiscripts/run_after_zz-next-steps.sh.tmpl | grep -A3 claudefiles`.
 | В `claudefiles` вышли новые коммиты, а чеклист не предлагает setup | `git pull` внутри chezmoi ограничен `refreshPeriod = "168h"` — обновление раз в неделю, а не при каждом `apply`; пока клон не обновился, HEAD совпадает с маркером | подождать окно обновления, либо `chezmoi apply --refresh-externals` (форсирует обновление внешних источников, минуя `refreshPeriod`) |
 | Строка «claudefiles setup is pending» не исчезает после прогона `setup.sh` | `setup.sh` завершился с ошибкой (маркер пишется только за гейтом «ни один профиль не упал»), либо это старый `setup.sh` без записи маркера | Прочитать вывод `setup.sh`, починить причину и прогнать снова; если клон старый — `chezmoi apply --refresh-externals` |
 | `git pull` внешнего источника падает с ошибкой перемотки | `claudefiles` на GitHub переписал историю (force-push) — `--ff-only` не даёт молча слить несовместимое | Разобраться, что произошло в `claudefiles` (это уже её история, не этого репозитория); при необходимости удалить и заново склонировать `~/.local/share/claudefiles` |
+| Всё агентско-контейнерное разом ощутимо тормозит, остальная машина живая | Поддерево `user.slice` упёрлось в `MemoryHigh=12G` — ядро тормозит и выжимает именно его | `systemctl --user show user.slice -p MemoryCurrent`; закрыть лишнее (Aspire, лишние сессии) или пересмотреть числа в дроп-ине |
+| У агента внезапно умер дочерний процесс (сборка, тесты, SQL Server) | Поддерево упёрлось в жёсткий `MemoryMax=16G` — OOM-killer снял самый жирный процесс внутри | `journalctl --user -u user.slice` и `dmesg \| grep -i oom`; это штатная работа потолка, не баг |
+| Хостовая сессия `claude` не видна под `user-agents.slice` | Сессия запущена не интерактивной оболочкой (обёртка — функция из `.bashrc`), либо запущена до применения обёртки | `systemd-cgls --user` — посмотреть, где сидит процесс; перезапустить сессию из обычного терминала |
 
 ## Почему именно так
 
@@ -263,6 +341,10 @@ home/.chezmoiscripts/run_after_zz-next-steps.sh.tmpl | grep -A3 claudefiles`.
   [Application order](https://www.chezmoi.io/reference/application-order/).
 - [multiplexer.md](multiplexer.md) — как herdr опознаёт запущенный `claude`
   внутри контейнера.
+- [browsers.md](browsers.md) — механика `slice-run` и двухступенчатых
+  потолков `MemoryHigh`/`MemoryMax` на примере браузерных слайсов.
+- [hardware.md](hardware.md) — zram и earlyoom: общесистемные меры, рядом с
+  которыми бюджет `user.slice` — прицельная защита от аварии 2 августа 2026.
 - [secrets.md](secrets.md) — устройство базы KeePassXC и почему у агента нет
   канала к секретам вообще.
 - [dev-tools.md](dev-tools.md) — единый npm-установщик и остальные

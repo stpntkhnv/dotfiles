@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-{{- if or (has "firefox" .enabled) (has "chromium" .enabled) (has "zen" .enabled) }}
+{{- if or (has "firefox" .enabled) (has "chromium" .enabled) (has "zen" .enabled) (eq .env "host") }}
 
 # systemd only notices new/edited unit files after a reload. The hashes
 # below re-trigger this script whenever a slice changes:
@@ -8,6 +8,7 @@ set -euo pipefail
 # browser-firefox.slice: {{ include "dot_config/systemd/user/browser-firefox.slice" | sha256sum }}
 # browser-chromium.slice: {{ include "dot_config/systemd/user/browser-chromium.slice" | sha256sum }}
 # browser-zen.slice: {{ include "dot_config/systemd/user/browser-zen.slice" | sha256sum }}
+# user.slice.d/50-agents-budget.conf: {{ include "dot_config/systemd/user/user.slice.d/50-agents-budget.conf" | sha256sum }}
 
 systemctl --user daemon-reload
 {{- end }}

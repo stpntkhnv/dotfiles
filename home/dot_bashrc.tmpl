@@ -70,6 +70,23 @@ alias {{ .name }}-claude='HERDR_AGENT=claude distrobox enter --no-workdir {{ .na
 alias {{ .name }}-tmux='distrobox enter --no-workdir {{ .name }} -- tmux -L {{ .name }} new-session -A -s work'
 {{- end }}
 {{- end }}
+{{- if or (has "claude" .enabled) (has "codex" .enabled) }}
+
+# Agent sessions started on the host go under user-agents.slice -- a child of
+# the user manager's user.slice, where rootless podman already parents every
+# container, so the single budget in
+# ~/.config/systemd/user/user.slice.d/50-agents-budget.conf covers agent work
+# wherever it runs. Sessions inside containers need no wrapper: their cgroup
+# is the container's, already under the umbrella. No recursion here --
+# systemd-run execs the PATH binary, shell functions do not survive into the
+# new scope.
+{{- if has "claude" .enabled }}
+claude() { slice-run user-agents.slice claude "$@"; }
+{{- end }}
+{{- if has "codex" .enabled }}
+codex() { slice-run user-agents.slice codex "$@"; }
+{{- end }}
+{{- end }}
 {{ end }}
 
 # --- modern shell tooling ---------------------------------------------------
