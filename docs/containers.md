@@ -4,6 +4,7 @@ covers:
   paths:
     - home/dot_config/distrobox/distrobox.ini.tmpl
     - home/.chezmoiscripts/run_onchange_before_10-bootstrap-pacman.sh.tmpl
+    - home/.chezmoiscripts/run_onchange_before_30-system.sh.tmpl
 ---
 
 # Контейнеры distrobox
@@ -146,6 +147,49 @@ host_mount in ${HOST_MOUNTS}; do mount_bind /run/host"${host_mount}"
 Фича `distrobox` (те же два пакета — `distrobox`, `podman`) ставится, наоборот,
 только на хосте: контейнеру для того, чтобы быть контейнером, ни тот ни другой
 не нужны.
+
+## Podman хоста из контейнера
+
+Рабочий контейнер сам создаёт контейнеры — не собственным демоном, а
+podman'ом хоста. Практический потребитель — .NET Aspire: AppHost, запущенный
+в рабочем контейнере (репозиторий 1ANV в digi3), поднимает SQL Server и
+Azurite как контейнеры, и делает это через API-сокет rootless podman хоста.
+
+Канал из трёх частей:
+
+- **Хост включает сокет.** `run_onchange_before_30-system.sh.tmpl`, ветка
+  `{{- if has "distrobox" .enabled }}` (на хосте — фактически безусловно,
+  `distrobox` там `always: true`), делает `systemctl --user enable --now
+  podman.socket`. Это user-юнит, не системный: без sudo и мимо функции
+  `enable_unit` того же скрипта. Сокет появляется в
+  `/run/user/1000/podman/podman.sock` и socket-активирован — podman
+  запускается на первое обращение и ничего не ест в простое.
+- **Контейнер видит сокет.** distrobox монтирует корень хоста в `/run/host`,
+  поэтому изнутри путь — `/run/host/run/user/1000/podman/podman.sock`. Права
+  сходятся благодаря `--userns keep-id`: UID 1000 в контейнере отображается
+  в UID 1000 хоста ([isolation-network.md](isolation-network.md), раздел
+  «Почему юниты работают от пользователя, а не от root» — там карта UID
+  живого контейнера).
+- **Контейнеру нужен клиент.** Aspire требует docker CLI в `PATH` — его даёт
+  фича `docker`, с 2026-08-02 расширенная до `scope: both`
+  ([dev-tools.md](dev-tools.md), раздел «Docker: на хосте — демон, в
+  контейнере — клиент podman хоста»). `DOCKER_HOST` на путь сокета выставляет
+  само приложение; демон docker в контейнере не запускается — `30-system`
+  целиком хостовый, ни `docker.socket`, ни группы `docker` там нет.
+
+Проверка после `chezmoi apply` на хосте и в контейнере:
+
+```sh
+# хост
+$ ls /run/user/1000/podman/podman.sock
+# контейнер
+$ command -v docker
+$ DOCKER_HOST=unix:///run/host/run/user/1000/podman/podman.sock docker version
+```
+
+Последняя команда должна показать в половине Server podman и его версию.
+Если сокета на хосте нет, чеклист `zz-next-steps` в контейнере с включённой
+фичей `docker` сам печатает готовую команду для хоста.
 
 ## Пока pacman ещё не работает
 

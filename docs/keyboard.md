@@ -213,8 +213,10 @@ SOURCE TABLE») печатает результат компиляции на st
 | systemd unit `systemd-vconsole-setup.service` | системный | скрипт перезапускает его (`sudo systemctl restart`) сразу после того, как карта прошла компиляцию |
 
 Тот же скрипт `30-system` дальше настраивает сжатый своп в памяти (zram) и
-включает системные сервисы вместе с firewall `ufw` — это уже не про клавиатуру,
-темы [hardware.md](hardware.md) и [network.md](network.md) соответственно.
+включает сервисы вместе с firewall `ufw` — это уже не про клавиатуру,
+темы [hardware.md](hardware.md) и [network.md](network.md) соответственно
+(user-юнит `podman.socket` из того же скрипта — тема
+[containers.md](containers.md)).
 
 ## Как проверить
 

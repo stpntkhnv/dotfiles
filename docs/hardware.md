@@ -56,6 +56,7 @@ flowchart TD
 
         S30["30-system<br/>третья часть скрипта"] --> ZCONF["/etc/systemd/zram-generator.conf<br/>меняет только compression-algorithm"]
         S30 --> SVC["enable_unit:<br/>sddm · NetworkManager · bluetooth ·<br/>ufw · timesyncd · fstrim.timer<br/>+ по фиче: cups.socket, tailscaled, docker.socket"]
+        S30 --> PODSOCK["podman.socket — user-юнит,<br/>systemctl --user enable --now,<br/>мимо enable_unit (distrobox, always)"]
         SVC -->|"исключение 1"| TSNOW["tailscaled:<br/>ещё и явный systemctl start"]
         SVC -->|"исключение 2"| UFWNOW["ufw --force enable:<br/>действует сейчас, не после ребута"]
         SVC -.->|"фича printing"| CUPSNOTE["cups.socket +<br/>ufw allow mdns — network.md"]
@@ -247,7 +248,16 @@ everything comes up on the next boot». Полный список того, чт
   `tailscaled.service`;
 - по фиче `docker`: `docker.socket`.
 
-Из всей группы **ровно два** пункта не ждут следующей перезагрузки:
+Мимо `enable_unit` — и мимо `sudo` — идёт ещё один сокет: `podman.socket`,
+user-юнит rootless podman (ветка `{{- if has "distrobox" .enabled }}`, на
+хосте — фактически безусловно). Он включается сразу с `--now`: сокет
+обслуживает уже работающие контейнеры (.NET Aspire создаёт через него
+контейнеры podman'ом хоста), и ждать перезагрузки ему незачем. Сам канал
+контейнер→podman хоста описан в [containers.md](containers.md), раздел
+«Podman хоста из контейнера».
+
+Из всей группы `enable_unit` **ровно два** пункта не ждут следующей
+перезагрузки:
 
 1. **`tailscaled.service`** получает не только `enable`, но и явный
    `systemctl start`, если ещё не `active`. Причина — прямая зависимость по
@@ -388,6 +398,7 @@ sudo systemctl stop bluetooth && sudo modprobe -r btusb && sudo modprobe btusb &
 | Юнит `cups.socket` | системный | `30-system`, если выбрана `printing`: `enable`, без `--now` |
 | Юнит `tailscaled.service` | системный | `30-system`, всегда (`tailscale` — `always: true`): `enable` + явный `start` |
 | Юнит `docker.socket` | системный | `30-system`, если выбрана `docker`: `enable`, без `--now`; сама фича описана в [dev-tools.md](dev-tools.md) |
+| Юнит `podman.socket` | пользовательский (`systemctl --user`) | `30-system`, ветка `distrobox` (`always: true` — на хосте всегда): `enable --now`; канал к контейнерам описан в [containers.md](containers.md) |
 | Политика `ufw`: `deny incoming`, `allow outgoing`, `--force enable` | хост | `30-system`, один раз — действует немедленно, не после ребута |
 | Пакеты `cups`, `cups-pk-helper`, `system-config-printer` | хост, pacman | фича `printing`, `default: true` |
 | `/etc/modprobe.d/btusb.conf` | вне дома | `50-bluetooth`, только если выбрана `bluetooth-fix` |
@@ -444,6 +455,10 @@ enabled
 enabled
 $ systemctl is-active tailscaled.service
 active
+$ systemctl --user is-enabled podman.socket
+enabled
+$ ls /run/user/1000/podman/podman.sock
+/run/user/1000/podman/podman.sock
 ```
 
 Печать:

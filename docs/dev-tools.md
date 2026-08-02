@@ -32,7 +32,8 @@ covers:
   графические и терминальные, без необходимости ставить сами базы или
   сервер на машину.
 - **Docker** — контейнеры для запуска чужого софта (в том числе тех самых
-  баз данных для db-tools).
+  баз данных для db-tools); в рабочем контейнере та же фича даёт только
+  docker CLI как клиент к podman хоста — для .NET Aspire.
 - **Azure CLI + azd**, **Teams**, **GitHub CLI** — по одному инструменту
   под конкретного вендора или сервис.
 
@@ -131,7 +132,7 @@ curl -fsSL https://aka.ms/install-azd.sh | bash
 | `rider` | AUR: `rider` (`needs: [dotnet]`) | нет | — |
 | `db-tools` | `dbeaver` + AUR `go-sqlcmd` `lazysql-bin` `usql-bin` | нет | — |
 | `api-tools` | AUR: `bruno-bin` `posting` | нет | — |
-| `docker` | `docker` `docker-buildx` `docker-compose` `lazydocker` | нет | группа `docker` и `docker.socket` в `run_onchange_before_30-system.sh.tmpl` |
+| `docker` | `docker` `docker-buildx` `docker-compose` `lazydocker` | нет | группа `docker` и `docker.socket` в `run_onchange_before_30-system.sh.tmpl` — только хост, в контейнере пакеты работают клиентами к podman хоста |
 | `azure` | `azure-cli` | нет управляемых (`azd` ставится мимо chezmoi, в свою обычную для linux-скрипта location) | `70-azure` |
 | `teams` | AUR: `teams-for-linux` | нет | — |
 | `gh` | `github-cli` | нет | — |
@@ -273,21 +274,33 @@ DataGrip: Rider и так несёт тот же набор инструмент
 данных, DBeaver здесь — бесплатный универсальный запасной вариант, а не
 основной инструмент.
 
-## Docker: единственная фича без смысла в контейнере
+## Docker: на хосте — демон, в контейнере — клиент podman хоста
 
-`docker` — `scope: host`, и это единственная из двенадцати фич, у которой
-`container` вообще не в списке возможных `scope`: демон Docker всё равно
-живёт на хосте, ставить его вторым слоем внутри [контейнера distrobox](glossary.md#контейнер-distrobox)
-незачем (комментарий в каталоге дословно: «The one feature with no reason
-to exist in a container: the daemon lives on the host anyway»).
+`docker` — `scope: both`, но две половины фичи делают разное. До 2026-08-02
+она была `scope: host`, единственной из двенадцати фич без права на
+контейнер — комментарий в каталоге тогда говорил: демон всё равно живёт на
+хосте, ставить его вторым слоем внутри [контейнера distrobox](glossary.md#контейнер-distrobox)
+незачем. Расширение до `both` — та же мысль, доведённая до конца: раз демон
+живёт на хосте, контейнеру нужен только клиент. .NET Aspire (AppHost),
+запущенный в рабочем контейнере, требует docker CLI в `PATH` и сам выставляет
+`DOCKER_HOST` на API-сокет rootless podman хоста, видимый из контейнера как
+`/run/host/run/user/1000/podman/podman.sock`. Как устроен этот канал целиком
+— [containers.md](containers.md), раздел «Podman хоста из контейнера».
 
-`run_onchange_before_30-system.sh.tmpl` включает не сам демон, а
+На хосте `run_onchange_before_30-system.sh.tmpl` включает не сам демон, а
 `docker.socket` — сокет-активация, демон стартует по первому обращению и
 ничего не ест, пока Docker не нужен — и добавляет пользователя в группу
 `docker`. Членство в группе действует только со следующего входа в
 систему, не сразу: `run_after_zz-next-steps.sh.tmpl` проверяет
-`id -nG "$USER" | grep -qw docker` при **каждом** `chezmoi apply` и
+`id -nG "$USER" | grep -qw docker` при **каждом** `chezmoi apply` на хосте и
 печатает напоминание, пока перелогин не состоялся.
+
+В контейнере из всего этого не происходит ничего: `30-system` целиком
+хостовый (гасится шаблоном на `{{- if ne .env "host" }}`), так что ни
+`docker.socket`, ни группа `docker` в контейнере не появляются — демон
+не запускается и не должен. Чеклист `zz-next-steps` в контейнере проверяет
+вместо группы единственное, что тут может отсутствовать: сокет podman хоста
+— и печатает готовую команду для хоста, если его нет.
 
 ## Azure: `azure-cli` и `azd` — два разных пути на машину
 
@@ -369,6 +382,7 @@ chezmoi data | jq -r '.enabled[]' | grep -E '^(neovim|vscode|node|go|dotnet|ride
 | После `chezmoi apply` меняется `~/.npmrc` каждый раз (теряются комментарии, тильда становится абсолютным путём) | `npm config get prefix` разошёлся с `$HOME/.npm-global` — guard срабатывает на каждом проходе | Проверить `npm config get prefix` и откуда взялось расхождение (например, другой инструмент вроде `nvm` переставил префикс) |
 | `azd` не находится в `PATH` после установки фичи `azure` | Установщик `aka.ms/install-azd.sh` кладёт бинарник не через chezmoi и не через pacman — не отслеживается этим документом как управляемый файл | `command -v azd`; при отсутствии — тот же `curl -fsSL https://aka.ms/install-azd.sh \| bash` руками |
 | `docker` команды требуют `sudo`, хотя фича включена и `chezmoi apply` прошёл | Членство в группе `docker` действует только со следующего входа в систему | Разлогиниться и зайти заново; чеклист (`zz-next-steps`) напоминает об этом на каждом apply, пока не увидит себя в группе |
+| В контейнере `docker version` отвечает «Cannot connect to the Docker daemon at unix:///var/run/docker.sock» | Без `DOCKER_HOST` клиент идёт в локальный демон, которого в контейнере нет намеренно | Проверить канал к хосту: `DOCKER_HOST=unix:///run/host/run/user/1000/podman/podman.sock docker version` — сервер должен ответить как podman; Aspire выставляет `DOCKER_HOST` сам ([containers.md](containers.md)) |
 | Rider не устанавливается, `chezmoi apply` падает на AUR-пакете `rider` | AUR-сборка тянет `dotnet` через `needs`; если `dotnet-sdk` не собрался или не установился раньше, зависимая по смыслу, но не по `pacman`-зависимости сборка Rider может провалиться на своих собственных проверках | Проверить, что `dotnet --version` работает, прежде чем разбирать сам Rider |
 
 ## Почему именно так

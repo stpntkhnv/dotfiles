@@ -516,11 +516,17 @@ features:
       - cups-pk-helper
       - system-config-printer
 
-  # The one feature with no reason to exist in a container: the daemon lives
-  # on the host anyway.
+  # Host and container get two different halves of one feature. On the host it
+  # is the real engine: these packages plus docker.socket and the docker group
+  # (30-system). In a container the same packages are clients only: .NET
+  # Aspire needs a docker CLI in PATH and drives the HOST's podman through
+  # /run/host/run/user/1000/podman/podman.sock (the app sets DOCKER_HOST to
+  # that path itself; --userns keep-id makes the UID match). No daemon runs in
+  # the container -- 30-system is host-gated, so neither docker.socket nor the
+  # group exists there.
   - key: docker
     label: "Docker + lazydocker"
-    scope: host
+    scope: both
     pacman:
       - docker
       - docker-buildx

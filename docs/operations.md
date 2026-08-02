@@ -107,7 +107,8 @@ flowchart TD
 | `keepassxc` | То же условие, вторая строка чеклиста | «KeePassXC phone: install KeePassDX, accept the 'passwords' Syncthing folder, open personal.kdbx» |
 | `keepassxc` | Ни один из трёх пакетов (`bitwarden`, `rbw`, `bws-bin`) не установлен | «Bitwarden leftovers: 'sudo pacman -Rns bitwarden rbw bws-bin', then rm -rf ~/.config/rbw ~/.config/bws; delete the vault.bitwarden.eu account LAST, after critical passwords are recreated in KeePassXC» |
 | `tailscale` | `tailscale status` завершается успешно | «Tailscale: not connected -- 'sudo tailscale up' (browser auth)» |
-| `docker` | Текущий пользователь состоит в группе `docker` | «Docker: you are not in the docker group yet -- log out and back in to use it without sudo» |
+| `docker` (только хост) | Текущий пользователь состоит в группе `docker` | «Docker: you are not in the docker group yet -- log out and back in to use it without sudo» |
+| `docker` (только контейнер) | Сокет `/run/host/run/user/<uid>/podman/podman.sock` существует | «Docker: the host's podman API socket is missing -- on the HOST run 'systemctl --user enable --now podman.socket' (or 'chezmoi apply' there)» — в контейнере docker CLI лишь клиент к podman хоста ([containers.md](containers.md)) |
 
 **Только на хосте** (`.env == "host"`; в контейнере блок целиком отсутствует
 в отрендеренном тексте):
@@ -211,6 +212,7 @@ x-scheme-handler/http x-scheme-handler/https`, когда обработчик �
 | `ufw allow 22000/tcp 22000/udp 21027/udp` | Фича `syncthing` | там же | [sync.md](sync.md) |
 | `systemctl enable` (без `--now`) юнитов `sddm`\*, `NetworkManager`, `bluetooth`, `ufw`, `systemd-timesyncd`, `fstrim.timer`, `cups.socket` (printing), `docker.socket` (docker) | Базовые сервисы хоста, каждый прогон, только если ещё не enabled | там же | [hardware.md](hardware.md) |
 | `systemctl enable` **и** `start` юнита `tailscaled.service` | Фича `tailscale`, `always: true` | там же | [network.md](network.md) |
+| `systemctl --user enable --now` юнита `podman.socket` | Фича `distrobox`, `always: true` — на хосте всегда; user-юнит, без sudo | там же | [containers.md](containers.md) |
 | `usermod -aG docker $USER` | Фича `docker`; действует со следующего входа в систему | там же | [dev-tools.md](dev-tools.md) |
 | `localectl --no-convert set-x11-keymap` | Системная смена X11-раскладки (побочно пишет файл из таблицы `/etc` выше) | там же | [keyboard.md](keyboard.md) |
 | `sudo systemctl restart systemd-vconsole-setup.service` | После записи `KEYMAP=` в `/etc/vconsole.conf`, только если консольная карта клавиш только что прошла проверку `loadkeys --mktable` | там же | [keyboard.md](keyboard.md) |

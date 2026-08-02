@@ -99,9 +99,18 @@ if command -v tailscale &>/dev/null && ! tailscale status &>/dev/null; then
 fi
 {{- end }}
 {{- if has "docker" .enabled }}
+{{- if eq .env "host" }}
 if ! id -nG "$USER" | grep -qw docker; then
     steps+=("Docker: you are not in the docker group yet -- log out and back in to use it without sudo")
 fi
+{{- else }}
+# In a container the docker feature is a client to the HOST's podman socket
+# (see the catalogue comment); no group, no daemon -- the only thing that can
+# be missing is the socket itself, and it is fixed on the host, not here.
+if [[ ! -S "/run/host/run/user/$(id -u)/podman/podman.sock" ]]; then
+    steps+=("Docker: the host's podman API socket is missing -- on the HOST run 'systemctl --user enable --now podman.socket' (or 'chezmoi apply' there)")
+fi
+{{- end }}
 {{- end }}
 
 {{- if eq .env "host" }}

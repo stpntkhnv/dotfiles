@@ -187,4 +187,20 @@ if ! id -nG "$USER" | grep -qw docker; then
     sudo usermod -aG docker "$USER"
 fi
 {{- end }}
+{{- if has "distrobox" .enabled }}
+
+# Podman API socket -- a user unit, so no sudo and no enable_unit: rootless
+# podman answers on /run/user/<uid>/podman/podman.sock. Work containers see
+# that socket as /run/host/run/user/<uid>/podman/podman.sock (distrobox mounts
+# the host's /run at /run/host, and --userns keep-id maps the UID onto
+# itself), which is how .NET Aspire inside a container creates containers via
+# the host's podman: the app points DOCKER_HOST at that path and talks to it
+# with the docker CLI (feature `docker` in a container). Socket-activated like
+# docker.socket above; --now, unlike the system units, because the socket
+# serves already-running containers and has no reason to wait for a reboot.
+if ! systemctl --user is-enabled --quiet podman.socket 2>/dev/null; then
+    echo "==> Enabling podman.socket (user)"
+    systemctl --user enable --now podman.socket
+fi
+{{- end }}
 {{- end }}

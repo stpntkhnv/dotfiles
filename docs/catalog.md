@@ -24,7 +24,7 @@
 | `chromium` | Chromium (for the Chromium-only sites) | host | по выбору | 1 | [browsers.md](browsers.md) |
 | `zen` | Zen browser + Junction link picker | host | галочка стоит | 2 | [isolation-browser.md](isolation-browser.md) |
 | `printing` | Printing (CUPS) | host | галочка стоит | 3 | [hardware.md](hardware.md) |
-| `docker` | Docker + lazydocker | host | по выбору | 4 | [dev-tools.md](dev-tools.md) |
+| `docker` | Docker + lazydocker | both | по выбору | 4 | [dev-tools.md](dev-tools.md) |
 | `greeter` | Login screen: DMS greeter on greetd | host | галочка стоит | 2 | [greeter.md](greeter.md) |
 | `go` | Go | both | по выбору | 1 | [dev-tools.md](dev-tools.md) |
 | `dotnet` | .NET SDK + ASP.NET, freetds | both | галочка стоит | 7 | [dev-tools.md](dev-tools.md) |
