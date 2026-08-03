@@ -41,6 +41,8 @@ covers:
   правильный контейнер.
 - [`killswitch.md`](killswitch.md) — что рубит сеть контейнера, если его VPN
   падает.
+- [`nested-podman.md`](nested-podman.md) — вложенный podman: контейнеры
+  разработки (Aspire, Testcontainers) внутри контекста, на его localhost.
 
 ## Рабочее место
 

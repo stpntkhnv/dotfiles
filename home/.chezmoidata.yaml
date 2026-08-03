@@ -537,12 +537,13 @@ features:
 
   # Host and container get two different halves of one feature. On the host it
   # is the real engine: these packages plus docker.socket and the docker group
-  # (30-system). In a container the same packages are clients only: .NET
-  # Aspire needs a docker CLI in PATH and drives the HOST's podman through
-  # /run/host/run/user/1000/podman/podman.sock (the app sets DOCKER_HOST to
-  # that path itself; --userns keep-id makes the UID match). No daemon runs in
-  # the container -- 30-system is host-gated, so neither docker.socket nor the
-  # group exists there.
+  # (30-system). In a container the same packages are clients only: no daemon
+  # runs there -- 30-system is host-gated, so neither docker.socket nor the
+  # group exists inside. A container that needs to RUN containers (Aspire,
+  # Testcontainers) takes nested-podman below instead; driving the host's
+  # podman API socket from inside a context was tried and abandoned -- the
+  # containers land in the host netns where the context cannot reach their
+  # ports, see docs/nested-podman.md.
   - key: docker
     label: "Docker + lazydocker"
     scope: both
@@ -551,6 +552,29 @@ features:
       - docker-buildx
       - docker-compose
       - lazydocker
+
+  # Containers INSIDE a work context: rootless podman nested in the distrobox
+  # container, plus a docker CLI so tools that speak docker (Aspire's DCP,
+  # Testcontainers) find what they expect. Their containers then share the
+  # context's localhost and publish nothing to the host or other contexts --
+  # which is both what dev tools assume and stricter isolation than routing
+  # through the host's podman.
+  #
+  # crun is listed explicitly and matters: with runc, containers created
+  # through the docker-compat API (docker CLI always sends PidsLimit=0) get
+  # pids.max=1 and cannot fork a single process; crun treats 0 as unlimited.
+  # Storage is naturally separate from the host's: each context has its own
+  # home, so ~/.local/share/containers is per-context. The /etc/subuid line,
+  # the TMPDIR override and the API socket live in
+  # run_onchange_after_36-nested-podman.sh.tmpl, the env in dot_bashrc.tmpl.
+  - key: nested-podman
+    label: "Podman-in-box: containers inside the context (Aspire, Testcontainers)"
+    scope: container
+    pacman:
+      - crun
+      - docker
+      - passt
+      - podman
 
   # The login screen. greetd runs the DMS greeter, which is the desktop shell
   # itself rather than a theme that resembles it: it reads the same

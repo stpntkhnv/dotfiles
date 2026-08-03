@@ -4,7 +4,7 @@
      Источник: home/.chezmoidata.yaml и шапки covers в docs/*.md
      Пересобрать: tools/gen-catalog.sh -->
 
-Все 37 фич каталога. Столбец «Документ» ведёт в подробное описание.
+Все 38 фич каталога. Столбец «Документ» ведёт в подробное описание.
 
 | Фича | Что это | Где | Как включается | Пакетов | Документ |
 |---|---|---|---|---|---|
@@ -26,6 +26,7 @@
 | `zen` | Zen browser + Junction link picker | host | галочка стоит | 2 | [isolation-browser.md](isolation-browser.md) |
 | `printing` | Printing (CUPS) | host | галочка стоит | 3 | [hardware.md](hardware.md) |
 | `docker` | Docker + lazydocker | both | по выбору | 4 | [dev-tools.md](dev-tools.md) |
+| `nested-podman` | Podman-in-box: containers inside the context (Aspire, Testcontainers) | container | по выбору | 4 | [nested-podman.md](nested-podman.md) |
 | `greeter` | Login screen: DMS greeter on greetd | host | галочка стоит | 2 | [greeter.md](greeter.md) |
 | `go` | Go | both | по выбору | 1 | [dev-tools.md](dev-tools.md) |
 | `dotnet` | .NET SDK + ASP.NET, freetds | both | галочка стоит | 7 | [dev-tools.md](dev-tools.md) |

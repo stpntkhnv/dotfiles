@@ -104,12 +104,24 @@ if ! id -nG "$USER" | grep -qw docker; then
     steps+=("Docker: you are not in the docker group yet -- log out and back in to use it without sudo")
 fi
 {{- else }}
-# In a container the docker feature is a client to the HOST's podman socket
-# (see the catalogue comment); no group, no daemon -- the only thing that can
-# be missing is the socket itself, and it is fixed on the host, not here.
+{{- if has "nested-podman" .enabled }}
+# In a container with nested-podman the docker CLI talks to the box-local
+# rootless podman socket (36-nested-podman enables it; DOCKER_HOST comes from
+# .bashrc). No group, no daemon -- only the socket can be missing.
+if [[ ! -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock" ]]; then
+    steps+=("Docker: the box-local podman API socket is missing -- run 'systemctl --user enable --now podman.socket' in this container")
+fi
+{{- else }}
+# Without nested-podman the docker CLI in a container is a client to the
+# HOST's podman socket; the only thing that can be missing is the socket
+# itself, and it is fixed on the host, not here. Note that containers created
+# that way live on the host's localhost, out of this netns's reach -- tools
+# that need them on THIS box's localhost need the nested-podman feature
+# (docs/nested-podman.md).
 if [[ ! -S "/run/host/run/user/$(id -u)/podman/podman.sock" ]]; then
     steps+=("Docker: the host's podman API socket is missing -- on the HOST run 'systemctl --user enable --now podman.socket' (or 'chezmoi apply' there)")
 fi
+{{- end }}
 {{- end }}
 {{- end }}
 

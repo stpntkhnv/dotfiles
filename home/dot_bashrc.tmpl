@@ -88,7 +88,15 @@ codex() { slice-run user-agents.slice codex "$@"; }
 {{- end }}
 {{- end }}
 {{ end }}
-
+{{ if and (eq .env "container") (has "nested-podman" .enabled) }}
+# Containers run INSIDE this context (nested rootless podman, see
+# docs/nested-podman.md). DOCKER_HOST points every docker-speaking tool
+# (docker CLI, Aspire's DCP, Testcontainers) at the box-local API socket.
+# DOCKER_BUILDKIT=0 keeps `docker build` on the legacy builder: podman's
+# compat API does not speak BuildKit, and modern docker CLI defaults to it.
+export DOCKER_HOST="unix://${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock"
+export DOCKER_BUILDKIT=0
+{{ end }}
 # --- modern shell tooling ---------------------------------------------------
 # The same file is deployed into the host and into every container, so it runs
 # in several environments. Each line is guarded with `command -v` so a missing

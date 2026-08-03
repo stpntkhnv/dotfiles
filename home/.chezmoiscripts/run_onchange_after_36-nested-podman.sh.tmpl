@@ -1,0 +1,45 @@
+#!/bin/bash
+{{- if or (ne .env "container") (not (has "nested-podman" .enabled)) }}
+exit 0
+{{- else }}
+set -euo pipefail
+
+# Nested rootless podman inside a distrobox context. Three things stand
+# between `pacman -S podman` and a working `podman run` in here, each earned
+# the hard way; the story and the checks live in docs/nested-podman.md.
+
+# 1. /etc/subuid. Rootless podman needs a subordinate UID range, and the
+# range must exist inside THIS container's user namespace. distrobox maps
+# 65536 IDs (--userns keep-id:size=65536), so the shadow default of
+# 100000+ -- which is what useradd or a copied host line would put here --
+# asks for IDs the namespace does not have, and newuidmap fails with EPERM.
+# One line, starting right after the user's own UID, not including it:
+# containers get at most 64535 distinct IDs, which every stock image fits.
+echo "==> Writing /etc/subuid and /etc/subgid for nested podman..."
+printf '%s:1001:64535\n' "{{ .chezmoi.username }}" | sudo tee /etc/subuid >/dev/null
+sudo cp /etc/subuid /etc/subgid
+
+# 2. TMPDIR for the API service. `docker build` through the compat API makes
+# buildah wrap the build context in an overlay mount under $TMPDIR. The
+# default /var/tmp sits on the container's own overlayfs, and overlay-over-
+# overlay is refused by the kernel ("userxattr: invalid argument"). The home
+# directory is a bind mount from the host's real filesystem, so a tmpdir
+# under it works. Set on the service, not in the shell: the service is the
+# process that builds.
+echo "==> Pointing podman.service TMPDIR at a non-overlay filesystem..."
+mkdir -p "$HOME/.cache/tmpdir"
+mkdir -p "$HOME/.config/systemd/user/podman.service.d"
+cat > "$HOME/.config/systemd/user/podman.service.d/tmpdir.conf" <<'UNIT'
+[Service]
+Environment=TMPDIR=%h/.cache/tmpdir
+UNIT
+
+# 3. The docker-compat API socket, as a user unit. The user manager does run
+# in these containers (systemd is init here, and entering the box starts
+# user@1000.service), and podman itself must NOT run as root: the whole
+# point is rootless nesting. The socket path is what DOCKER_HOST in
+# dot_bashrc.tmpl points at.
+echo "==> Enabling the rootless podman API socket..."
+systemctl --user daemon-reload
+systemctl --user enable --now podman.socket
+{{- end }}
