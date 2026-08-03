@@ -98,6 +98,15 @@ if command -v tailscale &>/dev/null && ! tailscale status &>/dev/null; then
     steps+=("Tailscale: not connected -- 'sudo tailscale up' (browser auth)")
 fi
 {{- end }}
+{{- if and (ne .env "host") (has "dotnet" .enabled) }}
+# ASP.NET/Aspire https endpoints use the dev certificate; until it is trusted
+# and exported, the Aspire dashboard rejects its own resource service with
+# UntrustedRoot. The export lands in ~/.aspnet/dev-certs/trust, which .bashrc
+# then adds to SSL_CERT_DIR.
+if [[ ! -d "$HOME/.aspnet/dev-certs/trust" ]]; then
+    steps+=("dotnet dev certificate: not trusted yet -- run 'dotnet dev-certs https --trust', then open a NEW shell")
+fi
+{{- end }}
 {{- if has "docker" .enabled }}
 {{- if eq .env "host" }}
 if ! id -nG "$USER" | grep -qw docker; then

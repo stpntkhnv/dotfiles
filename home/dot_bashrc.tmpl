@@ -97,6 +97,16 @@ codex() { slice-run user-agents.slice codex "$@"; }
 export DOCKER_HOST="unix://${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock"
 export DOCKER_BUILDKIT=0
 {{ end }}
+{{ if has "dotnet" .enabled }}
+# `dotnet dev-certs https --trust` exports the ASP.NET dev certificate into
+# this directory, but OpenSSL-based clients -- .NET itself included on Linux --
+# only consult it when SSL_CERT_DIR says so (the dev-certs tool prints exactly
+# this instruction). Without it the Aspire dashboard rejects its own resource
+# service with UntrustedRoot. Inert until the export exists.
+if [ -d "$HOME/.aspnet/dev-certs/trust" ]; then
+    export SSL_CERT_DIR="$HOME/.aspnet/dev-certs/trust:${SSL_CERT_DIR:-/etc/ssl/certs}"
+fi
+{{ end }}
 # --- modern shell tooling ---------------------------------------------------
 # The same file is deployed into the host and into every container, so it runs
 # in several environments. Each line is guarded with `command -v` so a missing
