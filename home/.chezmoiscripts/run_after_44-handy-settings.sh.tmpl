@@ -38,12 +38,28 @@ fi
 # is this list, joined with ", ". Two consequences, both measured:
 #
 #   the seed must READ like the wanted output -- capitals, commas, a final full
-#   stop, and Latin terms inside Russian, because the register being pinned is
-#   Russian-with-English and not Russian;
+#   stop, and Latin terms inside the prose, because what gets pinned is a
+#   register (Russian-with-English, English-with-English) and not just a style;
 #
 #   the seed must come LAST. A prompt that ends mid-list came back lowercase and
 #   almost unpunctuated, worse than sending no prompt at all.
-SEED="Смотри, я поправил конфиг chezmoi и перезапустил distrobox: теперь Zen ходит через свой SOCKS-прокси, а Claude Code его не видит."
+#
+# A third consequence, and the reason this is not one hardcoded string any more:
+# the seed pins the output LANGUAGE harder than Handy's own language setting
+# does. Observed on this machine 2026-08-03 -- with the Russian seed below and
+# selected_language forced to "en", English speech came back as Russian
+# translation (transcription 732 in history.db, against the log line
+# `task=Transcribe, language=Some("en"), initial_prompt=true`), while the same
+# voice on a model that ignores initial_prompt came back in English. So the seed
+# has to follow whatever language is actually selected, and where no language is
+# selected there must be no seed at all: an "auto" that guesses English while
+# the prompt insists on Russian is exactly the failure above.
+HANDY_LANG="$(jq -r '.settings.selected_language // "auto"' "$STORE")"
+case "$HANDY_LANG" in
+    ru) SEED="Смотри, я поправил конфиг chezmoi и перезапустил distrobox: теперь Zen ходит через свой SOCKS-прокси, а Claude Code его не видит." ;;
+    en) SEED="Look, I fixed the chezmoi config and restarted distrobox: Zen now goes through its own SOCKS proxy, and Claude Code cannot see it." ;;
+    *)  SEED="" ;;
+esac
 
 # custom_words is not overwritten. The same list is where rare technical terms
 # get taught to Handy, and assigning a one-element list would wipe them on the
@@ -54,7 +70,14 @@ SEED="Смотри, я поправил конфиг chezmoi и перезапу
 # we wrote. Matching on shape instead of on today's SEED string means editing
 # SEED does not leave the old wording behind as a second, permanent entry --
 # every seed this script has ever written is swept out the same way, not just
-# the one that happens to match the current text.
+# the one that happens to match the current text. This is also what makes
+# switching languages clean: the Russian seed is swept out by the same filter
+# that would sweep out an old wording, so a machine that moves from ru to en
+# does not end up carrying both prompts at once.
+#
+# An empty $SEED (no language selected) therefore means no seed at all, not an
+# empty string appended to the list: whisper would take "..., " as the tail of
+# its prompt and pin nothing useful.
 #
 # post_process_enabled is turned off explicitly rather than left alone: the
 # server it points at is gone, and Handy would go on paying a connection timeout
@@ -70,7 +93,8 @@ patch() {
     jq --arg model "$MODEL" --arg seed "$SEED" '
         .settings.selected_model = $model
         | .settings.custom_words =
-            [(.settings.custom_words // [])[] | select(test(" ") | not)] + [$seed]
+            ([(.settings.custom_words // [])[] | select(test(" ") | not)]
+             + (if $seed == "" then [] else [$seed] end))
         | .settings.history_limit = 100
         | .settings.experimental_enabled = true
         | .settings.post_process_enabled = false

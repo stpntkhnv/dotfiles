@@ -723,7 +723,10 @@ features:
   #
   # Which Whisper, and the seed that keeps its punctuation from wandering, are
   # pinned by 44-handy-settings rather than left to whatever was picked in the
-  # UI: both were measured, and neither survives a reinstall on its own.
+  # UI: both were measured, and neither survives a reinstall on its own. The
+  # seed is the one thing that follows the UI instead of overruling it -- it
+  # pins the output language harder than Handy's own language setting does, so
+  # 44 reads selected_language and writes a seed in that same language.
   - key: voice
     label: "Voice input (Handy, offline)"
     scope: host
