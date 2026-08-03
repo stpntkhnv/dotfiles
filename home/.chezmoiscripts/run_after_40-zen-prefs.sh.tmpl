@@ -29,7 +29,7 @@ read -r -d '' PREFS <<'JS' || true
 // the proxied ones had zero too. Without it, call media (WebRTC only -- tabs
 // still obey the proxy) leaves directly from the host, so a call made from a
 // work tab shows the home IP to the tenant. The owner ruled the home IP not
-// confidential; docs/isolation.md carries this in "Что не изолировано".
+// confidential; docs/isolation.md carries this under "Constraints".
 
 // Web push is a notification surface during screen sharing.
 user_pref("permissions.default.desktop-notification", 2);

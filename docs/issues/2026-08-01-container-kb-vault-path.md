@@ -1,90 +1,24 @@
-# База знаний агентов в контейнерах указывала не на хостовый волт
+# Agent knowledge base in containers pointed at a container-local vault
 
-Работа 1 августа 2026. Симптом заметил пользователь: сетап claudefiles в новом
-контейнере печатает, что путём базы знаний будет `~/Documents/Notes/kb`, но
-изнутри контейнера этот путь ведёт не в хостовое хранилище. Здесь — что
-измерено, две причины (вторая пряталась за первой) и что именно поправлено.
-Правка кода этого репозитория не потребовалась: всё лечилось конфигами
-claudefiles в домах контейнеров, но ловушка воспроизведётся при каждом новом
-контейнере, поэтому журнал живёт здесь, рядом с описанием синхронизации.
+Found and fixed 2026-08-01; closed upstream 2026-08-02. No repo code changed.
 
-## Что было на диске
+**Symptom** claudefiles setup in a container prints the vault path as
+`~/Documents/Notes/kb`, which is not the host vault. All three had their own
+empty vault at `~/homes/<ctx>/Documents/Notes/kb`, with
+`CLAUDE_CODE_REMOTE_MEMORY_DIR` in each of their three profiles pointing there
+- outside Syncthing.
 
-Во всех трёх контейнерах (`personal`, `stellium`, `digi3`) claudefiles завёл
-по **собственному пустому волту**:
+**Root cause** Two layers. (1) `kb.vault_path` in `secrets.json` was empty and
+the claudefiles default is `$HOME/Documents/Notes/kb` (`lib/kb.sh`,
+`kb_vault_path`); in a container `$HOME` is `~/homes/<ctx>`. (2) Behind it: `kb_settings.py` builds permission rules from
+the `$HOME` of the process running it, so a host run emitted `Read(~/...)`,
+re-expanding against the container `~`; the container `HOME` gives the
+absolute `//home/...` form (double slash is rule syntax).
 
-```
-~/homes/<контекст>/Documents/Notes/kb/    # README.md + global/INDEX.md, 2 файла
-```
+**Fix** Explicit `kb.vault_path` in all three `secrets.json`, then `kb_apply`
+rerun for all nine container x profile pairs with the container `HOME`. Closed
+in claudefiles 2026-08-02: `kb_vault_path` now fails fast on an empty path in
+a container.
 
-и `CLAUDE_CODE_REMOTE_MEMORY_DIR` во всех профилях (`.claude`,
-`.claude-super`, `.claude-g`) каждого контейнера указывал туда же. Настоящих
-заметок ни в одном из трёх не было — только сид-скелет, поэтому ничего не
-потерялось. Но памяти агентов из контейнеров была уготована судьба: без
-синхронизации Syncthing (папки `kb` каталога это не касается) и гибель вместе
-с домом контейнера при пересоздании.
-
-## Причина 1: `$HOME` внутри контейнера — другой
-
-`kb.vault_path` в `~/homes/<контекст>/.config/claudefiles/secrets.json` был
-пуст, а пустое значение означает умолчание `$HOME/Documents/Notes/kb`
-(`claudefiles/lib/kb.sh`, функция `kb_vault_path`). Сетап, запущенный внутри
-контейнера, видит `$HOME = ~/homes/<контекст>` — и умолчание честно
-раскрывается в контейнерный дом. Сообщение сетапа при этом буквально правдиво
-(`~/Documents/Notes/kb`), лжёт только интуиция про то, чей это `~`.
-
-## Причина 2: права доступа с `~` в шаблоне
-
-После правки `vault_path` и перепрогона `kb_apply` осталась вторая, менее
-заметная копия той же ошибки: правила прав в `settings.json` генерировались
-как `Read(~/Documents/Notes/kb/**)` и так далее. `kb_settings.py` строит
-шаблон от `$HOME` того процесса, который его запускает: прогон с хоста дал
-`~/…`, что внутри контейнера снова раскрылось бы от контейнерного `~` — то
-есть указывало бы на уже несуществующий контейнерный волт, и каждая запись в
-настоящий волт просила бы подтверждение. Повторный прогон с `HOME`, равным
-дому контейнера, дал абсолютную форму `//home/stsiapan/Documents/Notes/kb/**`
-— вторая косая в начале это синтаксис абсолютного пути в правилах прав
-Claude Code, а не опечатка.
-
-## Что сделано (2026-08-01)
-
-1. В `secrets.json` всех трёх контейнеров прописан явный
-   `kb.vault_path = /home/stsiapan/Documents/Notes/kb`.
-2. `kb_apply` перепрогнан для девяти комбинаций (3 контейнера × 3 профиля) с
-   `HOME`, равным дому контейнера. Проверено с хоста: env-переменная,
-   симлинки `rules/kb-index.md` и тексты правил `rules/kb.md` везде указывают
-   на хостовый волт, правила прав — абсолютные.
-3. Осиротевшие сид-волты в домах контейнеров оставлены на месте (на них
-   больше ничто не указывает); удалить руками:
-   `rm -rf ~/homes/{personal,stellium,digi3}/Documents/Notes/kb`.
-
-## Чем это не закрыто
-
-Ловушка системная и вернётся с каждым новым контейнером, пока жив дефолт от
-`$HOME`. Два пути закрыть её насовсем, оба — в репозитории claudefiles, не
-здесь: задавать `kb.vault_path` явно при каждом сетапе в контейнере (дёшево,
-но держится на памяти человека) или научить `kb_vault_path` распознавать
-контейнер (например, по `/run/host`) и отказываться от умолчания вместо
-тихого попадания в контейнерный дом — ровно та же логика «required config
-must fail fast», по которой построен и `pat`.
-
-Закрыто 2026-08-02: `kb_vault_path` в claudefiles теперь падает на пустом
-пути внутри контейнера (спека `2026-08-02-kb-context-machine-wiring-design.md`
-того репозитория).
-
-## Как проверить
-
-Всё — чтение, с хоста:
-
-```sh
-$ for h in personal stellium digi3; do
-    for t in .claude .claude-super .claude-g; do
-      jq -r '.env.CLAUDE_CODE_REMOTE_MEMORY_DIR' ~/homes/$h/$t/settings.json
-    done
-  done | sort -u
-/home/stsiapan/Documents/Notes/kb
-```
-
-Единственная строка вывода и есть проверка: девять настроек, один путь, и
-путь этот — хостовый волт, который возит Syncthing (папка `kb` каталога,
-[sync.md](../sync.md)).
+**Recheck** `jq -r '.env.CLAUDE_CODE_REMOTE_MEMORY_DIR'
+~/homes/*/.claude*/settings.json | sort -u` - one line.

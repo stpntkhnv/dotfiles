@@ -13,11 +13,11 @@ CHECK_ONLY=0
 case "${1:-}" in
   --check) CHECK_ONLY=1 ;;
   "")      CHECK_ONLY=0 ;;
-  *)       printf 'использование: %s [--check]\n' "${0##*/}" >&2; exit 2 ;;
+  *)       printf 'usage: %s [--check]\n' "${0##*/}" >&2; exit 2 ;;
 esac
 
 for tool in chezmoi jq git awk sed; do
-  command -v "$tool" >/dev/null 2>&1 || { printf 'нет инструмента: %s\n' "$tool" >&2; exit 2; }
+  command -v "$tool" >/dev/null 2>&1 || { printf 'missing tool: %s\n' "$tool" >&2; exit 2; }
 done
 
 # Файлы, которые обязаны быть покрыты: всё под home/ плюс установщик.
@@ -44,7 +44,7 @@ parse_header() {
   awk -v doc="$1" '
     FNR == 1 {
       if ($0 != "---") {
-        printf "%s\tHEADER-ERROR\tнет frontmatter в первой строке\n", doc
+        printf "%s\tHEADER-ERROR\tno frontmatter on line 1\n", doc
         bailed = 1
         exit
       }
@@ -72,7 +72,7 @@ parse_header() {
       next
     }
     {
-      printf "%s\tHEADER-ERROR\tнеожиданная строка в шапке: %s\n", doc, $0
+      printf "%s\tHEADER-ERROR\tunexpected line in header: %s\n", doc, $0
       bailed = 1
       exit
     }
@@ -81,8 +81,8 @@ parse_header() {
       # awk выполняет END и после exit, поэтому без этой проверки одна
       # сломанная шапка давала бы две строки HEADER-ERROR.
       if (bailed) exit
-      if (!seen_covers)  printf "%s\tHEADER-ERROR\tнет ключа covers\n", doc
-      else if (!closed)  printf "%s\tHEADER-ERROR\tшапка не закрыта\n", doc
+      if (!seen_covers)  printf "%s\tHEADER-ERROR\tno covers key\n", doc
+      else if (!closed)  printf "%s\tHEADER-ERROR\theader not closed\n", doc
     }
   ' "$1"
 }
@@ -259,9 +259,9 @@ FAIL=0
 
 {
   printf '\n'
-  printf 'фич без документа:    %s\n'  "$(grep -c '^UNCOVERED-FEATURE' "$REPORT" || true)"
-  printf 'файлов без документа: %s\n'  "$(grep -c '^UNCOVERED-FILE' "$REPORT" || true)"
-  printf 'прочих замечаний:     %s\n'  "$(grep -cvE '^(UNCOVERED-FEATURE|UNCOVERED-FILE)' "$REPORT" || true)"
+  printf 'features with no doc: %s\n'  "$(grep -c '^UNCOVERED-FEATURE' "$REPORT" || true)"
+  printf 'files with no doc:    %s\n'  "$(grep -c '^UNCOVERED-FILE' "$REPORT" || true)"
+  printf 'other findings:       %s\n'  "$(grep -cvE '^(UNCOVERED-FEATURE|UNCOVERED-FILE)' "$REPORT" || true)"
 } >&2
 
 if [[ "$CHECK_ONLY" -eq 1 ]]; then
@@ -270,19 +270,19 @@ fi
 
 # --- генерация docs/catalog.md ---
 {
-  printf '# Каталог фич\n\n'
-  printf '<!-- ФАЙЛ ГЕНЕРИРУЕТСЯ. Правки руками будут стёрты.\n'
-  printf '     Источник: home/.chezmoidata.yaml и шапки covers в docs/*.md\n'
-  printf '     Пересобрать: tools/gen-catalog.sh -->\n\n'
-  printf 'Все %s фич каталога. Столбец «Документ» ведёт в подробное описание.\n\n' "$(printf '%s\n' "$CATALOG_KEYS" | wc -l)"
-  printf '| Фича | Что это | Где | Как включается | Пакетов | Документ |\n'
+  printf '# Feature catalogue\n\n'
+  printf '<!-- GENERATED FILE. Hand edits are wiped.\n'
+  printf '     Source: home/.chezmoidata.yaml and the covers headers in docs/*.md\n'
+  printf '     Rebuild: tools/gen-catalog.sh -->\n\n'
+  printf 'All %s features. The Doc column leads to the detailed description.\n\n' "$(printf '%s\n' "$CATALOG_KEYS" | wc -l)"
+  printf '| Feature | What | Where | How enabled | Packages | Doc |\n'
   printf '|---|---|---|---|---|---|\n'
   printf '%s' "$FEATURES" | jq -r '
     .[] |
     [ .key,
       .label,
       .scope,
-      (if .always then "всегда" elif .default then "галочка стоит" else "по выбору" end),
+      (if .always then "always" elif .default then "pre-checked" else "opt-in" end),
       ([(.pacman // []), (.aur // []), (.npm // []), (.dotnet // [])] | add | length | tostring)
     ] | @tsv' | while IFS=$'\t' read -r key label scope how pkgs; do
       doc="$(printf '%s\n' "$HEADERS" | awk -F'\t' -v k="$key" '$2 == "feature" && $3 == k { print $1; exit }')"
@@ -293,7 +293,7 @@ fi
       fi
       printf '| `%s` | %s | %s | %s | %s | %s |\n' "$key" "$label" "$scope" "$how" "$pkgs" "$link"
     done
-  printf '\nПакеты посчитаны из всех источников фичи: pacman, AUR, npm, dotnet tool.\n'
+  printf '\nPackage counts add up pacman, AUR, npm and dotnet tool sources.\n'
 } > docs/catalog.md
 
 exit "$FAIL"

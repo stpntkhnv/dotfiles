@@ -1,107 +1,25 @@
----
-covers:
-  features: []
-  paths: []
----
+# English dictation comes out as a Russian translation
 
-# 2026-08-03: английская диктовка выходит русским переводом
+Found and fixed 2026-08-03.
 
-## Симптом
+**Symptom** Handy input language `English`; English speech types out as fluent
+Russian matching the meaning - a translation, not a bad transcript.
+Intermittent.
 
-В интерфейсе Handy выбран язык ввода `English`. Диктуешь по-английски —
-печатается связный русский текст, по смыслу совпадающий со сказанным. Не
-искажённая расшифровка, а именно перевод. Иногда та же речь выходит
-по-английски, без видимой закономерности, что и делало симптом похожим на
-случайный сбой.
+**Root cause** The `initial_prompt` seed `44-handy-settings` wrote into
+`custom_words` was hardcoded Russian, and the seed sets output language more
+strongly than `selected_language`. From `handy.log` + `history.db` (log
+UTC, db local): at 18:03:30, `language=Some("en")`, task `Transcribe`,
+`translate_to_english` off and `initial_prompt=true` still gave Russian for
+English speech (732) - "wrong language" is out. At 18:05:18 the only change
+was model `canary-180m-flash`, which drops the seed: same voice, English
+(735). `language=None` runs at 18:01-18:02 show the model sometimes beating
+the seed. Mic and post-processing ruled out.
 
-## Что оказалось причиной
+**Fix** `44-handy-settings` now reads `selected_language` from
+`settings_store.json` and seeds in that language; on `auto`, none. See
+[voice.md](../voice.md). Black-box evidence only - no standalone whisper.cpp
+here; samples `handy-1785773009.wav` (732), `handy-1785773116.wav` (735).
 
-Затравка (`initial_prompt`), которую скрипт `44-handy-settings` пишет в
-`custom_words`, была жёстко русской. Она задаёт язык вывода сильнее, чем
-настройка `selected_language`.
-
-## Как ловили
-
-Разбирать было почти нечего: Handy пишет в лог параметры каждого запуска
-распознавания, а расшифровки складывает в SQLite. Обе стороны читаются
-без единой записи.
-
-```sh
-grep -aE "transcribe-cpp run" ~/.local/share/com.pais.handy/logs/handy.log
-python3 -c "
-import sqlite3, datetime
-c = sqlite3.connect('file:$HOME/.local/share/com.pais.handy/history.db?mode=ro', uri=True)
-for r in c.execute('select id, timestamp, substr(transcription_text,1,60) from transcription_history order by id desc limit 10'):
-    print(r[0], datetime.datetime.fromtimestamp(r[1]).strftime('%H:%M:%S'), r[2])
-"
-```
-
-Метки времени в логе и в базе расходятся ровно на два часа (лог в UTC, база
-в местном времени) — сопоставлять записи нужно с этой поправкой, иначе
-кажется, что строки не совпадают ни с чем.
-
-Совмещённая картина за 3 августа 2026 (время местное, как в базе):
-
-| Время | Параметры запуска | Речь | Результат |
-|---|---|---|---|
-| 18:01:41 | `task=Transcribe, language=None, initial_prompt=true` | английская | английский (запись 729) |
-| 18:02:12 | `task=Transcribe, language=None, initial_prompt=true` | английская | русский перевод (запись 730) |
-| 18:02:53 | `task=Transcribe, language=Some("en"), initial_prompt=true` | счёт «1, 2, 3...» | без языка, неинформативно (запись 731) |
-| 18:03:30 | `task=Transcribe, language=Some("en"), initial_prompt=true` | английская | русский перевод (запись 732) |
-| 18:04:05 | `task=Transcribe, language=Some("en"), initial_prompt=true` | русская | русский (записи 733, 734) |
-| 18:05:18 | `task=Transcribe, language=Some("en"), initial_prompt=false` | английская | английский (запись 735) |
-
-## Что доказывает вывод
-
-**Строка 18:03:30 отвергает версию «неверно выбран язык».** Язык передан в
-декодер явно (`language=Some("en")`), задача — `Transcribe`, а не
-`Translate`, и `translate_to_english` в настройках выключен. Все три рычага,
-которыми Handy управляет языком, стоят правильно, а результат всё равно
-русский.
-
-**Строка 18:05:18 отвергает версию «модель просто ошибается».** Между ней и
-предыдущей строкой изменилось ровно одно: пользователь переключился на модель
-`canary-180m-flash`, которая `initial_prompt` не принимает — это видно в самом
-логе как `initial_prompt=false`. Тот же голос, тот же язык в запросе,
-затравка не дошла до декодера — и результат английский.
-
-**Пары 18:01:41 и 18:02:12 объясняют, почему симптом казался случайным.** При
-`language=None` (значение `auto` в интерфейсе) язык определяет сама модель по
-звуку, и на коротком чистом английском она иногда перебарывает затравку, а на
-длинном сбивчивом — нет. Отсюда впечатление «работает через раз», которое и
-мешало заподозрить настройку, стоящую одинаково во всех прогонах.
-
-## Что отвергли по дороге
-
-- **Микрофон и звуковой тракт.** Отпадает сразу: текст осмысленный и точно
-  соответствует сказанному, теряется только язык. Проблема со звуком дала бы
-  обрывки или тишину.
-- **`translate_to_english`.** Настройка выключена (`false`), и она в любом
-  случае переводит *в* английский, а не из него.
-- **Постобработка.** `post_process_enabled = false`, в базе у новых записей
-  `post_processed_text` пуст — переводить после распознавания было нечему и
-  нечем.
-- **Нечёткая замена по `custom_words`.** Она подменяет отдельные слова по
-  порогу похожести (`word_correction_threshold`), а не переписывает фразу
-  на другой язык. К тому же в списке была ровно одна запись — сама затравка.
-
-## Что сделали
-
-Скрипт `44-handy-settings` больше не держит одну зашитую затравку. Он читает
-`selected_language` из `settings_store.json` и пишет затравку того же языка;
-при `auto` не пишет никакой. Разбор решения и его следствий — в
-[voice.md](../voice.md#затравка-задаёт-язык-сильнее-чем-настройка-языка).
-
-## Что осталось непроверенным
-
-Утверждение «затравка перебарывает языковой токен» доказано здесь только
-чёрным ящиком — по совпадению входов и выходов, без прогона whisper.cpp
-напрямую с тем же звуком и разными затравками. Такой прогон на этой машине
-сделать нечем: отдельного CLI whisper.cpp в системе нет, Handy держит свою
-копию внутри бинарника, а модели лежат в формате его собственной сборки.
-Записи для такой проверки, если она когда-нибудь понадобится, сохранены —
-имена файлов лежат в колонке `file_name` той же базы:
-`~/.local/share/com.pais.handy/recordings/handy-1785773009.wav` (запись 732,
-английская речь при `language=Some("en")`, вышла русским переводом) и
-`handy-1785773116.wav` (запись 735, та же речь на модели без затравки, вышла
-английской).
+**Recheck** `grep -aE "transcribe-cpp run" .../handy/logs/handy.log`:
+`initial_prompt=true` only when seed and language match.

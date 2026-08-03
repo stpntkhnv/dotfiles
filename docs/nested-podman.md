@@ -5,128 +5,65 @@ covers:
     - home/.chezmoiscripts/run_onchange_after_36-nested-podman.sh.tmpl
 ---
 
-# Вложенный podman: контейнеры внутри рабочего контекста
+# Nested podman
 
-Инструменты разработки — .NET Aspire, Testcontainers, любой `docker run` из
-скрипта проекта — исходят из того, что контейнер поднимется на той же машине,
-где живёт процесс, и оба увидят друг друга через общий
-[`127.0.0.1`](glossary.md#127001). Рабочий контекст этого репозитория — сам
-[контейнер distrobox](glossary.md#контейнер-distrobox) со своим
-[network namespace](glossary.md#network-namespace), и «той же машиной» для него
-является он сам, а не хост. Фича `nested-podman` даёт контексту собственный
-rootless podman: контейнеры разработки создаются *внутри* контекста, делят с
-ним localhost, и ни один их порт не виден ни хосту, ни соседним контекстам —
-проверено пробами с обеих сторон.
+## What it does
 
-Путь, который выглядит проще — гонять контейнеры через podman хоста, чей
-API-сокет виден в контексте через `/run/host`, — был реализован, прожил
-несколько месяцев на мосту из TCP-релеев и умер об Aspire: его оркестратор DCP
-безусловно создаёт собственную bridge-сеть и подключает к ней каждый контейнер
-отдельным `docker network connect`, поэтому контейнеры неизбежно оказываются в
-сети хоста, где контекст не может достать их порты, а порты, опубликованные на
-`127.0.0.1` хоста, для контекста не существуют. Обратное — положить контейнер
-в netns контекста режимом `container:stellium` — DCP запрещает та же
-безусловная сеть: контейнер в этом режиме нельзя подключить к bridge-сети, и
-DCP не доводит его до старта. Вложенный podman снимает вопрос целиком: DCP
-получает то, что ожидает, — «обычный docker» на «обычной машине».
+Feature `nested-podman`, scope `container`: rootless podman and docker CLI in a
+work context, so Aspire's DCP, Testcontainers and `docker run` get containers on
+its `127.0.0.1`, unreachable from host or siblings.
 
-## Из чего состоит
+## Files
 
-Пакеты ставит каталог фич (`home/.chezmoidata.yaml`, ключ `nested-podman`):
-`podman`, `passt`, `crun` и docker CLI (пакет `docker`; демона в контейнере
-нет, `30-system` включает docker.socket только на хосте). `crun` перечислен
-явно и обязателен — см. реестр обходов.
+| Path | Role |
+|---|---|
+| `home/.chezmoiscripts/run_onchange_after_36-nested-podman.sh.tmpl` | subuid/subgid, tmpdir drop-in, `podman.socket` |
+| `home/.chezmoidata.yaml`, key `nested-podman` | `podman`, `docker` (CLI), `crun`, `passt` |
+| `home/dot_bashrc.tmpl`, `has "nested-podman"` | `DOCKER_HOST`, `DOCKER_BUILDKIT=0` (compat API has no BuildKit) |
 
-Остальное делает `run_onchange_after_36-nested-podman.sh.tmpl`
-([`run_onchange`](glossary.md#run_onchange)) тремя шагами, дословно
-прокомментированными в самом скрипте:
+## How it works
 
-1. **`/etc/subuid` и `/etc/subgid`** — одна строка `stsiapan:1001:64535`.
-   Rootless podman раздаёт контейнерам «подчинённые» UID из этого диапазона,
-   а ядро требует, чтобы каждый такой UID существовал в user namespace
-   текущего контейнера. distrobox отображает в контекст ровно 65536 ID
-   (`--userns keep-id:size=65536`), поэтому дефолт shadow (100000+) просит
-   несуществующие ID и `newuidmap` отказывает с EPERM — это была
-   единственная причина легенды «вложенный podman не работает».
+Three fixes, reasons in the script: subuid `1001:64535` (distrobox maps exactly
+65536 IDs; shadow's 100000+ makes `newuidmap` fail EPERM - the whole "nested
+podman does not work" myth); `TMPDIR` off the container overlayfs, where buildah
+cannot overlay-mount a build context; `podman.socket` as a *user* unit.
 
-2. **TMPDIR для сервиса** — drop-in
-   `~/.config/systemd/user/podman.service.d/tmpdir.conf` уводит временные
-   файлы API-сервиса в `~/.cache/tmpdir`. Нужен для `docker build`: buildah
-   оборачивает контекст сборки в overlay-монтирование под `$TMPDIR`, а
-   дефолтный `/var/tmp` лежит на overlayfs самого контекста — overlay поверх
-   overlay ядро не монтирует. Домашняя папка — bind с настоящей файловой
-   системы хоста, там можно.
+Storage `~/.local/share/containers` sits under the context home (`home=` in
+`dot_config/distrobox/distrobox.ini.tmpl`), not the host's.
 
-3. **API-сокет** — `systemctl --user enable --now podman.socket`. Юнит
-   пользовательский, не системный: user manager в контексте работает
-   (systemd здесь init, вход в контекст поднимает `user@1000.service`), а
-   root-подман сломал бы саму идею rootless-вложенности.
+## Constraints
 
-Переменные окружения задаёт `dot_bashrc.tmpl` только в контейнере и только
-при включённой фиче: `DOCKER_HOST` указывает на сокет из шага 3,
-`DOCKER_BUILDKIT=0` держит `docker build` на легаси-билдере — BuildKit
-compat-API подмана не умеет.
+- `rm -rf ~/.local/share/containers` is safe only when `$HOME` is a context
+  home: in a box lacking `home=` it wiped *host* podman storage, all contexts
+  recreated (2026-08-03, volumes survived).
+- 64535 UIDs per container; a third nesting level has no range left.
+- Containers die with the context; volumes survive. They share its cgroup and
+  `--memory=8g` with builds and tests.
 
-## Сторадж: свой у каждого контекста, и это важно
+## Decisions
 
-Хранилище вложенного подмана — `~/.local/share/containers` — лежит в
-*домашней папке контекста* (`/home/stsiapan/homes/<имя>/...`), потому что у
-каждого контекста свой `home=` в `distrobox.ini`. Хостовый podman держит своё
-в `/home/stsiapan/.local/share/containers`. Это разные каталоги, и путать их
-опасно: сброс вложенного стораджа командой вида `rm -rf
-~/.local/share/containers` безопасен только когда `$HOME` действительно
-домашняя папка контекста. В тестовом боксе без своего `home=` та же команда
-снесла реестр *хостового* подмана — все контексты пришлось пересоздавать
-(2026-08-03; тома с данными выжили, потому что лежали в `volumes/` отдельными
-каталогами, и их удалось перерегистрировать).
+| Decision | Why | Rejected |
+|---|---|---|
+| podman inside the context | dev tools assume container and process share a localhost | Host podman over `/run/host/.../podman.sock`: Aspire's DCP always creates a bridge network and connects every container to it, so they land in the host netns the context cannot reach, and host `127.0.0.1` publishes are invisible to it. `--network container:<box>` fails the same way: DCP cannot attach it to the bridge. |
+| `crun` explicit | docker CLI sends `PidsLimit=0`; runc >= 1.4 reads it literally and the container gets `pids.max=1`, dying on its first fork | `runc` |
 
-Цена отдельного стораджа: образы у каждого контекста свои (mssql + redis +
-rabbitmq ≈ 2–3 ГБ на контекст), а слои поверх overlayfs пишутся без
-native diff, то есть медленнее. Плата разовая при pull/build; на скорость
-работающих контейнеров не влияет.
+## Verify
 
-## Пределы
-
-- Контейнерам доступно не больше 64535 различных UID — все стоковые образы
-  укладываются с запасом.
-- Третий уровень вложенности (контейнер в контейнере в контейнере) не
-  поднимется: диапазона ID уже не хватит.
-- Контейнеры живут, пока жив контекст: `distrobox stop` или перезагрузка
-  машины гасит их вместе с ним. Персистентные контейнеры (например, SQL с
-  томом) при следующем запуске стартуют заново из своего стораджа — данные в
-  томах переживают всё.
-- Вложенные контейнеры сидят в cgroup своего контекста, то есть под его
-  `--memory=8g` из `distrobox.ini` — вместе со сборкой, тестами и всем
-  остальным, что в контексте запущено. Полный стек (SQL Server + RabbitMQ +
-  Redis + dotnet + node) в 8 ГиБ помещается, но впритык; если контекст
-  начнёт ловить OOM внутри себя, ручка — `--memory` его секции в
-  `distrobox.ini`, а общий потолок всё равно держит `user.slice`
-  ([agents.md](agents.md), раздел про бюджет памяти).
-
-## Как проверить
-
-Изнутри контекста, одной пробой на весь тракт (create → publish → localhost):
-
-```
+```sh
 podman run -d --name probe -p 127.0.0.1:18080:80 docker.io/library/nginx:alpine
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/   # ждём 200
+curl -so /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/  # 200; refused on host
 podman rm -f probe
+docker build .  # compat+TMPDIR
 ```
 
-С хоста тот же `curl http://127.0.0.1:18080/` обязан получить отказ
-соединения: порт существует только в netns контекста. Тракт docker CLI
-проверяется так же с `DOCKER_HOST` из bashrc: `docker run`, `docker build`
-(любой Dockerfile) — оба должны пройти без правок окружения.
+## Failure modes
 
-Отдельная, не подмановская грабля рядом: панель Aspire ходит по https к
-своему сервису ресурсов с dev-сертификатом ASP.NET и, пока тот не доверен,
-сыпет `UntrustedRoot` и роняет свои страницы. Лечится один раз командой
-`dotnet dev-certs https --trust` и новым шеллом — блок фичи `dotnet` в
-`.bashrc` добавит экспортированный сертификат в `SSL_CERT_DIR`
-([dev-tools.md](dev-tools.md), таблица граблей). Браузер доверяет своему
-хранилищу, а не этому: предупреждение на странице панели остаётся, принять
-его — нормально.
+| Symptom | Cause | Fix |
+|---|---|---|
+| `newuidmap ... EPERM` | shadow default in `/etc/subuid` | rerun apply |
+| `userxattr: invalid argument` | tmpdir drop-in gone | restart `podman.service` |
 
-Обходы, на которых это держится, и признаки того, что их можно снять, — в
-[workarounds.md](workarounds.md): строки про `crun` против `runc` и про
-TMPDIR для buildah.
+## See also
+
+[workarounds.md](workarounds.md) (crun vs runc, buildah TMPDIR),
+[containers.md](containers.md).

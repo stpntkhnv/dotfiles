@@ -1,132 +1,100 @@
 # CLAUDE.md
 
-Этот репозиторий — личный конфиг Arch Linux на chezmoi: пакеты, конфиги домашней
-папки, скрипты установки и настройки и, отдельным слоем сложности, изоляция
-нескольких рабочих контекстов внутри одного браузера через distrobox и сеть.
-Документация лежит в `docs/`, разбита по подсистемам и связана с кодом
-машинно — через YAML-шапку `covers` в каждом документе и генератор
-`tools/gen-catalog.sh`. Не знаешь, с чего начать — открой `docs/README.md`,
-там карта.
+This repo is a personal Arch Linux configuration on chezmoi: packages, home
+configs, install and setup scripts, and - the complex part - isolation of
+several work contexts inside one browser via distrobox and network namespaces.
+Docs live in `docs/`, split by subsystem and bound to the code machine-readably
+through the `covers` frontmatter in each doc plus the generator
+`tools/gen-catalog.sh`. Start at [`docs/README.md`](docs/README.md), it is the
+map.
 
-Команда, которую стоит держать в голове: `tools/gen-catalog.sh --check`
-прогоняет все проверки покрытия документации, ничего не записывая; без
-`--check` тот же скрипт ещё и перезаписывает `docs/catalog.md`.
+The command worth remembering: `tools/gen-catalog.sh --check` runs every
+coverage check and writes nothing. Without `--check` it also regenerates
+`docs/catalog.md`.
 
-## Главное правило: код и документация меняются вместе
+## Main rule: code and docs change together
 
-**Правка не закончена, пока документация снова не описывает репозиторий
-верно.** Это не отдельная задача «обновить доки потом» и не работа для
-следующей сессии: правка файла и правка документов, которые его описывают, —
-одно изменение и один коммит. Документация здесь стоила дороже кода и ценна
-ровно тем, что ей можно верить не перепроверяя; один разошедшийся с кодом
-абзац отнимает это свойство у всего каталога сразу, потому что снаружи не
-видно, какой именно абзац устарел.
+**A change is not finished until the docs describe the repo correctly again.**
+Not a follow-up task, not the next session's problem: editing a file and
+editing the docs that describe it are one change and one commit. The docs cost
+more than the code and are valuable exactly because they can be trusted without
+re-checking; one paragraph that drifts from the code takes that property away
+from the whole catalogue, because from the outside there is no way to tell
+which paragraph went stale.
 
-Порядок, который проходится на каждой задаче, какой бы мелкой она ни
-казалась:
+Run this on every task, however small it looks:
 
-1. **Посмотри, что реально изменилось** — `git diff` и `git status`, а не
-   память о том, что собирался сделать.
-2. **Найди все документы, которые это описывают.** Для файла — те `docs/*.md`,
-   у кого путь стоит в `covers.paths` (правило 1). Для фичи — документ, чей
-   `covers.features` содержит её ключ (правила 2 и 3). Сверх этого пройди
-   `grep` по имени файла, ключа фичи, функции, юнита, порта, пакета: документы
-   цитируют код дословно и ссылаются друг на друга, поэтому упоминание бывает
-   и там, где шапка `covers` ничего не обещала.
-3. **Поправь каждый найденный документ, а не первый попавшийся.** Цитата,
-   разошедшаяся с кодом, хуже отсутствующей: она выглядит проверенной.
-4. **Прогони `tools/gen-catalog.sh --check`** и добейся чистого выхода; если
-   трогал каталог фич или шапку `covers` — сначала `tools/gen-catalog.sh` без
-   флага (правило 4).
-5. **Не объявляй задачу сделанной, пока пункты 1–4 не пройдены.** «Код готов,
-   документацию поправим отдельно» — это незакрытая задача, а не готовая.
+1. **Look at what actually changed** - `git diff` and `git status`, not your
+   memory of what you set out to do.
+2. **Find every doc that describes it.** For a file: the `docs/*.md` whose
+   `covers.paths` lists it (rule 1). For a feature: the doc whose
+   `covers.features` holds its key (rules 2 and 3). Then `grep` for the file
+   name, feature key, function, unit, port, package - docs quote code verbatim
+   and cross-reference each other, so mentions live where `covers` promised
+   nothing.
+3. **Fix every doc you found, not the first one.** A quote that disagrees with
+   the code is worse than no quote: it looks verified.
+4. **Run `tools/gen-catalog.sh --check`** and get a clean exit. If you touched
+   the feature catalogue or any `covers` header, first run it without the flag
+   (rule 4).
+5. **Do not call the task done before 1-4 are done.** "Code is ready, docs
+   later" is an open task, not a finished one.
 
-Две вещи, которые тут важно понимать правильно.
+Two things to get right about this.
 
-**Проверка не заменяет чтение.** `gen-catalog.sh` знает только покрытие фич и
-путей да целость ссылок; про смысл текста он не знает ничего. Скрипт может
-поменять поведение целиком, документ — врать про него в каждом абзаце, а
-проверка выйдет с кодом `0` и напечатает три нуля. Плюс у неё есть три
-названных пробела ([`docs/operations.md`](docs/operations.md), раздел «Три
-пробела, которые проверка не ловит»): упоминание документа простым текстом, а
-не markdown-ссылкой, она не видит вовсе; корневой `README.md` и
-`docs/issues/*.md` как источник ссылок не читает; файл под `home/`, не
-прошедший `git add`, не считает непокрытым.
+**The check does not replace reading.** `gen-catalog.sh` knows feature and path
+coverage and link integrity; it knows nothing about meaning. A script can
+change behaviour completely, its doc can lie in every paragraph, and the check
+still exits `0`. It also has three named blind spots, listed in
+[`docs/operations.md`](docs/operations.md): a doc mentioned as plain text
+rather than as a markdown link is invisible to it; the root `README.md` and
+`docs/issues/*.md` are not read as link sources; a file under `home/` that was
+never `git add`ed does not count as uncovered.
 
-**Мелочь бывает двух разных видов.** Если изменение действительно не задевает
-ничего описанного — опечатка в комментарии, который никто не цитирует,
-переставленные строки без смены поведения, — в документации делать нечего, и
-выдумывать себе работу не надо. Но вывод «это мелочь» делается после пункта 2,
-а не вместо него: числа («тридцать пять фич», «двадцать семь скриптов»,
-«восемь безусловных»), дословные цитаты комментариев и вывода команд, имена
-юнитов, портов и пакетов рассыпаны по документам десятками, и правка на одну
-строку регулярно задевает три документа сразу.
+**"Too small to matter" is a verdict, not an assumption.** If a change really
+touches nothing described - a typo in a comment nobody quotes, reordered lines
+with no behaviour change - leave the docs alone. But decide that after step 2,
+not instead of it: counts, verbatim quotes, unit names, ports and package names
+are scattered across dozens of documents, and a one-line edit routinely lands
+in three of them.
 
-## Правила
+## Rules
 
-Ниже — частные случаи главного правила и механика, которая его обслуживает.
-
-1. **Тронул файл под `home/` — обнови все документы, которые его перечисляют.**
-   Найди все `docs/*.md`, у кого этот путь стоит в шапке `covers.paths`, и
-   поправь каждый, а не первый попавшийся. Один и тот же скрипт может быть
-   перечислен сразу в нескольких документах законно: например
-   `run_onchange_before_30-system.sh.tmpl` одновременно настраивает раскладку
-   клавиатуры, zram и firewall, и это не ошибка каталогизации, а свойство
-   самого скрипта.
-
-2. **Завёл фичу в `home/.chezmoidata.yaml` — дай ей документ.** Впиши её ключ
-   в `covers.features` существующего документа или заведи новый. Генератор
-   считает непокрытую фичу ошибкой: он досматривает отчёт до конца, а потом
-   выходит с кодом `1`, так что здесь нельзя просто забыть.
-
-2а. **Завёл новый документ — впиши его в карту `docs/README.md`.** Это
-   единственное правило, которое машина не проверяет: генератор следит за
-   покрытием фич и путей, но про карту не знает ничего. Документ, которого нет
-   в карте, формально в порядке и при этом невидим для человека, пришедшего
-   с первой страницы.
-
-3. **Правишь существующий блок фичи в `.chezmoidata.yaml`** (пакеты, `scope`,
-   `needs`, `label`) — правка идёт не в `how-it-works.md`, а в документ, чей
-   `covers.features` содержит именно этот ключ. Правило пути из пункта 1 здесь
-   не подсказывает: `.chezmoidata.yaml` — один файл, а фич в нём 35;
-   `how-it-works.md` описывает только механику каталога, а не содержимое
-   отдельных фич.
-
-4. **После правки каталога фич или любой шапки `covers` — прогони
-   `tools/gen-catalog.sh`** (без `--check`, чтобы он переписал файл) **и
-   закоммить получившийся `docs/catalog.md`.** Этот файл руками не
-   редактируется никогда: генератор — единственный источник его содержимого,
-   и ручная правка исчезнет при следующем запуске.
-
-5. **Обошёл баг чужой программы — запиши это в `docs/workarounds.md`.** Строка
-   таблицы несёт доказательство в одном из четырёх состояний, описанных в
-   самом файле, и проверку, по которой в будущем видно, жив ли баг ещё. Без
-   такой строки обход выглядит частью логики репозитория и переживает причину,
-   которая его вызвала, на годы дольше необходимого.
-
-   Реестр и `docs/issues/` — разные вещи, и путать их не надо. В реестр идёт
-   **итог**: одна строка про обход, который в репозитории уже есть. В
-   `docs/issues/` идёт **расследование**: как ловили, что мерили, что
-   отвергли, — то есть то, что читают один раз и обычно не перечитывают.
-   Завёл журнал расследования — сошлись на него из тематического документа,
-   иначе он останется никому не видимым.
-
-6. **Утверждение о поведении этого репозитория подтверждай ссылкой на файл и
-   якорь**, а не на голый номер строки: имя функции, заголовок раздела или
-   короткий уникальный фрагмент строки. Номер строки допустим только как
-   дополнение к якорю. Он один протухает от первой же посторонней правки выше
-   по файлу и уже через месяц указывает не туда.
-
-7. **Пиши документацию простым русским языком.** Термин при первом появлении в
-   документе либо объясняется тут же на месте, либо ведёт ссылкой на
-   `docs/glossary.md` — там термины выстроены по нарастающей, каждый опирается
-   только на уже объяснённые выше.
-
-8. **Не вычищай объясняющие комментарии в скриптах `home/.chezmoiscripts/` и в
-   `home/.chezmoidata.yaml`.** Они поставлены в этом репозитории намеренно.
-   Если где-то ещё у тебя действует общее правило «ноль комментариев в коде»,
-   здесь оно не годится: комментарии вроде того, почему `distrobox` создаётся
-   с `--userns keep-id` или почему сокет лежит в `/var/lib/wsproxy`, а не в
-   `/mnt`, экономят следующему читателю день на то, что автор уже один раз
-   выяснил и записал. Это тот случай, когда правило самого репозитория
-   конкретнее и весомее общего правила проекта.
+1. **Touched a file under `home/` - update every doc that lists it.** Find all
+   `docs/*.md` with that path in `covers.paths` and fix each. One script may
+   legitimately appear in several docs: `run_onchange_before_30-system.sh.tmpl`
+   sets up the keyboard layout, zram and the firewall at once.
+2. **Added a feature to `home/.chezmoidata.yaml` - give it a doc.** Put its key
+   in some doc's `covers.features` or write a new doc. An uncovered feature is
+   an error: the generator finishes its report and then exits `1`.
+3. **Editing an existing feature block** (packages, `scope`, `needs`, `label`)
+   - the edit goes to the doc whose `covers.features` holds that key, not to
+   `how-it-works.md`. Rule 1 gives no hint here: `.chezmoidata.yaml` is one
+   file and holds every feature, while `how-it-works.md` describes only the
+   machinery of the catalogue.
+4. **After editing the feature catalogue or any `covers` header, run
+   `tools/gen-catalog.sh`** without `--check` and commit the resulting
+   `docs/catalog.md`. That file is never hand-edited: the generator is its only
+   source, and manual edits vanish on the next run.
+5. **Worked around someone else's bug - record it in
+   [`docs/workarounds.md`](docs/workarounds.md).** The row carries the evidence
+   in one of the four states the file defines, plus the check that shows
+   whether the bug is still alive. Without it the workaround reads as repo
+   logic and outlives its cause by years. The registry holds the *outcome*;
+   `docs/issues/` holds the *investigation*. Start an investigation log and the
+   subsystem doc links to it, or nobody will ever see it.
+6. **Back a claim about this repo with a file plus an anchor** - a function
+   name, a heading, a short unique fragment - never a bare line number. Line
+   numbers rot on the first unrelated edit above them.
+7. **Docs are written for agents, in English, to the standard in
+   [`docs/STYLE.md`](docs/STYLE.md).** Dense, factual, no tutorials about
+   standard technology, 1.5-8 KB per doc, fixed section skeleton. A doc is an
+   index and a memory, not a second copy of the code: point at the file instead
+   of pasting it, and spend the bytes on what cannot be re-derived - rationale,
+   rejected alternatives, dated evidence, verification commands.
+8. **Do not strip the explanatory comments in `home/.chezmoiscripts/` and
+   `home/.chezmoidata.yaml`.** They are deliberate. If a global "no comments in
+   code" rule applies to you elsewhere, it does not apply here: comments like
+   why `distrobox` is created with `--userns keep-id`, or why the socket lives
+   in `/var/lib/wsproxy` rather than `/mnt`, save the next reader a day of
+   rediscovery.

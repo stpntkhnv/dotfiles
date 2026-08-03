@@ -1,83 +1,24 @@
-# Веб-клиент Windows App / AVD: серый экран в Zen, лечится подменой агента на Firefox-на-Windows
+# AVD / Windows App web client: grey screen in Zen
 
-Найдено 2 августа 2026, при попытке зайти в виртуалку JT International
-(`cjo2858@corp.jti.com`) через веб-клиент `windows.cloud.microsoft` из Zen.
-Сессия устанавливалась полностью, но вместо рабочего стола оставался серый
-холст. **Закрыто в тот же день.** Правки кода репозитория не потребовалось:
-лечение — настройка расширения User-Agent Switcher, которая живёт в профиле
-браузера, а не в этом репозитории. Журнал здесь, потому что ловушка
-неочевидна и вернётся при любом заходе в AVD/Windows App из Firefox-форка.
+Found and fixed 2026-08-02. No repo code changed - the fix is a User-Agent
+Switcher setting in the profile.
 
-## Как выглядело
+**Symptom** `windows.cloud.microsoft` (JTI tenant) in Zen: session
+established, desktop a grey canvas. Chromium works.
 
-Оболочка клиента живая: сайдбар, тулбар, кнопка «Standard Desktop». После
-подключения — серый (почти чёрный) прямоугольник на месте рабочего стола,
-на нём курсор. В Chromium-браузерах тот же вход работает.
+**Root cause** RDP came up completely - only video decode was dead, looping on
+`Initializing WebCodecs` / `WebCodecs Error`. Its flag telemetry carries
+`"Nh_Disable_WebCodecs_Firefox": true`: Microsoft knows that path is broken on
+Firefox and routes it to the software decoder, keyed on the User-Agent. JTI
+Conditional Access blocks non-Windows, so UA spoofing to Edge was on
+(`Edg/148`), so the client took the WebCodecs branch Gecko cannot serve.
 
-## Что показал лог консоли
+**Fix** Spoof as Firefox on Windows instead, per-site: `Mozilla/5.0 (Windows
+NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0` - the platform
+passes CA, `Firefox/141.0` turns the flag on. Rejected: hiding
+`window.VideoDecoder` via `+js(set, VideoDecoder, undefined)` - in Edge mode
+the client assumes WebCodecs exists and dies on `isConfigSupported`. If JTI
+later filters on browser too: pre-WebCodecs Chrome UA, or native FreeRDP.
 
-Ключевое — не ошибка, а последовательность:
-
-1. Сессия RDP поднялась целиком: `Logged in ... JTICORP\cjo2858`, буфер
-   обмена расшарен (`Local clipboard is shared`), ввод и раскладка монитора
-   приняты (`SendMonitorLayout fired with success: 1`). То есть мёртв ровно
-   один слой — декодирование и отрисовка видеопотока.
-2. Клиент выбрал путь **WebCodecs** и зациклился на инициализации:
-   `WebCodecs available in worker context ... Prefer hardware: 1`, затем
-   без конца `Initializing WebCodecs` / `WebCodecs Error`.
-3. В телеметрии флагов — `"Nh_Disable_WebCodecs_Firefox": true`. То есть
-   Microsoft **сам знает**, что WebCodecs-путь на Firefox сломан, и держит
-   флаг, уводящий Firefox на программный декодер (которым Firefox и
-   обслуживался раньше).
-4. `navigator.userAgent` на вкладке: `... Chrome/148 ... Edg/148`.
-
-## Причина
-
-Детект браузера у клиента идёт по User-Agent. Для входа в тенант JTI
-включена подмена агента (Conditional Access режет не-Windows/не-Edge), и
-Zen представлялся Edge. Флаг `Nh_Disable_WebCodecs_Firefox` включается по
-детекту **Firefox** — а «Edge» его не получает, поэтому клиент шёл в
-WebCodecs-ветку, которой в настоящем Gecko нет рабочей реализации под их
-кодек. Итог: `webCodecs:true`, воркеры декодера падают, холст пуст.
-
-Проверено отдельно: голое сокрытие `window.VideoDecoder` (uBlock-скриптлет
-`+js(set, VideoDecoder, undefined)`) НЕ помогает и делает хуже — в
-Edge-режиме их код считает WebCodecs гарантированным и падает на
-`window.VideoDecoder.isConfigSupported` с `TypeError`, инициализация
-умирает, вечный «Connecting…».
-
-## Что сработало
-
-Подмена агента не на Edge, а на **Firefox на Windows**:
-
-```
-Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0
-```
-
-Разбор, почему именно это:
-- `Windows NT 10.0` проходит платформенный фильтр JTI (CA режет по ОС —
-  Linux; браузер, судя по тому, что Firefox-на-Windows пустил, не режется);
-- `Firefox/141.0` включает у клиента флаг `Nh_Disable_WebCodecs_Firefox`,
-  и он сам уходит на программный декодер, который под Firefox и работает.
-
-Одним UA закрываются оба требования разом: вход (Windows) и рабочий
-декодер (Firefox).
-
-## Границы
-
-- Лечение — настройка расширения на профиле, не код репозитория.
-  Установку самого расширения репозиторий обеспечивает
-  ([isolation-browser.md](../isolation-browser.md), список расширений).
-- Если JTI когда-нибудь начнёт резать CA и по браузеру, Firefox-на-Windows
-  перестанет пускать — тогда остаётся либо старый Chrome-UA (версия до
-  WebCodecs, чтобы клиент пошёл legacy-веткой), либо нативный клиент AVD
-  (FreeRDP) в обход браузера.
-- Обычные «only in Edge»-сайты по-прежнему хотят Edge — подмена на Firefox
-  нужна именно этому клиенту и настраивается на нём точечно (per-site в
-  User-Agent Switcher), а не глобально.
-
-## Как проверить, что диагноз ещё в силе
-
-Зайти в `windows.cloud.microsoft` с UA «Edge» и открыть консоль: пока в
-логе есть `WebCodecs Error` в цикле при `navigator.userAgent` с `Edg/`, а
-смена UA на Firefox-на-Windows даёт рабочий стол — механизм тот же.
+**Recheck** With an Edge UA the console still loops `WebCodecs Error`; the
+Firefox-on-Windows UA gives a desktop.

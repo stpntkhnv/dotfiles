@@ -1,87 +1,64 @@
 # dotfiles
 
 Arch Linux workstation configuration managed with [chezmoi](https://www.chezmoi.io/).
-One-line install below; everything past this paragraph — the docs under
-`docs/` — is written in Russian.
 
 ```sh
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/stpntkhnv/dotfiles/main/install.sh)"
 ```
 
-## Установка
+## Install
 
-Команда выше ставит chezmoi (если его ещё нет), клонирует этот репозиторий,
-показывает чеклист фич, ставит выбранное и раскладывает конфиги. Работает
-одинаково что на голом хосте, что внутри контейнера distrobox — окружение
-определяется само, по наличию `/run/.containerenv`.
+The command above installs chezmoi if needed, clones this repo, shows the
+feature checklist, installs what was selected and lays down the configs. It
+behaves the same on a bare host and inside a distrobox container - the
+environment is detected from the presence of `/run/.containerenv`.
 
-Если CDN отдаёт устаревший `install.sh`, тот же файл можно взять напрямую
-через API GitHub:
+If the CDN serves a stale `install.sh`, fetch the same file through the GitHub
+API instead:
 
 ```sh
 sh -c "$(curl -fsSL https://api.github.com/repos/stpntkhnv/dotfiles/contents/install.sh -H 'Accept: application/vnd.github.raw')"
 ```
 
-Неинтерактивная установка, смена уже сделанного выбора и подводные камни
-`chezmoi init --prompt` — в [`docs/install.md`](docs/install.md).
+Non-interactive installs, changing a choice already made, and the sharp edges
+of `chezmoi init --prompt` are in [`docs/install.md`](docs/install.md).
 
-## Что попадает на машину
+## What lands on the machine
 
-Без единого вопроса — потому что без этого машина не работает. Таких фич
-ровно семь (`always: true` в каталоге): `core` и `shell` — базовые утилиты
-и оболочка (`git`, `ssh`, starship, eza, bat, fzf, zoxide); `host-base` —
-обвязка хоста; `desktop` — рабочий стол niri + DankMaterialShell; `tailscale`
-— сеть между своими машинами; `distrobox` — контейнеры рабочих контекстов;
-`container-base` — обвязка внутри контейнера вроде locale-gen и xauth.
-Разобраны они в
-[`docs/base.md`](docs/base.md), [`docs/desktop.md`](docs/desktop.md),
-[`docs/network.md`](docs/network.md) и [`docs/containers.md`](docs/containers.md);
-полный список фич с пометкой, какая безусловна, — в
-[`docs/catalog.md`](docs/catalog.md).
+Eight features are unconditional (`always: true`), because the machine does not
+work without them: `core` and `shell` (base utilities and the shell - `git`,
+`ssh`, starship, eza, bat, fzf, zoxide), `host-base` (host plumbing),
+`earlyoom` (memory watchdog), `desktop` (niri + DankMaterialShell), `tailscale`
+(network between own machines), `distrobox` (work-context containers) and
+`container-base` (in-container plumbing such as locale-gen and xauth). They are
+described in [`docs/base.md`](docs/base.md),
+[`docs/desktop.md`](docs/desktop.md), [`docs/hardware.md`](docs/hardware.md),
+[`docs/network.md`](docs/network.md) and
+[`docs/containers.md`](docs/containers.md).
 
-Остальные 29 фич — чеклист (браузер `zen`, несущий изоляцию рабочих
-контекстов, там предвыбран — [`docs/isolation-browser.md`](docs/isolation-browser.md)).
-Всего `home/.chezmoidata.yaml` перечисляет 36, у
-каждой свои пакеты и `scope` (хост / контейнер / везде); при установке
-чеклист можно поправить (пробел — переключить фичу, Enter — подтвердить), и
-выбор сохраняется в `~/.config/chezmoi/chezmoi.toml`. Как каталог фич
-устроен изнутри и что делать, если фичу нужно добавить или её выбор — уже не
-тот, что нужен, — в [`docs/how-it-works.md`](docs/how-it-works.md).
+The other 30 come from a checklist; 17 of them are pre-checked, including the
+`zen` browser that carries the work-context isolation
+([`docs/isolation-browser.md`](docs/isolation-browser.md)). `home/.chezmoidata.yaml`
+lists 38 features in total, each with its own packages and a `scope` (host /
+container / both). During install the checklist can be edited (space toggles,
+Enter confirms) and the choice is saved to `~/.config/chezmoi/chezmoi.toml`.
+The full table with the unconditional ones marked is
+[`docs/catalog.md`](docs/catalog.md); how the catalogue works and how to add a
+feature is [`docs/how-it-works.md`](docs/how-it-works.md).
 
-## Токены доступа
+## Access tokens
 
-У агентов, работающих в этом репозитории, нет доступа ни к паролям, ни к
-personal access token: раньше была команда `pat`, читавшая их из Bitwarden,
-но эта схема выпилена 2026-08-01. Personal access token каждой организации
-человек копирует вручную с её сайта в момент, когда он нужен.
+Agents working in this repo have access to neither passwords nor personal
+access tokens. There used to be a `pat` command reading them from Bitwarden;
+that scheme was removed on 2026-08-01. Each organisation's personal access
+token is now copied by hand from its site at the moment it is needed.
 
-Пароли живут в KeePassXC — один локальный файл, синхронизируемый на все
-машины через Syncthing. Как это устроено и что делать при поломке —
+Passwords live in KeePassXC - one local file synced to every machine through
+Syncthing. How that is wired and what to do when it breaks:
 [`docs/secrets.md`](docs/secrets.md).
 
-## Документация
+## Docs
 
-Дальнейшая документация — в [`docs/`](docs/), по-русски, один документ на
-тему:
-
-- [`docs/README.md`](docs/README.md) — карта всех документов: что где
-  искать.
-- [`docs/catalog.md`](docs/catalog.md) — сгенерированная таблица «фича →
-  документ», перегенерируется, руками не редактируется.
-- [`docs/glossary.md`](docs/glossary.md) — словарь терминов, от простого к
-  сложному.
-- [`docs/install.md`](docs/install.md) — установка на чистой машине шаг за
-  шагом, включая неинтерактивный режим.
-- [`docs/isolation.md`](docs/isolation.md) — зачем и как изолированы рабочие
-  контексты в браузере: сеть, куки, контейнеры.
-- [`docs/agents.md`](docs/agents.md) — Claude Code и Codex: как они
-  раскладываются на машину и обновляются.
-- [`docs/operations.md`](docs/operations.md) — какими командами проверить,
-  что всё применилось как надо, и что делать, когда что-то сломалось.
-
-## Каталог документации
-
-`tools/gen-catalog.sh --check` прогоняет все проверки покрытия документации
-(каждая фича и каждый файл из `home/` должны быть перечислены хотя бы в одном
-документе), ничего не записывая. Без `--check` тот же скрипт перезаписывает
-`docs/catalog.md`.
+Everything under `docs/` is written in English for AI agents: dense, factual,
+no tutorials. Start from the map, [`docs/README.md`](docs/README.md). The
+format they follow is [`docs/STYLE.md`](docs/STYLE.md).

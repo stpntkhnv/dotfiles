@@ -7,315 +7,64 @@ covers:
     - home/.chezmoiscripts/run_onchange_before_30-system.sh.tmpl
 ---
 
-# Контейнеры distrobox
+# distrobox containers
 
-[isolation.md](isolation.md) объяснил, зачем у каждого рабочего контекста своя
-сеть. Этот документ — про то, из чего физически собран контейнер, который эту
-сеть несёт: какой в нём образ, что в нём общее с хостом, а что своё, и три
-особенности его сборки, которые иначе стоят часа непонятного дебага.
+## What it does
 
-## Что такое distrobox
-
-Обычная виртуальная машина эмулирует железо целиком: свой процессор (в смысле
-эмуляции), своя копия ядра, свой загрузчик. distrobox — не это. Ядро Linux у
-контейнера то же самое, что и у хоста, физически то же самое, работающее прямо
-сейчас. Программа `distrobox` — надстройка над `podman`, которая создаёт
-[контейнер distrobox](glossary.md#контейнер-distrobox): группу процессов в
-своём наборе [namespace](glossary.md#namespace), плюс сама пробрасывает внутрь
-домашний каталог, графику и звук, которые голый podman-контейнер не даёт
-сам по себе.
-
-Практическое следствие: контейнер digi3 — это не отдельная система, которую
-нужно накатывать с нуля через установщик дистрибутива. Это набор процессов
-Arch Linux поверх того же ядра, с частью своего окружения и частью общего с
-хостом. Какая часть какая — тема следующих разделов.
-
-## Как собирается контейнер
-
-Контейнеры описаны в одном файле-шаблоне,
-`home/dot_config/distrobox/distrobox.ini.tmpl`. У него секция `[base]` с
-общими настройками и одна секция на рабочий контекст, сгенerированная из
-`contexts:` в `home/.chezmoidata.yaml` (список контекстов — тема
-[isolation.md](isolation.md)):
-
-```ini
-[base]
-image=docker.io/library/archlinux:latest
-init=true
-...
-
-[digi3]
-include=base
-home=~/homes/digi3
-additional_flags="--memory=8g --volume ~/.local/share/wsproxy/digi3:/var/lib/wsproxy:rw"
-```
-
-`include=base` подтягивает все настройки `[base]`, секция контекста добавляет
-только то, что у контекста своё: домашний каталог и подключённый том.
-`init=true` в `[base]` значит, что внутри контейнера поднимается собственный
-systemd — на нём держатся сервисы моста, описанные в isolation-network.md.
-
-Собирается это одной командой:
-
-```sh
-distrobox assemble create --name digi3 --file ~/.config/distrobox/distrobox.ini
-```
-
-**Флаг `--name` не опционален.** Первая строка самого файла
-(`home/dot_config/distrobox/distrobox.ini.tmpl:1-3`) объясняет почему:
-`distrobox-assemble` обходит INI-файл и создаёт контейнер из **каждой**
-секции, включая `[base]`. Без `--name` он честно создаст два контейнера:
-`digi3` — реальный — и `base` — пустой мусорный, из тех же настроек `[base]`
-без переопределений контекста. `--name digi3` говорит собрать только одну,
-явно названную секцию.
-
-## Параметры unshare: что своё, а что общее с хостом
-
-`[base]` включает шесть флагов `unshare_*` — каждый снимает с контейнера один
-общий с хостом [namespace](glossary.md#namespace) и делает его отдельным.
-Значения в `distrobox.ini.tmpl:24-37` выбраны не одинаково:
-
-| Параметр | Значение | Что снимает | Почему так |
-|---|---|---|---|
-| `unshare_netns` | `true` | общий [network namespace](glossary.md#network-namespace) | несёт всю конструкцию изоляции контекстов — без своей сети остальное бессмысленно (подробнее — [isolation.md](isolation.md), раздел «Что изолировано надёжно») |
-| `unshare_process` | `true` | общий список процессов (pid namespace) | список процессов одного контекста не читается из другого; ничего не стоит |
-| `unshare_ipc` | `false` | *(остаётся общим)* — `/dev/shm` и IPC | будь `true`, контейнер получил бы вместо хостового `/dev/shm` дефолт podman в 64 МБ, и приложения на Electron и JVM начали бы падать на нехватке разделяемой памяти |
-| `unshare_devsys` | `false` | *(остаётся общим)* — `/dev` | будь `true`, ушёл бы проброс `/dev` в контейнер, а с ним видеокарта и звук |
-| `unshare_groups` | `false` | *(остаётся общим)* — дополнительные группы пользователя | default самого distrobox, отдельной причины в комментарии репозитория для этого значения нет |
-| `unshare_all` | `false` | — | это не «своё значение», а флаг-ярлык «включить все unshare разом»; не используется, потому что нужным флагам здесь и так проставлены разные значения |
-
-Комментарий в коде формулирует это одной строкой: «neither \[ipc, devsys\]
-buys anything against attribution» — разделение памяти и устройств ловит
-падения одной машины, а не связывает активность в журналах двух организаций.
-Ту же мысль, но со стороны угрозы, а не механизма, разбирает
-[isolation.md](isolation.md) в разделе «Что не изолировано».
-
-## Потолок памяти и единственный канал к хосту
-
-Секция каждого контекста добавляет `additional_flags` с двумя вещами:
-
-```
---memory=8g --volume ~/.local/share/wsproxy/<контекст>:/var/lib/wsproxy:rw
-```
-
-`--memory=8g` — жёсткий потолок podman на один контейнер: три работающих
-контекста разом не могут вынести хост, если что-то в одном взбесится. Это не
-про неатрибутируемость, это защита от исчерпания ресурсов — подробнее об этом
-различии в разделе «Почему именно так» ниже и в
+Per-context container assembly. Features: `distrobox` (host: `distrobox` +
+`podman`), `container-base` (container, 11 pkgs); both `always`. Why:
 [isolation.md](isolation.md).
 
-`--volume` — единственный проброшенный внутрь каталог, и он персональный:
-у каждого контекста свой, в отличие от `/run/host`, который виден целиком и
-всем (это уже подробность [isolation.md](isolation.md)). Внутри этого
-каталога позже появляется [UNIX-сокет](glossary.md#unix-сокет), через который
-идёт сетевой мост — сам мост не тема этого документа, см.
-isolation-network.md.
+## Files
 
-**Почему том смонтирован в `/var/lib/wsproxy`, а не в `/mnt`.** Это выглядело
-бы естественнее — `/mnt` для того и существует. Но distrobox монтирует
-хостовый `/mnt` (заодно с `/media`, `/run/media` и `/var/mnt`) поверх
-одноимённого пути внутри контейнера при **каждом** старте — это отдельный,
-безусловный шаг его собственного entrypoint, а не что-то, что можно выключить
-флагом в `distrobox.ini.tmpl`. Том, положенный туда через `--volume`, эта
-перемонтировка накрывает и прячет: он остаётся числиться в
-`/proc/self/mountinfo`, поэтому отказ выглядит как «путь примонтирован, но
-файлов в нём нет», а не как явная ошибка. Это подтверждено чтением исходника
-distrobox (`89luca89/distrobox`, файл `distrobox-init`, версия 1.8.2.5 —
-именно она в `extra` Arch на момент проверки 2026-07-30): список
-`HOST_MOUNTS` содержит `/mnt`, `/media`, `/run/media`, `/var/mnt`, и цикл `for
-host_mount in ${HOST_MOUNTS}; do mount_bind /run/host"${host_mount}"
-"${host_mount}"; done` выполняется без всяких условий на каждом запуске
-контейнера; флага исключить один конкретный путь из этого списка нет. Запись
-в реестр обходов — [workarounds.md](workarounds.md).
-
-## Что ставится внутри контейнера
-
-Фича `container-base` (`home/.chezmoidata.yaml`, `scope: container`) — пакеты,
-без которых сам контейнер работает, но не годится для той роли, которую от
-него ждут:
-
-| Пакет | Зачем |
+| Path | Role |
 |---|---|
-| `glibc-locales` | локали внутри контейнера |
-| `xorg-xauth` | проброс X11 на хост для приложений, экспортированных обратно |
-| `nss-mdns` | резолвинг имён `.local` |
-| `sox`, `mesa`, `vte-common` | зависимости приложений, экспортированных на хост |
-| `microsocks`, `socat` | публикуют выход контейнера в интернет для хостового браузера через UNIX-сокет — механика этого моста в isolation-network.md |
-| `nftables` | под опциональный killswitch; ничего не делает, пока эта фича не выбрана (killswitch.md) |
-| `alsa-plugins`, `words` | без отдельного объяснения в коде |
+| `home/dot_config/distrobox/distrobox.ini.tmpl` | `[base]` + per-context sections |
+| `.chezmoiscripts/run_onchange_before_10-bootstrap-pacman.sh.tmpl` | container-only pacman fixup |
+| `.chezmoiscripts/run_onchange_before_30-system.sh.tmpl` | host-only; enables user `podman.socket` |
 
-Фича `distrobox` (те же два пакета — `distrobox`, `podman`) ставится, наоборот,
-только на хосте: контейнеру для того, чтобы быть контейнером, ни тот ни другой
-не нужны.
+## How it works
 
-## Podman хоста из контейнера
+- `distrobox assemble create --name <ctx> --file ~/.config/distrobox/distrobox.ini`
+- `init=true`: systemd inside runs the bridge units
+  ([isolation-network.md](isolation-network.md))
+- Per context: `--memory=8g` (resource protection, not anti-attribution) plus
+  `--volume ~/.local/share/wsproxy/<ctx>:/var/lib/wsproxy` — the only host
+  channel, per-context by design.
+- Host socket `/run/user/1000/podman/podman.sock` is, inside,
+  `/run/host/run/user/1000/podman/podman.sock` (`--userns keep-id`); client:
+  feature `docker` ([dev-tools.md](dev-tools.md)), no daemon inside.
 
-Рабочий контейнер может создавать контейнеры podman'ом хоста через его
-API-сокет. Важная оговорка появилась 2026-08-03: контейнеры, созданные этим
-каналом, живут в сети **хоста**, и их порты из netns контекста недостижимы —
-для .NET Aspire, который был главным потребителем канала и ожидает общий
-localhost с поднятыми контейнерами, этот путь оказался тупиком и заменён
-вложенным podman'ом ([nested-podman.md](nested-podman.md), там же разбор,
-почему канал хоста для Aspire не спасается). Канал остаётся для случаев, где
-общий localhost не нужен или адрес можно переопределить — например,
-Testcontainers с `TESTCONTAINERS_HOST_OVERRIDE`.
+## Constraints
 
-Канал из трёх частей:
+- `--name` is mandatory: assemble builds one per section, `[base]` included —
+  without it a junk `base` container appears.
+- Rootless podman scopes join the `user.slice` 12G/16G cap ([agents.md](agents.md)).
 
-- **Хост включает сокет.** `run_onchange_before_30-system.sh.tmpl`, ветка
-  `{{- if has "distrobox" .enabled }}` (на хосте — фактически безусловно,
-  `distrobox` там `always: true`), делает `systemctl --user enable --now
-  podman.socket`. Это user-юнит, не системный: без sudo и мимо функции
-  `enable_unit` того же скрипта. Сокет появляется в
-  `/run/user/1000/podman/podman.sock` и socket-активирован — podman
-  запускается на первое обращение и ничего не ест в простое.
-- **Контейнер видит сокет.** distrobox монтирует корень хоста в `/run/host`,
-  поэтому изнутри путь — `/run/host/run/user/1000/podman/podman.sock`. Права
-  сходятся благодаря `--userns keep-id`: UID 1000 в контейнере отображается
-  в UID 1000 хоста ([isolation-network.md](isolation-network.md), раздел
-  «Почему юниты работают от пользователя, а не от root» — там карта UID
-  живого контейнера).
-- **Контейнеру нужен клиент.** docker CLI в `PATH` даёт фича `docker`, с
-  2026-08-02 расширенная до `scope: both` ([dev-tools.md](dev-tools.md),
-  раздел «Docker: на хосте — демон, в контейнере — клиент»). `DOCKER_HOST` на
-  путь сокета выставляет сам инструмент или разработчик; демон docker в
-  контейнере не запускается — `30-system` целиком хостовый, ни
-  `docker.socket`, ни группы `docker` там нет. Если в контейнере включена
-  фича `nested-podman`, `.bashrc` выставляет `DOCKER_HOST` на **локальный**
-  сокет контекста, и docker CLI по умолчанию работает с вложенным podman'ом,
-  а не с этим каналом.
+## Decisions
 
-Проверка после `chezmoi apply` на хосте и в контейнере:
+| Decision | Why | Rejected |
+|---|---|---|
+| `unshare_ipc`/`devsys` false | GPU, sound, podman's 64M shm (see ini) | unsharing; cost not re-measured |
+| volume under `/var/lib` | `/mnt` remount hides it | `/mnt`; no upstream match, searched 2026-07-30 (#778, #1020, #1527, #2036 adjacent) |
+| host podman socket kept | ok without shared localhost (Testcontainers + `TESTCONTAINERS_HOST_OVERRIDE`) | as Aspire's engine: containers land in host netns, dead end 2026-08-03 ([nested-podman.md](nested-podman.md)) |
+| keep `10-bootstrap-pacman` | idempotent, cheap | dropping: fresh `archlinux:latest` (2026-07-30) had mirrors and `Include` already — guard unproven |
+
+## Verify
 
 ```sh
-# хост
-$ ls /run/user/1000/podman/podman.sock
-# контейнер
-$ command -v docker
-$ DOCKER_HOST=unix:///run/host/run/user/1000/podman/podman.sock docker version
+# Server half must say podman
+DOCKER_HOST=unix:///run/host/run/user/1000/podman/podman.sock docker version
+uname -r; pacman -Q linux; grep -c overlay /proc/filesystems
 ```
 
-Последняя команда должна показать в половине Server podman и его версию.
-Если сокета на хосте нет, чеклист `zz-next-steps` в контейнере с включённой
-фичей `docker` сам печатает готовую команду для хоста.
+## Failure modes
 
-Память всех контейнеров, созданных этим путём, — и самих рабочих
-контейнеров distrobox — ограничена общим бюджетом: rootless podman кладёт
-каждый scope `libpod-*` под `user.slice` пользовательского менеджера, а на
-нём с 2026-08-02 висит потолок `MemoryHigh=12G`/`MemoryMax=16G`. Устройство
-бюджета и почему он именно на `user.slice` — [agents.md](agents.md), раздел
-про бюджет памяти. Контейнеры вложенного podman'а
-([nested-podman.md](nested-podman.md)) сидят ещё глубже: внутри cgroup своего
-контекста, то есть под его собственным `--memory=8g` из `distrobox.ini` — и
-под тем же общим бюджетом заодно.
+| Symptom | Cause | Fix |
+|---|---|---|
+| `'overlay' is not supported over extfs` | `linux` upgraded, no reboot: `CONFIG_OVERLAY_FS=m`, module went with the old modules dir | reboot. Arch wontfix: FS#16702, FS#23809, FS#73043 |
+| volume "mounted but not there" | `distrobox-init` remounts host `/mnt`, `/media`, `/run/media`, `/var/mnt` every start, no opt-out (1.8.2.5 source, 2026-07-30) | keep `/var/lib/wsproxy` |
 
-## Пока pacman ещё не работает
+## See also
 
-Прежде чем внутри контейнера можно поставить хоть один пакет — включая пакеты
-`container-base` выше — должен отработать
-`home/.chezmoiscripts/run_onchange_before_10-bootstrap-pacman.sh.tmpl`. Число
-`10` в имени не случайное: это самый ранний `before`-скрипт репозитория,
-раньше даже `run_onchange_before_20-packages.sh.tmpl`. Скрипт проверяет
-`.env`, и вне контейнера ничего не делает:
-
-```sh
-{{- if ne .env "container" }}
-exit 0
-{{- else }}
-```
-
-Внутри контейнера он чинит две вещи, которые комментарий в файле называет
-причиной своего существования: «the archlinux:latest image ships with an
-empty mirrorlist and no Include directive for \[extra\]». Если в
-`/etc/pacman.d/mirrorlist` нет ни одной строки `Server`, скрипт качает свежий
-список с `archlinux.org/mirrorlist` и подставляет его; если у `[extra]` в
-`/etc/pacman.conf` нет `Include`, дописывает его. Обе проверки идемпотентны
-(`grep -q` перед правкой), так что повторный `chezmoi apply` их не портит.
-
-Живая проверка образа 2026-07-30 (`podman run --rm --pull=always
-docker.io/library/archlinux:latest`) этого не подтвердила: свежепотянутый
-`docker.io/library/archlinux:latest` уже пришёл с непустым `mirrorlist`
-(`fastly.mirror.pkgbuild.com`, `geo.mirror.pkgbuild.com`) и с `Include =
-/etc/pacman.d/mirrorlist` под `[extra]` на месте. История файла в
-`archlinux/archlinux-docker` показывает, что рабочий мирror в образе стоит
-как минимум с 2017 года, а нынешняя пара — с правки 2022 года. Условие, ради
-которого написан этот участок скрипта, на сегодняшнем образе не
-воспроизводится — сам скрипт от этого не ломается (его проверки просто не
-находят, что чинить, и молча проходят), но он либо чинит что-то более редкое
-и не пойманное этой проверкой, либо является подстраховкой на случай отката к
-образу постарше. Подробности и статус — [workarounds.md](workarounds.md).
-
-## `podman info` теряет overlay после обновления ядра
-
-Отдельный от предыдущего, куда более живой случай. Симптом — контейнер не
-стартует, `podman info` внутри окружения хоста показывает:
-
-```
-Error: configure storage: kernel does not support overlay fs:
-'overlay' is not supported over extfs
-```
-
-Причина — не файловая система: пакет `linux` обновился (`pacman -Syu`), а
-машина ещё не перезагружалась. У Arch модули ядра лежат в
-`/usr/lib/modules/<версия ядра>/`, и обновление пакета `linux` удаляет
-каталог модулей **работающего** ядра, кладя рядом каталог для нового —
-загружаемого только после ребута. `overlay` в ядре Arch собран именно
-загружаемым модулем, не встроен (`CONFIG_OVERLAY_FS=m` — проверено на этой
-машине), поэтому он пропадает вместе с остальными модулями запущенного ядра
-до перезагрузки. Различить причину:
-
-```sh
-uname -r          # версия работающего ядра
-pacman -Q linux   # версия установленного пакета
-grep -c overlay /proc/filesystems
-```
-
-Если первые два расходятся, а третья строка — `0`, лечится только
-перезагрузкой. Это не баг конкретно podman и не баг конкретно этого
-репозитория — это принятое поведение пакетирования ядра в Arch, обсуждённое и
-закрытое как ожидаемое в `bugs.archlinux.org`: FS#16702 (2009, перенесён в
-GitLab без отдельного решения) и FS#23809 (2011, закрыт как Won't Fix — «the
-only sensible solution is to not do an upgrade if you are not prepared to
-reboot»); FS#73043 (2021) закрыт как дубликат FS#16702 с тем же выводом.
-Ни один из них не говорит про overlay или podman напрямую — все про общий
-случай «модуль стал недоступен после обновления ядра», `overlay` в него
-попадает как частный случай. Запись — [workarounds.md](workarounds.md).
-
-## Почему именно так
-
-**`--memory=8g` — это не про неатрибутируемость.** Он не даёт трём контекстам
-свалить хост, если что-то в одном взбесится; это отдельная защита с отдельной
-причиной, подробнее — [isolation.md](isolation.md), раздел «Почему именно
-так».
-
-**Цена `unshare_ipc`/`unshare_devsys`, будь они включены, не измерена в этом
-репозитории заново** — комментарий в `distrobox.ini.tmpl` называет конкретные
-симптомы (падения Electron/JVM на 64 МБ podman-дефолте, потерю GPU и звука),
-но не цифры замера на этой машине; переиспользован как есть, потому что
-детали уже названы в самом коде и совпадают с обычным поведением podman и
-distrobox.
-
-**Обход `/mnt` — исходник distrobox прочитан, подходящего тикета не нашлось.**
-Поиск шёл и по существующим issue репозитория `89luca89/distrobox`
-(в частности #778, #1020, #1527, #2036 — все про смежные, но другие проблемы
-с точками монтирования), и по обсуждениям — ни один не описывает именно этот
-случай: пользовательский `--volume`, положенный на путь из `HOST_MOUNTS`,
-скрытый перемонтировкой при каждом старте. Зафиксировано как «upstream не
-найден, искали 2026-07-30» — сам механизм при этом подтверждён чтением кода
-`distrobox-init`, а не домыслен.
-
-**Мирролист `archlinux:latest` — предположение в коде репозитория не
-подтвердилось при проверке.** Скрипт `run_onchange_before_10-bootstrap-pacman`
-написан так, будто образ ломается всегда, но прямая проверка образа,
-потянутого только что (2026-07-30), этого не показала: рабочие мирроры и
-`Include` для `[extra]` там уже есть. Это не значит, что скрипт лишний
-(идемпотентная проверка ничего не портит и стоит дёшево), но текущим кодом
-подтверждается только то, что защита существует, — не то, что она сейчас от
-чего-то защищает.
-
-**`overlay` после обновления ядра — механизм подтверждён составом ядра этой
-машины и тремя тикетами Arch, а не воспроизведён живым обновлением `linux` в
-этой сессии.** `CONFIG_OVERLAY_FS=m` в `/usr/lib/modules/$(uname -r)` на этой
-машине проверен напрямую; сценарий «пакет обновился, ядро не
-перезагружалось» не прогонялся заново, потому что это разрушительная
-операция, которую агент не запускает без явной необходимости.
+[workarounds.md](workarounds.md) rows: `/mnt`, mirrorlist, overlay.

@@ -1,125 +1,30 @@
-# Опознание агента внутри контейнера: что измерено на herdr 0.7.5
+# herdr does not see an agent running inside a container
 
-Работа 30 июля 2026. Задача: чтобы claude, запущенный руками после входа в контейнерный шелл,
-опознавался herdr и показывал состояние. Решение принято и внесено (`HERDR_AGENT` на команде входа,
-`dot_bashrc.tmpl`, `executable_work.tmpl`), README переписан. Здесь то, что в README не поместилось:
-цифры, отвергнутый путь и одна необъяснённая странность.
+2026-07-30, `herdr-bin 0.7.5-1`. Fixed; the anomaly below closed wontfix.
 
-Все замеры на изолированном тестовом сервере (`XDG_CONFIG_HOME` и `HERDR_SOCKET_PATH` во временный
-каталог), живая сессия не затрагивалась. Контейнеры `personal` и `digi3`.
+**Symptom** claude started by hand after `distrobox enter` is invisible:
+`agent explain` -> `agent_not_found`.
 
-## 1. Корень
+**Root cause** herdr identifies the agent from the foreground process group of
+the *host* pane, which under `distrobox enter` is `distrobox` + `podman`.
+State detection is unrelated to processes - it is screen/OSC rules in
+`agent-detection/remote/claude.toml` (2026.07.13.1).
 
-herdr опознаёт агента по группе процессов переднего плана **хостовой** панели. Через
-`distrobox enter` там `distrobox` + `podman`; настоящий claude сидит на другом pty внутри
-контейнера. Панель с живым claude на экране: `agent explain` -> `agent_not_found`, `agent=None`.
+**Fix** `HERDR_AGENT=claude` on the entry command, in `home/dot_bashrc.tmpl`
+and `home/dot_local/bin/executable_work.tmpl`. Rejected: `export HERDR_AGENT`
+inside the container shell (herdr reads the env of the process it spawned);
+`pane.report_agent` over the socket - reachable from a container, but a
+reported state takes authority and freezes the sidebar, and neither
+`release_agent` nor `clear_agent_authority` hands it back, so it needs claude
+hooks per transition per container; `herdr integration install claude` only
+hooks `SessionStart`. Unexplained and not chased: one pane stopped accepting
+`pane.report_agent` at all, unreproducible on fresh panes.
 
-Экран при этом доезжает целиком. Отдельная проверка: долгоживущий процесс в контейнере выставил
-заголовок `✳ fake claude idle`, herdr показал правило `osc_title_idle` с этим самым текстом как
-evidence; с `⠐ ...` сработало `osc_title_working` (priority 1100). То есть данных для состояний
-хватает, не хватало только опознания.
+**Recheck** Enter a context by its alias, then `herdr agent list` - the pane
+shows `agent=claude`.
 
-Детекция состояний вообще не про процессы: манифест
-`~/.local/state/herdr/agent-detection/remote/claude.toml` (версия 2026.07.13.1) это набор правил по
-регионам экрана и OSC-заголовку.
-
-## 2. Что помогает и что нет
-
-| Способ | Результат |
-|---|---|
-| `HERDR_AGENT=claude` на команде `distrobox enter` | работает; состояние живое, с экрана |
-| `export HERDR_AGENT=claude` внутри контейнерного шелла | `agent=None`, `unknown`; herdr читает окружение процесса, который запустил сам |
-| `pane.report_agent` через сокет изнутри контейнера | помечает панель, но морозит состояние (раздел 3) |
-| `pane.report_agent_session` в одиночку | записывает `agent_session`, агента НЕ создаёт (`agent` остаётся `None`) |
-| `herdr integration install claude` | ставит хук только на `SessionStart` и репортит лишь id сессии; состояний не репортит |
-
-Приёмка выбранного варианта, `digi3`, настоящий claude через `claude-super`, вход отдельным шеллом:
-
-```
-shell only     agent=claude status=idle    scraped=[idle, rule none]
-claude-super   agent=claude status=idle    scraped=[idle, rule live_prompt_box]  title '✳ Claude Code'
-запрос         status=done -> working -> done, title '⠐ Claude Code' / '⠂ Claude Code'
-```
-
-## 3. Почему отвергнут путь через сокет
-
-Все предусловия для него выполняются, это проверено по отдельности:
-
-- `distrobox enter` передаёт внутрь `HERDR_ENV=1`, `HERDR_PANE_ID`, `HERDR_SOCKET_PATH`,
-  `HERDR_TAB_ID`, `HERDR_WORKSPACE_ID`;
-- хостовый сокет виден изнутри контейнера по тому же абсолютному пути;
-- бинарь `herdr` в контейнерах есть (фича `scope: both`), и API-вызов изнутри отвечает.
-
-Изнутри `personal` вызов `pane.report_agent` на хостовую панель поменял её агента с `claude/idle` на
-`codex/blocked`. То есть контейнер управляет агентами хостового herdr, и это ещё один пример уже
-задокументированного факта: сокет herdr границей не является.
-
-Убивает путь другое. **Отрепорченное состояние забирает власть и морозит сайдбар.** При
-отрепорченном `idle` экран читался как `working` (правило `osc_title_working`, заголовок виден), а
-`pane.get` и `agent list` продолжали показывать `idle`. Способа «пометить, но состояние отдать
-экрану» нет:
-
-- `pane.release_agent` -> `agent=None`;
-- `pane.clear_agent_authority` -> `agent=None`.
-
-Значит вариант живёт только с полным набором хуков claude на каждый переход, в конфиге claude каждого
-контейнера. Против одного слова в алиасе это не окупается.
-
-Побочно: на панели, помеченной репортом, `agent prompt` отказал с
-`agent_not_ready: agent ... is no longer the pane foreground process`. На панели, помеченной
-`HERDR_AGENT`, тот же вызов сработал. То есть выбранный вариант ещё и не ломает агентское API herdr,
-а отвергнутый ломает.
-
-## 4. Ловушки CLI 0.7.5, на которые ушло время
-
-Если когда-нибудь понадобится скриптовать эти вызовы, начинать надо с этого:
-
-- **Порядок аргументов обратный тому, что печатает `--help`.** Строка usage говорит
-  `[OPTIONS] --source <ID> --agent <LABEL> <PANE_ID>`, а работает только `<PANE_ID>` первым:
-  `herdr pane report-agent w1:p1 --source x --agent claude --state idle`.
-- **Двоеточие в значении опции роняет разбор**: `--source herdr:claude` даёт
-  `unknown option: herdr:claude`. Форма `--source=herdr:claude` ломается на следующей опции.
-- **Отказ разбора молчаливый и с кодом 0**, если stdout не терминал: команда ничего не отправляет,
-  а `rc=0`. Несколько замеров из-за этого выглядели как «сервер отверг репорт».
-- `herdr pane read` принимает `<PANE_ID>` позиционно, не `--pane`; у `pane process-info` наоборот
-  `--pane`.
-- Метода `pane.run` в API нет, у CLI `pane run` под капотом send-text + send-keys. Полный список
-  методов: `herdr api schema --output <файл>`.
-
-Обход всего этого: говорить с сокетом напрямую построчным JSON
-(`{"id":...,"method":"pane.report_agent","params":{...}}`), как это делает штатный хук herdr.
-
-## 5. Необъяснённое
-
-Одна панель (в container-режиме) перестала принимать `pane.report_agent` полностью: сервер отвечал
-`{"type":"ok"}`, но `agent` оставался `None` — и с хоста, и изнутри контейнера, с совпадающим и
-несовпадающим `source`, с `agent_session_id` и без, после `clear_agent_authority`, в фокусе и без
-фокуса, для метки `claude` и для `codex`. На свежих панелях (и хостовых, и контейнерных) тот же
-вызов работает всегда, включая повторную проверку «вход в контейнер на той же панели, до и после».
-Причина не найдена. До этого на той панели успели пройти `report_agent_session` с id и
-`release_agent`, но воспроизвести этой последовательностью не удалось.
-
-Практического влияния на выбранное решение нет: оно вообще не пользуется репортами. Записано, чтобы
-не искать заново, если однажды панель поведёт себя так же.
-
-## 6. Закрыто как не относящееся к репозиторию
-
-Решение 30 июля 2026, при разборе открытых issues.
-
-Странность из раздела 5 остаётся необъяснённой, и чинить её здесь нечего. Причины ровно три:
-
-- это чужой бинарь версии 0.x, не код этого репозитория;
-- она лежит на пути, которым выбранное решение **сознательно** не пользуется: метка ставится
-  `HERDR_AGENT` на команде входа, репортов не делается ни одного;
-- ни один файл в репозитории не изменится, даже если панель однажды поведёт себя так же.
-
-Версия herdr на машине проверена при закрытии и та же, на которой мерили, — `herdr-bin 0.7.5-1`.
-Значит замеры раздела 2 и отвергнутый путь раздела 3 остаются в силе, а не описывают прошлое.
-
-Раздел 4 (ловушки CLI) сохраняется отдельно от этого решения: он пригодится любому, кто станет
-скриптовать herdr, независимо от репортов.
-
-Если понадобится довести до конца: воспроизводить надо на изолированном сервере (свои
-`XDG_CONFIG_HOME` и `HERDR_SOCKET_PATH`), и первое, что стоит проверить, — не остаётся ли за панелью
-authority от уже завершённой agent-session. Одна последовательность из раздела 5 (`report_agent_session`
-с id, затем `release_agent`) уже пробована и не воспроизвела.
+**CLI traps** (0.7.5, independent of the fix) `--help` usage ends
+`--state <STATUS> <PANE_ID>` and is wrong: only `<PANE_ID>` first works, as
+`herdr.dev/docs/cli-reference/` has it - built-in usage and site disagree.
+Colon in an option value breaks parsing; a parse failure is silent with `rc=0`
+off a tty. Recheck: `herdr pane report-agent --help`, `<PANE_ID>` still last.

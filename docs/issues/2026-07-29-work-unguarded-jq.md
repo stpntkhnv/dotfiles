@@ -1,61 +1,22 @@
-# Мелочь в `work`: одна необёрнутая jq-выборка
+# Unguarded jq extractions in `work`
 
-Найдено финальной проверкой ветки `worktree-task2` 29 июля 2026. Признано не
-блокирующим слияние, записано, чтобы не потерялось. **Закрыто 30 июля 2026**, и
-мест оказалось три, а не одно.
+Found 2026-07-29. Status: fixed 2026-07-30.
 
-## Что
+**Symptom** Never seen live; found by audit. Under `set -euo pipefail` a jq
+exit 2 inside a command substitution kills the script mid-loop, so remaining
+contexts never open and `exec herdr` never runs.
 
-В `home/dot_local/bin/executable_work.tmpl`, в ветке `count == 1` функции
-`first_tab_pane`, извлечение идентификатора панели идёт без `|| true`:
+**Root cause** Three jq calls in `home/dot_local/bin/executable_work.tmpl`
+lacked `|| true`: the `count == 1` branch of `first_tab_pane`, and the
+`workspace_id` / `root_pane.pane_id` extractions in the create-workspace
+branch. `// empty` guards against `null`, not against invalid JSON. The other
+six jq uses in the file were checked and are fine.
 
-```sh
-printf '%s' "$panes" | jq -r --arg t "$tab" '.result.panes[] | select(.tab_id == $t) | .pane_id'
-```
+**Fix** `|| true` at all three sites, deliberately without `2>/dev/null` so
+jq's own error stays on stderr. Verified with a stub jq failing on exactly the
+second extraction: before rc=2 and script dead, after rc=0; with real jq both
+versions rc=0, so the test does not pass by itself. No real input reproduces
+it - the same `$panes` and `$tab` were parsed successfully one line above.
 
-Результат попадает в `pane=$(first_tab_pane "$ws" "$ctx")`, которое тоже не
-обёрнуто. Под `set -euo pipefail` отказ в этом месте убил бы скрипт целиком, а
-это ровно тот класс ошибки, который эта же волна правок закрыла в соседних
-местах.
-
-## Ещё два места того же класса
-
-Полный аудит файла при закрытии нашёл в ветке создания нового пространства:
-
-```sh
-ws=$(printf '%s' "$created" | jq -r '.result.workspace.workspace_id // empty')
-pane=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
-```
-
-`// empty` спасает от `null`, но не от невалидного JSON: jq выйдет с кодом 2,
-`pipefail` протащит это из подстановки, `set -e` убьёт скрипт посреди цикла.
-Режим отказа тот же, что описан в комментарии перед `enter_context`: следующие
-контексты не откроются и `exec herdr` не выполнится.
-
-Остальные шесть вызовов `jq` в файле проверены и в порядке: `workspace_for`
-обёрнут на месте вызова через `||`, `pane_is_idle_shell` сознательно предикат
-внутри `if`, ещё два упоминания — комментарии.
-
-## Почему не чинили сразу
-
-Ревьюер подтвердил механизм синтетическим воспроизведением, но не смог построить
-настоящий вход, на котором это срабатывает: те же `$panes` и `$tab` строкой выше
-уже успешно разобраны почти таким же фильтром, чтобы получить `count == 1`. То
-есть отказ на втором проходе при живых данных невоспроизводим.
-
-## Что сделано
-
-Дописано `|| true` в трёх местах. Без `2>/dev/null`: сообщение jq остаётся на
-stderr, как того и требует принцип, записанный в этом же файле — своя ошибка
-инструмента должна быть видна, а не выброшена.
-
-Проверено синтетически, на обеих версиях файла, с подставным `jq`, который
-отказывает ровно на второй выборке:
-
-```
-first_tab_pane        было: rc=2, скрипт мёртв   стало: rc=0, pane=[], сообщение jq на stderr
-ветка создания        было: rc=2, скрипт мёртв   стало: rc=0, ws=[w1], pane=[]
-с настоящим jq        обе версии: rc=0, значения на месте
-```
-
-Последняя строка важна: она показывает, что тест не проходит сам собой.
+**Recheck** `grep -n 'jq -r' home/dot_local/bin/executable_work.tmpl` - every
+hit outside an `if` condition ends in `|| true`.

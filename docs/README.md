@@ -4,88 +4,80 @@ covers:
   paths: []
 ---
 
-# Карта документации
+# Doc map
 
-Один документ — одна тема. Список ниже сгруппирован по смыслу; внутри каждой
-группы строка — ссылка на документ и одно предложение о том, что внутри.
+One doc, one topic. Written for agents: dense, English, no tutorials - the
+format is [`STYLE.md`](STYLE.md).
 
-Три входа в документацию, в зависимости от того, что уже известно:
+Three ways in:
 
-- Знаешь имя фичи из `home/.chezmoidata.yaml` (например `zen` или `killswitch`)
-  — иди в [`catalog.md`](catalog.md), это сгенерированная таблица «фича →
-  документ».
-- Не знаешь термин (`netns`, `space`, `pathspec`...) — ищи его в
-  [`glossary.md`](glossary.md), там определения строятся друг на друге с нуля.
-- Хочешь прочитать про уже расследованный баг или странность — загляни в
-  [`issues/`](issues/), это журнал расследований с фактами и датами.
+- Know a feature key from `home/.chezmoidata.yaml` (`zen`, `killswitch`) - go to
+  [`catalog.md`](catalog.md), the generated "feature -> doc" table.
+- Hit a word this repo uses in its own way (`context`, `space`, `wsproxy`) -
+  [`glossary.md`](glossary.md).
+- Want a bug that was already investigated - [`issues/`](issues/), one file per
+  investigation with dates and evidence.
 
-## Механика
+## Machinery
 
-- [`how-it-works.md`](how-it-works.md) — как устроен chezmoi в этом
-  репозитории: единый источник правды в `.chezmoidata.yaml`, порядок скриптов
-  и файлов при `apply`.
-- [`install.md`](install.md) — установка на чистой машине одной командой, что
-  спрашивает chezmoi и как поставить всё неинтерактивно.
+- [`how-it-works.md`](how-it-works.md) - how chezmoi is wired here: the feature
+  catalogue as single source of truth, script ordering, what re-runs when.
+- [`install.md`](install.md) - installing on a clean machine, what the checklist
+  asks, non-interactive installs, changing a saved choice.
+- [`STYLE.md`](STYLE.md) - the standard every doc here follows.
 
-## Изоляция
+## Isolation
 
-- [`isolation.md`](isolation.md) — зачем вообще нужна изоляция рабочих
-  контекстов и как устроена общая картина моста между браузером и сетью.
-- [`containers.md`](containers.md) — distrobox-контейнеры рабочих контекстов:
-  из чего собираются и что в них живёт.
-- [`isolation-network.md`](isolation-network.md) — мост через UNIX-сокет и
-  `socat` между браузером на хосте и сетью внутри контейнера.
-- [`isolation-browser.md`](isolation-browser.md) — расширения Zen,
-  Multi-Account Containers и привязка space к прокси контейнера.
-- [`isolation-links.md`](isolation-links.md) — маршрутизация внешних ссылок в
-  правильный контейнер.
-- [`killswitch.md`](killswitch.md) — что рубит сеть контейнера, если его VPN
-  падает.
-- [`nested-podman.md`](nested-podman.md) — вложенный podman: контейнеры
-  разработки (Aspire, Testcontainers) внутри контекста, на его localhost.
+- [`isolation.md`](isolation.md) - threat model and the overall picture; what is
+  isolated reliably and what only by convention.
+- [`containers.md`](containers.md) - the distrobox containers behind each work
+  context.
+- [`isolation-network.md`](isolation-network.md) - the socat/UNIX-socket bridge
+  between the host browser and the network inside a container.
+- [`isolation-browser.md`](isolation-browser.md) - Zen, Multi-Account
+  Containers, and binding a space to a container's proxy.
+- [`isolation-links.md`](isolation-links.md) - routing an external link into the
+  right context.
+- [`killswitch.md`](killswitch.md) - default-drop egress that kills traffic
+  bypassing a container's VPN.
+- [`nested-podman.md`](nested-podman.md) - podman inside a context, so Aspire
+  and Testcontainers run on that context's localhost.
 
-## Рабочее место
+## Workspace
 
-- [`base.md`](base.md) — базовые утилиты, оболочка, git, приглашение
-  командной строки.
-- [`desktop.md`](desktop.md) — niri, DankMaterialShell, обои рабочего стола.
-- [`greeter.md`](greeter.md) — экран входа в систему: greetd и оболочка DMS
-  вместо sddm.
-- [`terminal.md`](terminal.md) — ghostty и alacritty, темы оформления.
-- [`keyboard.md`](keyboard.md) — раскладка клавиатуры и её защита от
-  `localectl`.
-- [`multiplexer.md`](multiplexer.md) — herdr, tmux и скрипт `work` для
-  переключения между рабочими контекстами.
-- [`browsers.md`](browsers.md) — systemd-слайсы браузеров, ограничение
-  памяти, ярлыки запуска.
+- [`base.md`](base.md) - base utilities, shell, git, prompt.
+- [`desktop.md`](desktop.md) - niri, DankMaterialShell, wallpapers.
+- [`greeter.md`](greeter.md) - login screen: greetd with the DMS greeter.
+- [`terminal.md`](terminal.md) - ghostty and alacritty, themes.
+- [`keyboard.md`](keyboard.md) - layout and its protection from `localectl`.
+- [`multiplexer.md`](multiplexer.md) - herdr, tmux, and the `work` script.
+- [`browsers.md`](browsers.md) - browser systemd slices, memory caps, launchers.
 
-## Голос
+## Voice
 
-- [`voice.md`](voice.md) — голосовой ввод через Handy: горячие клавиши, запись
-  и печать распознанного текста.
+- [`voice.md`](voice.md) - offline dictation through Handy: hotkeys, model,
+  typing the recognised text.
 
-## Данные и сеть
+## Data and network
 
-- [`sync.md`](sync.md) — Syncthing и Obsidian, какие папки синхронизируются и
-  между какими машинами.
-- [`network.md`](network.md) — Tailscale, Ziti и firewall.
-- [`secrets.md`](secrets.md) — KeePassXC и SSH-ключи.
+- [`sync.md`](sync.md) - Syncthing and Obsidian: which folders sync where.
+- [`network.md`](network.md) - Tailscale, OpenZiti, firewall.
+- [`secrets.md`](secrets.md) - KeePassXC and SSH keys.
 
-## Инструменты
+## Tools
 
-- [`dev-tools.md`](dev-tools.md) — neovim, VS Code, node, go, dotnet, rider,
-  инструменты для баз данных и API, docker, azure, teams, gh.
-- [`agents.md`](agents.md) — Claude Code и Codex, что раскладывается на
-  машину для работы с ними.
+- [`dev-tools.md`](dev-tools.md) - neovim, VS Code, node, go, dotnet, rider, DB
+  and API clients, docker, azure, teams, gh.
+- [`agents.md`](agents.md) - what this repo lays down for Claude Code and Codex.
 
-## Железо
+## Hardware
 
-- [`hardware.md`](hardware.md) — принтеры, известный баг Bluetooth-донгла,
-  настройки NVIDIA, zram и сторож памяти earlyoom.
+- [`hardware.md`](hardware.md) - printing, the Bluetooth dongle bug, NVIDIA,
+  zram, earlyoom.
 
-## Эксплуатация
+## Operations
 
-- [`workarounds.md`](workarounds.md) — реестр обходов чужих багов: чей баг,
-  какое доказательство и как проверить, что он ещё жив.
-- [`operations.md`](operations.md) — какими командами проверить, что всё
-  применилось как надо, и что делать, когда что-то сломалось.
+- [`workarounds.md`](workarounds.md) - registry of other people's bugs this repo
+  works around: whose bug, what the evidence is, how to tell it is still alive.
+- [`operations.md`](operations.md) - manual steps, diagnosis commands, and what
+  `tools/gen-catalog.sh` does and does not check.

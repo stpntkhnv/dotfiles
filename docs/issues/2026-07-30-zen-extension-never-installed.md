@@ -1,157 +1,25 @@
-# Расширение `context-proxy` не устанавливалось ни разу
+# `context-proxy` extension was never installed, silently
 
-Найдено 30 июля 2026, при попытке доделать браузерную автоматизацию. Расширение
-`context-proxy@dotfiles.local` — то самое, что раздаёт каждому контейнеру свой
-SOCKS-прокси, — за всё время существования этой части репозитория не
-установилось в браузер ни одного раза. **Закрыто 30 июля 2026.**
+Found and fixed 2026-07-30.
 
-Цена бага ровно та, ради недопущения которой всё это писалось: у контейнеров
-были свои куки, но не своя сеть. Трафик всех рабочих вкладок шёл напрямую с
-хоста, а браузер выглядел настроенным.
+**Symptom** Nothing visible: policy applied, four of five extensions present,
+the fifth absent from `extensions.json`. Containers had separate cookies but
+shared network. Console: `Download failed - ERROR_SIGNEDSTATE_REQUIRED`.
 
-## Как выглядело
+**Root cause** `zen-browser-bin 1.21.9b-1` is built with
+`MOZ_REQUIRE_SIGNING: false`, which does not disable the signature check, only
+turns it into the pref `xpinstall.signatures.required`
+(`AddonSettings.sys.mjs` in `omni.ja`). Toolkit defaults it false; Zen's
+application defaults, read later, set it true.
 
-Никак. В этом и была главная сложность.
+**Fix** `32-browser-extensions` (`$zenPrefs`) sets the pref false and `locked`
+by policy, not `user.js` - policy is read before profile creation, so the
+extension arrives on first launch. The same build flag is what allows that
+policy override (`Policies.sys.mjs`); a build with it on would require signing
+and forbid the override - see [workarounds.md](../workarounds.md). Same pass:
+`43-zen-session` seeding now appends (it refused any profile with tabs; first
+launch leaves four), and `40-zen-prefs` dropped `run_onchange_` so it reruns
+on profile state.
 
-Браузер стартовал нормально. `about:policies` показывал политику применённой. В
-профиле лежали четыре расширения из пяти — все, что приходят с AMO. Пятого не
-было ни в `extensions.json`, ни в каталоге `extensions/`, ни в `about:addons`.
-Ни ошибки, ни уведомления, ни строки в системном журнале.
-
-Файл `/usr/local/lib/zen-context-proxy.xpi` при этом лежал на месте, собранный и
-валидный, а политика его требовала с `installation_mode: force_installed`.
-
-Проверка в `run_after_zz-next-steps.sh` этого не ловила: она искала `.xpi` среди
-файлов профиля и была написана так, что находила бы даже отключённое расширение.
-Здесь она не находила ничего и печатала свою строку, но строка терялась среди
-прочего вывода `chezmoi apply`, а «расширение не встало» звучит как что-то, что
-починится само при следующем запуске.
-
-## Как нашли
-
-Запуском Zen на выброшенном профиле, с открытой консолью браузера. Единственный
-след нашёлся там:
-
-```
-Download failed - ERROR_SIGNEDSTATE_REQUIRED - file:///usr/local/lib/zen-context-proxy.xpi
-```
-
-То есть браузер расширение видел, скачивал и отклонял, потому что оно
-неподписанное. Что противоречило тому, ради чего сборка Zen вообще выбиралась.
-
-## Причина
-
-Условий два, а выглядят они как одно.
-
-**Первое.** Zen действительно собран с `MOZ_REQUIRE_SIGNING: false`
-(`modules/AppConstants.sys.mjs:115` в распакованном `/opt/zen-browser-bin/omni.ja`,
-пакет `zen-browser-bin 1.21.9b-1`). Но этот флаг **не отключает проверку
-подписи**. Он лишь переводит её из константы кода в обычную настройку —
-`modules/addons/AddonSettings.sys.mjs:32-48`:
-
-```js
-if (AppConstants.MOZ_REQUIRE_SIGNING && !Cu.isInAutomation) {
-  makeConstant("REQUIRE_SIGNING", true);
-  ...
-} else {
-  XPCOMUtils.defineLazyPreferenceGetter(
-    AddonSettings, "REQUIRE_SIGNING", PREF_SIGNATURES_REQUIRED, false
-  );
-```
-
-При истинном флаге `REQUIRE_SIGNING` прибит к `true`. При ложном — следует за
-настройкой `xpinstall.signatures.required`. Всё.
-
-**Второе.** Значение самой этой настройки. Toolkit ставит её в `false`:
-
-```
-greprefs.js:1157   pref("xpinstall.signatures.required", false);
-```
-
-Но дефолты **приложения** читаются позже дефолтов toolkit и перекрывают их, а
-Zen ставит её в `true` — дважды, в `browser/omni.ja` →
-`defaults/preferences/firefox.js:27` и `:1611`.
-
-Итог: `REQUIRE_SIGNING` истинно, `modules/addons/XPIInstall.sys.mjs:1667`
-отклоняет установку с `ERROR_SIGNEDSTATE_REQUIRED`, и никто об этом не узнаёт.
-
-Ошибка в рассуждении, которая держалась до этого дня, была одна: «сборка без
-обязательной подписи» прочитано как «сборка, не проверяющая подпись». Это разные
-вещи, и вторая из них не была верна ни минуты.
-
-## Что сделано
-
-Политика Zen теперь выставляет настройку сама
-(`run_onchange_before_32-browser-extensions.sh.tmpl`, переменная `$zenPrefs`):
-
-```json
-"Preferences": {
-  "xpinstall.signatures.required": { "Value": false, "Status": "locked" }
-}
-```
-
-Политикой, а не через `user.js`: политика читается **до** создания профиля,
-поэтому расширение приезжает при первом же запуске браузера, а не после второго
-`apply`. `locked` — чтобы значение нельзя было сбить из `about:config` и чтобы
-оно не вернулось после обновления Zen.
-
-Право поставить именно эту настройку политике даёт то самое первое условие —
-`modules/policies/Policies.sys.mjs:2464-2466`:
-
-```js
-if (!AppConstants.MOZ_REQUIRE_SIGNING) {
-  allowedPrefixes.push("xpinstall.signatures.required");
-}
-```
-
-Сборка, которая когда-нибудь включит флаг, разом и потребует подпись, и запретит
-политике её отключать. На этот случай запись в
-[workarounds.md](../workarounds.md) несёт проверку, по которой это видно.
-
-Заодно исправлена проверка в `run_after_zz-next-steps.sh`: теперь она читает
-`extensions.json` и смотрит поле `.active == true`, а не наличие файла. Файл,
-оставшийся от прошлой установки, не доказывает ничего, и у отключённого
-расширения файл тоже на месте.
-
-## Чем доказано
-
-Тем же запуском на выброшенном профиле, до и после правки. До — четыре
-расширения из пяти и строка `ERROR_SIGNEDSTATE_REQUIRED` в консоли. После — пять
-из пяти, консоль чистая.
-
-Отдельно проверено на настоящей машине: 30 июля профили Zen, политика, собранный
-XPI, юниты и сокеты были снесены полностью и восстановлены с нуля через
-`chezmoi apply`. На созданном заново профиле:
-
-```sh
-jq -r '[.addons[]|select(.active)|.id]|sort|.[]' ~/.config/zen/*/extensions.json \
-  | grep context-proxy
-```
-```
-context-proxy@dotfiles.local
-```
-
-## Что ещё вскрылось тем же прогоном
-
-Полный снос и переустановка нашли ещё два места, где код никогда не отрабатывал
-на настоящей машине. Оба того же класса: защита, написанная разумно, но
-срабатывавшая всегда.
-
-1. **Засев spaces (скрипт 43) не сработал ни разу.** Он отказывался писать в
-   профиль, где есть хоть одна вкладка. А первый запуск Zen — тот самый шаг,
-   который создаёт нужные засеву контейнеры, — оставляет после себя четыре
-   вкладки и space с именем «Space». Условие выполнялось на любой реальной
-   машине. Починено переходом на «дописывать недостающее, а не замещать».
-
-2. **`user.js` не появлялся никогда.** Скрипт назывался
-   `run_onchange_after_40-zen-prefs.sh.tmpl`, а `run_onchange` считает хеш от
-   отрендеренного текста скрипта. Скрипт отработал один-единственный раз, на
-   машине, где профиля Zen ещё не существовало, честно напечатал «Zen has not
-   created a profile yet, skipping prefs.», записал своё состояние и больше не
-   запускался. Починено переименованием в `run_after_40-zen-prefs.sh.tmpl`: что
-   он делает, зависит от состояния профиля, а не от собственного текста.
-
-Общее у всех трёх — отказ был тихим и выглядел как штатная работа. Отсюда
-проверки в [isolation-browser.md](../isolation-browser.md), раздел «Как
-проверить», которые смотрят на результат в профиле, а не на то, что скрипт
-отработал без ошибки.
+**Recheck** `jq -r '.addons[]|select(.active)|.id'
+~/.config/zen/*/extensions.json | grep context-proxy`.
