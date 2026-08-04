@@ -47,6 +47,8 @@ Three ways in:
 
 - [`base.md`](base.md) - base utilities, shell, git, prompt.
 - [`desktop.md`](desktop.md) - niri, DankMaterialShell, wallpapers.
+- [`desktop-canvas.md`](desktop-canvas.md) - the second session: driftwm's
+  infinite canvas with Noctalia, for the laptop.
 - [`greeter.md`](greeter.md) - login screen: greetd with the DMS greeter.
 - [`terminal.md`](terminal.md) - ghostty and alacritty, themes.
 - [`keyboard.md`](keyboard.md) - layout and its protection from `localectl`.

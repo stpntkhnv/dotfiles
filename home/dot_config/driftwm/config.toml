@@ -1,0 +1,52 @@
+# driftwm: infinite-canvas session for the laptop. Every field here overrides a
+# built-in default; the annotated full reference ships with the package at
+# /etc/driftwm/config.reference.toml. Validate with `driftwm --check-config`.
+
+mod_key = "super"
+
+# New windows land next to whatever cluster is already in view instead of on top
+# of the camera centre. On an infinite canvas "center" means every window opens
+# in the same spot and buries the previous one.
+window_placement = "auto"
+
+autostart = ["noctalia"]
+
+[session]
+# The canvas IS the workspace: losing it on logout would be the equivalent of
+# niri closing every column. Suspended windows are saved regardless.
+restore_windows = true
+restore_camera = true
+restore_bookmarks = true
+
+[env]
+# exec-terminal probes foot, alacritty, ptyxis, kitty, wezterm... but not
+# ghostty, which is the terminal this repo installs (docs/terminal.md).
+TERMINAL = "ghostty"
+
+[input.keyboard]
+layout = "us,ru"
+# The layout string exists three times independently: here, niri
+# (dot_config/niri/config.kdl, `xkb {`) and localectl/TTY (script 30) --
+# docs/keyboard.md.
+#
+# ctrl:swapcaps only. grp:alt_shift_toggle is deliberately NOT here: driftwm
+# reads a bare modifier chord as a tap binding, and an xkb group toggle on the
+# same chord eats it. The switch is the "alt+shift" binding below, same keys.
+options = "ctrl:swapcaps"
+num_lock = true
+
+[input.trackpad]
+tap_to_click = true
+natural_scroll = true
+disable_while_typing = true
+
+[keybindings]
+"alt+shift" = "switch-layout next"
+"mod+return" = "exec ghostty"
+# Mod+Space is the launcher on the niri session too (niri/dms/binds.kdl), so the
+# muscle memory survives a session switch; mod+d is driftwm's own default key
+# for it and would otherwise reach for fuzzel, which is not installed.
+"mod+space" = "spawn noctalia msg panel-toggle launcher"
+"mod+d" = "spawn noctalia msg panel-toggle launcher"
+"mod+l" = "spawn noctalia msg session lock"
+"mod+n" = "spawn noctalia msg panel-toggle control-center"

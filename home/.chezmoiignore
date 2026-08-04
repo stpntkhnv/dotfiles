@@ -37,6 +37,10 @@
 .config/DankMaterialShell/**
 {{ end }}
 
+{{ if not (has "canvas" .enabled) }}
+.config/driftwm/**
+{{ end }}
+
 {{ if not (has "distrobox" .enabled) }}
 .config/distrobox/**
 {{ end }}

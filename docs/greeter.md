@@ -92,6 +92,11 @@ grep -rl xkb /etc/greetd/niri  # /etc/greetd/niri/dms.kdl
 
 ## See also
 
+The session menu is filled from `wayland-sessions/` and `xsessions/` under the
+XDG data dirs (dank-greeter `core/internal/greeter/session_launcher.go`,
+`sessionDesktopDirs`), so with the `canvas` feature on it offers `driftwm`
+beside `niri` ([desktop-canvas.md](desktop-canvas.md)).
+
 [desktop.md](desktop.md), [keyboard.md](keyboard.md),
 [workarounds.md](workarounds.md),
 [dank-greeter](https://github.com/AvengeMedia/dank-greeter).

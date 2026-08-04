@@ -21,8 +21,13 @@ Session [desktop.md](desktop.md), greeter [greeter.md](greeter.md).
 
 ## How it works
 
-- Layout string exists twice, independently: here and
-  `home/dot_config/niri/config.kdl` (`xkb {`).
+- Layout string exists three times, independently: here,
+  `home/dot_config/niri/config.kdl` (`xkb {`), and - when the `canvas` feature
+  is on - `home/dot_config/driftwm/config.toml` (`[input.keyboard]`,
+  [desktop-canvas.md](desktop-canvas.md)). The third copy carries
+  `ctrl:swapcaps` **without** `grp:alt_shift_toggle`: driftwm reads a bare
+  modifier chord as a tap binding, so the group toggle would eat it, and the
+  same keys are bound there as `"alt+shift" = "switch-layout next"`.
 - X11 step diffs `localectl status` first: `set-x11-keymap` needs sudo,
   unguarded it prompts on every apply.
 - Map failing the `loadkeys --mktable` check: `vconsole.conf` untouched.
@@ -59,7 +64,7 @@ loadkeys --mktable /usr/local/share/kbd/keymaps/us-swapcaps.map >/dev/null; echo
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| One surface moved, other did not | two copies; `run_onchange` fires on own text only | `grep -n xkb ~/.config/niri/config.kdl` vs `localectl` |
+| One surface moved, other did not | three copies; `run_onchange` fires on own text only | `grep -n xkb ~/.config/niri/config.kdl`, `grep -n layout ~/.config/driftwm/config.toml`, `localectl` |
 | TTY Caps stays Caps | map did not compile, apply said so on stderr | `loadkeys --mktable` on it |
 | `VC Keymap: (unset)` | not a fault: `localectl` prints registry names, not paths | read `/etc/vconsole.conf` |
 

@@ -447,6 +447,37 @@ features:
       - podman
 
   # ---------------------------------------------------------------- asked ---
+  # A SECOND session next to niri, not a replacement: driftwm puts windows on
+  # one infinite canvas at their native size and navigates by moving the camera
+  # with trackpad gestures, so what it buys is a small screen and ten fingers.
+  # A desktop with a mouse gets the drawbacks (pan by mod+drag) and none of the
+  # gestures, which is why this is asked instead of `always` -- tick it on the
+  # laptop, leave it off here.
+  #
+  # Both sessions can be installed at once: each package drops its own entry in
+  # /usr/share/wayland-sessions and the greeter lists both, so niri stays the
+  # way back from a compositor that calls itself experimental in its README.
+  #
+  # `noctalia` is v5, the native Wayland/GL rewrite, NOT the `noctalia-shell`
+  # v4 package -- see the doc for why that one cannot be installed here.
+  - key: canvas
+    label: "Desktop: driftwm + Noctalia (infinite canvas, laptop)"
+    scope: host
+    aur:
+      - driftwm
+      - noctalia
+    pacman:
+      # SSD title-bar font driftwm asks for by name in [decorations].
+      - adwaita-fonts
+      # Screenshot bindings (grim | wl-copy) are driftwm defaults; wl-clipboard
+      # comes with `desktop`.
+      - grim
+      - slurp
+      # /usr/share/xdg-desktop-portal/driftwm-portals.conf, shipped by the
+      # package, names wlr as the ScreenCast and Screenshot backend; the gtk
+      # portal it defaults to for everything else comes with `desktop`.
+      - xdg-desktop-portal-wlr
+
   # Two features rather than one with a sub-choice: the checklist is already
   # multi-select, so ticking both is the ordinary answer and not a workaround.
   #

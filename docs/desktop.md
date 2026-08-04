@@ -80,6 +80,7 @@ grep -n 'windowrules\|wpblur' home/dot_config/niri/config.kdl  # empty = orphans
 
 ## See also
 
+[desktop-canvas.md](desktop-canvas.md) (the other session, `canvas`),
 [greeter.md](greeter.md) (same shell), [keyboard.md](keyboard.md), [voice.md](voice.md),
 [browsers.md](browsers.md), [base.md](base.md) (`ttf-jetbrains-mono-nerd` comes with
 `desktop`, not `shell`).

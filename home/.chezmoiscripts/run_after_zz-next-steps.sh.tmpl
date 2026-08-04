@@ -93,6 +93,15 @@ if { pacman -Qq bitwarden rbw bws-bin 2>/dev/null || true; } | grep -q .; then
     steps+=("Bitwarden leftovers: 'sudo pacman -Rns bitwarden rbw bws-bin', then rm -rf ~/.config/rbw ~/.config/bws; delete the vault.bitwarden.eu account LAST, after critical passwords are recreated in KeePassXC")
 fi
 {{- end }}
+{{- if has "canvas" .enabled }}
+# driftwm writes ~/.local/state/driftwm/session.json on its first exit (our
+# config sets restore_windows/restore_camera), so its absence means the session
+# was installed and never entered. Nothing else marks a compositor as "tried":
+# the systemd unit is gone the moment you log out of it.
+if [[ ! -f "$HOME/.local/state/driftwm/session.json" ]]; then
+    steps+=("driftwm: installed but never started -- try it in a window first: 'driftwm --session-file ~/.local/state/driftwm/nested.json'; to make it the session, log out and pick 'driftwm' in the greeter's session menu (docs/desktop-canvas.md)")
+fi
+{{- end }}
 {{- if has "tailscale" .enabled }}
 if command -v tailscale &>/dev/null && ! tailscale status &>/dev/null; then
     steps+=("Tailscale: not connected -- 'sudo tailscale up' (browser auth)")

@@ -4,7 +4,7 @@
      Source: home/.chezmoidata.yaml and the covers headers in docs/*.md
      Rebuild: tools/gen-catalog.sh -->
 
-All 38 features. The Doc column leads to the detailed description.
+All 39 features. The Doc column leads to the detailed description.
 
 | Feature | What | Where | How enabled | Packages | Doc |
 |---|---|---|---|---|---|
@@ -16,6 +16,7 @@ All 38 features. The Doc column leads to the detailed description.
 | `desktop` | Desktop: niri + DankMaterialShell | host | always | 32 | [desktop.md](desktop.md) |
 | `tailscale` | Tailscale VPN | host | always | 1 | [network.md](network.md) |
 | `distrobox` | distrobox + podman | host | always | 2 | [containers.md](containers.md) |
+| `canvas` | Desktop: driftwm + Noctalia (infinite canvas, laptop) | host | opt-in | 6 | [desktop-canvas.md](desktop-canvas.md) |
 | `herdr` | herdr: agent-aware multiplexer (primary) | both | pre-checked | 1 | [multiplexer.md](multiplexer.md) |
 | `tmux` | tmux (fallback multiplexer) | both | pre-checked | 1 | [multiplexer.md](multiplexer.md) |
 | `neovim` | Neovim + LSP, treesitter | both | pre-checked | 2 | [dev-tools.md](dev-tools.md) |

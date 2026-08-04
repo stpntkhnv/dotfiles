@@ -33,6 +33,7 @@ Logins: `claude` then "Log in"; `codex login`; `gh auth login`; `az login`;
 | dev cert (in box) | `dotnet dev-certs https --trust`, then a NEW shell |
 | `docker` group (host) | log out and back in |
 | podman socket (in box) | `systemctl --user enable --now podman.socket`, in the box with `nested-podman`, else on the host |
+| driftwm never started | `driftwm --session-file ~/.local/state/driftwm/nested.json` in a window, or log out and pick `driftwm` in the greeter ([desktop-canvas.md](desktop-canvas.md)) |
 | Zen first run | `zen-browser` once, then apply |
 | Zen extension dead | `about:policies`, `about:addons`; apply rebuilds policy and XPI |
 | Junction missing | `sudo pacman -S junction`, then apply |
