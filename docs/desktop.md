@@ -63,6 +63,9 @@ its config. `desktop` is `always: true`, 32 packages; `wallpapers` gates 3 JPEGs
 
 That comment cites `dms-shell`, but `dms-shell-niri` is installed (`Optional Deps:
 None`); `kimageformats` is in neither, `tuned-ppd` only as `power-profiles-daemon`.
+`tuned-ppd` Provides and Conflicts With that name, so a machine that arrives with
+the real `power-profiles-daemon` needs it removed before the install list runs -
+the preflight in `20-packages` ([install.md](install.md)).
 `brightnessctl` is unused (2026-07-31: absent from `home/` and the `dms` binary).
 
 ## Verify

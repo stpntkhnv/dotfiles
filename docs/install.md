@@ -49,6 +49,14 @@ sh -c "$(curl -fsSL https://api.github.com/repos/stpntkhnv/dotfiles/contents/ins
 - `20-packages` renders flat `pacman/aur/npm/dotnet` lists from enabled
   features; `run_onchange` hashes that text, so a changed set re-triggers it.
   `dotnet tool update -g`, not `install` (fails if installed).
+- One preflight before the `pacman -Syu`, gated on `desktop`: a real
+  `power-profiles-daemon` package is removed with `-Rdd`, because `tuned-ppd`
+  Provides *and* Conflicts With it and `--noconfirm` answers "no" to the
+  replace prompt - killing the whole transaction, not one package. Arch
+  laptops routinely arrive with it preinstalled (hit 2026-08-05 on a fresh
+  install). The guard compares the name `pacman -Qq power-profiles-daemon`
+  prints, since that query resolves provides and answers `tuned-ppd` on a
+  machine that is already correct.
 
 ### Non-interactive
 
@@ -112,6 +120,7 @@ chezmoi execute-template < home/.chezmoiscripts/run_onchange_before_20-packages.
 |---|---|---|
 | `Setup did not complete` | a script under `init --apply` failed | fix it, then `chezmoi apply`; answers kept |
 | `claude`: "No such file or directory" | dangling symlink: npm ran without `--allow-scripts` | `chezmoi apply` |
+| `unresolvable package conflicts detected`, `tuned-ppd` and `power-profiles-daemon` | preinstalled real `power-profiles-daemon`; the preflight above is newer than that machine's checkout | `sudo pacman -S tuned-ppd` (answer `y` to remove ppd), then `chezmoi apply` |
 
 ## See also
 

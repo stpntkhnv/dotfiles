@@ -30,6 +30,24 @@ set -euo pipefail
 
 # Selected features: {{ $enabled | join " " }}
 
+{{- if has "desktop" $enabled }}
+# `power-profiles-daemon` ships preinstalled on plenty of Arch laptops
+# (archinstall's own desktop profiles pull it), and `tuned-ppd` both Provides
+# and Conflicts With it. pacman then asks "Remove power-profiles-daemon?", and
+# --noconfirm answers NO -- so the ENTIRE transaction below dies with
+# "unresolvable package conflicts", not just that one package. Swap it out
+# first. -Rdd because whatever depends on it is satisfied again the moment
+# tuned-ppd lands, two lines later.
+#
+# The test compares the NAME pacman prints, not its exit code: `pacman -Qq
+# power-profiles-daemon` resolves provides, so on a machine that already has
+# tuned-ppd it succeeds and prints `tuned-ppd` (verified 2026-08-05).
+if [[ "$(pacman -Qq power-profiles-daemon 2>/dev/null)" == "power-profiles-daemon" ]]; then
+    echo "==> Replacing power-profiles-daemon with tuned-ppd..."
+    sudo pacman -Rdd --noconfirm power-profiles-daemon
+fi
+{{- end }}
+
 echo "==> Installing repository packages ({{ len $pacman }})..."
 sudo pacman -Syu --noconfirm --needed \
 {{ range $i, $p := $pacman }}    {{ $p }}{{ if lt (add1 $i) (len $pacman) }} \{{ end }}
