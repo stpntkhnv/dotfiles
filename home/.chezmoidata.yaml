@@ -324,6 +324,14 @@ features:
       - socat
       - sox
       - vte-common
+      # Pasting an image into a terminal agent is not a terminal feature: text
+      # arrives over the pty from the host terminal, but for an image Claude
+      # Code shells out to `xclip -selection clipboard -t image/png -o` or
+      # `wl-paste --type image/png` INSIDE the container. Both attempts are
+      # 2>/dev/null, so without a clipboard tool here the paste silently does
+      # nothing. The Wayland socket itself is already reachable
+      # (/run/user/1000/wayland-1 -> /run/host/...); only the tool was missing.
+      - wl-clipboard
       - words
       - xorg-xauth
 

@@ -10,7 +10,7 @@ All 39 features. The Doc column leads to the detailed description.
 |---|---|---|---|---|---|
 | `core` | Base utilities | both | always | 21 | [base.md](base.md) |
 | `shell` | Shell: starship, eza, bat, fzf, zoxide, ripgrep, fd | both | always | 9 | [base.md](base.md) |
-| `container-base` | Container plumbing | container | always | 11 | [containers.md](containers.md) |
+| `container-base` | Container plumbing | container | always | 12 | [containers.md](containers.md) |
 | `host-base` | Host essentials: network, Bluetooth, firewall, zram | host | always | 12 | [base.md](base.md) |
 | `earlyoom` | earlyoom: kill one process instead of hanging the machine | host | always | 1 | [hardware.md](hardware.md) |
 | `desktop` | Desktop: niri + DankMaterialShell | host | always | 32 | [desktop.md](desktop.md) |

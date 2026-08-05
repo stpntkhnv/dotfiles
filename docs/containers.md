@@ -12,7 +12,7 @@ covers:
 ## What it does
 
 Per-context container assembly. Features: `distrobox` (host: `distrobox` +
-`podman`), `container-base` (container, 11 pkgs); both `always`. Why:
+`podman`), `container-base` (container, 12 pkgs); both `always`. Why:
 [isolation.md](isolation.md).
 
 ## Files
@@ -64,6 +64,7 @@ uname -r; pacman -Q linux; grep -c overlay /proc/filesystems
 |---|---|---|
 | `'overlay' is not supported over extfs` | `linux` upgraded, no reboot: `CONFIG_OVERLAY_FS=m`, module went with the old modules dir | reboot. Arch wontfix: FS#16702, FS#23809, FS#73043 |
 | volume "mounted but not there" | `distrobox-init` remounts host `/mnt`, `/media`, `/run/media`, `/var/mnt` every start, no opt-out (1.8.2.5 source, 2026-07-30) | keep `/var/lib/wsproxy` |
+| clipboard reads empty inside | no `wl-paste`/`xclip` in the container; the Wayland socket is fine (`/run/user/1000/wayland-1 -> /run/host/...`) | `wl-clipboard` in `container-base` since 2026-08-05 ([agents.md](agents.md)) |
 
 ## See also
 

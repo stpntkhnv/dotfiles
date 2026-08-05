@@ -40,6 +40,12 @@ configures Claude, caps agent and container memory. Features `claude`
   `.bashrc` wrappers are host-only, and in a container `claude` is the plain
   binary in the container's cgroup, under `--memory=8g`
   ([containers.md](containers.md)).
+- Image paste needs a clipboard tool *in the same namespace as `claude`*.
+  Pasted text is written to the pty by the host terminal; a pasted image
+  cannot cross a pty, so `claude` reads the clipboard itself - `strings` on
+  `bin/claude.exe` gives `xclip -selection clipboard -t image/png -o >` with
+  `|| wl-paste --type image/png`, both `2>/dev/null`. `wl-clipboard` is
+  therefore in `container-base`, not only in host `desktop`.
 - Budget: rootless podman parents every `libpod-*` scope under the user
   manager's `user.slice` (checked 2026-08-02: nothing else is there), so one
   drop-in covers containers and agents; host sessions join through the
@@ -75,6 +81,7 @@ systemctl --user show user.slice -p MemoryHigh -p MemoryMax
 |---|---|---|
 | New `claudefiles` commits, no nag | 168h window open | `chezmoi apply --refresh-externals` |
 | Agent child killed | hit `MemoryMax=16G` | expected; `dmesg \| grep -i oom` |
+| Ctrl+V of an image does nothing in a container, text pastes fine | `wl-paste`/`xclip` missing inside; errors swallowed | `chezmoi update` in the container (`wl-clipboard`, `container-base`) |
 
 ## See also
 
