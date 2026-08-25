@@ -40,9 +40,11 @@ either way, so the cliff is unmoved.
 
 The mitigation shipped on 08-25 is `DOTNET_gcServer=0`,
 `DOTNET_GCConserveMemory=5` and `MSBUILDDISABLENODEREUSE=1` for containers in
-`home/dot_bashrc.tmpl` ([dev-tools.md](../dev-tools.md)). It lowers the cost of
-each process; it does not raise the ceiling, and it only reaches a process
-started from a new shell after `chezmoi update`.
+`home/dot_bashrc.tmpl` ([dev-tools.md](../dev-tools.md)), carried on the `<ctx>`
+entry aliases because `distrobox enter <ctx> -- <cmd>` reads no rc file and the
+builds here are launched by agents, not typed. It lowers the cost of each
+process; it does not raise the ceiling, and it reaches only processes started
+after the change - the Aspire services from 08-24 kept their 12 heaps.
 
 **Recheck** Under load, the pair that separates livelock from ordinary
 pressure is a climbing `max` with `oom_kill 0`:

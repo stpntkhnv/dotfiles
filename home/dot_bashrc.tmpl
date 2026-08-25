@@ -2,6 +2,7 @@
 {{- $ctx := index (splitList " " $badge) 0 -}}
 {{- $herdr := has "herdr" .enabled -}}
 {{- $tmux := has "tmux" .enabled -}}
+{{- $dotnetenv := ternary "DOTNET_gcServer=0 DOTNET_GCConserveMemory=5 MSBUILDDISABLENODEREUSE=1 " "" (has "dotnet" .enabled) -}}
 [[ $- != *i* ]] && return
 
 alias ls='ls --color=auto'
@@ -54,6 +55,17 @@ export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.dotnet/tools:$PATH"
 # an editor in that context. The state is honest (nothing is claimed to be
 # working), the row is simply there before the agent is.
 #
+# The .NET variables ride on the entry for the same reason, and it is not
+# belt-and-braces: `distrobox enter <ctx> -- claude` runs the command with no
+# shell at all, so nothing in the container's .bashrc is ever read. Measured --
+# on that path even PATH is the host's, /home/stsiapan/... and not
+# .../homes/<ctx>/... . An agent started by the `-claude` or `-tmux` alias
+# therefore built with Server GC no matter what the container's rc said, which
+# is exactly the case that mattered, since builds here are run by agents and
+# not typed into a shell. Host env does cross the boundary (verified with a
+# probe variable), so setting it here reaches every session; the copy in the
+# container's rc below stays for shells entered some other way.
+#
 # The two session flags of the tmux twin are NOT the same kind of thing as
 # herdr's. tmux keeps its server socket in /tmp, which distrobox shares with
 # every container, so `-L <name>` is what stops three contexts from sharing one
@@ -62,12 +74,12 @@ export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$HOME/.dotnet/tools:$PATH"
 # another's home and connect to whatever socket it finds there. The netns is
 # the boundary; the multiplexer socket is not.
 {{- range .contexts }}
-alias {{ .name }}='{{ if $herdr }}HERDR_AGENT=claude {{ end }}distrobox enter --no-workdir {{ .name }}'
+alias {{ .name }}='{{ if $herdr }}HERDR_AGENT=claude {{ end }}{{ $dotnetenv }}distrobox enter --no-workdir {{ .name }}'
 {{- if $herdr }}
-alias {{ .name }}-claude='HERDR_AGENT=claude distrobox enter --no-workdir {{ .name }} -- claude'
+alias {{ .name }}-claude='HERDR_AGENT=claude {{ $dotnetenv }}distrobox enter --no-workdir {{ .name }} -- claude'
 {{- end }}
 {{- if $tmux }}
-alias {{ .name }}-tmux='distrobox enter --no-workdir {{ .name }} -- tmux -L {{ .name }} new-session -A -s work'
+alias {{ .name }}-tmux='{{ $dotnetenv }}distrobox enter --no-workdir {{ .name }} -- tmux -L {{ .name }} new-session -A -s work'
 {{- end }}
 {{- end }}
 {{- if or (has "claude" .enabled) (has "codex" .enabled) }}
@@ -106,6 +118,12 @@ export DOCKER_BUILDKIT=0
 # docs/issues/2026-08-24-container-livelock-at-memory-cap.md. Workstation GC is
 # one heap per process and costs throughput no local dev run will notice.
 # Verified present in SDK 10.0.110: `strings -el libcoreclr.so | grep -x gcServer`.
+#
+# This is the fallback path. The primary one is the `<ctx>` aliases above, which
+# carry the same three variables across the boundary, because `distrobox enter
+# <ctx> -- <cmd>` reads no rc file at all. What is left for this block is a
+# shell entered some other way, and it is guarded non-interactive-first by the
+# `[[ $- != *i* ]] && return` on line 1, so it reaches interactive shells only.
 export DOTNET_gcServer=0
 
 # 0-9, trades CPU for a smaller heap and returns pages to the OS sooner. Set

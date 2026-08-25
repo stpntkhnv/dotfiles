@@ -68,13 +68,22 @@ npm package itself (20's npm block serves `claude`/`codex`).
   `dotnet dev-certs https --trust` exports into `~/.aspnet/dev-certs/trust`, and
   needs a **new** shell after - otherwise the Aspire dashboard rejects its own
   resource service with `UntrustedRoot`.
-- In a container only, `home/dot_bashrc.tmpl` also sets `DOTNET_gcServer=0`,
-  `DOTNET_GCConserveMemory=5` and `MSBUILDDISABLENODEREUSE=1`. A .NET process
-  sizes its heap against the cgroup limit as if nothing else were in there, and
-  Server GC opens one heap per core, so six Aspire services plus a build did not
-  fit under `--memory=8g`
+- `DOTNET_gcServer=0`, `DOTNET_GCConserveMemory=5` and
+  `MSBUILDDISABLENODEREUSE=1` are set for container work by
+  `home/dot_bashrc.tmpl`. A .NET process sizes its heap against the cgroup limit
+  as if nothing else were in there, and Server GC opens one heap per core, so
+  six Aspire services plus a build did not fit under `--memory=8g`
   ([issues/2026-08-24-container-livelock-at-memory-cap.md](issues/2026-08-24-container-livelock-at-memory-cap.md)).
-  These cap cost per process, not process count: a build still forks one MSBuild
+- They ride on the `<ctx>` entry aliases, host-side, like `HERDR_AGENT`
+  ([multiplexer.md](multiplexer.md)). That placement is load-bearing:
+  `distrobox enter <ctx> -- <cmd>` runs the command with no shell, so the
+  container's `.bashrc` is never read - on that path even `PATH` is the host's.
+  Builds here are started by agents through the `-claude` and `-tmux` aliases,
+  not typed into a shell, so an in-container export alone would have missed
+  every one of them. The block inside the container's rc is the fallback for a
+  shell entered some other way, and `.bashrc` line 1 returns early when
+  non-interactive.
+- These cap cost per process, not process count: a build still forks one MSBuild
   node per core unless it is given `-m:4`.
 
 ## Decisions

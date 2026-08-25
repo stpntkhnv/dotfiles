@@ -182,7 +182,16 @@ enter_context() {
     # Dropping it here while the aliases keep it would be the worst of the two:
     # spaces opened by `work` would go unlabelled and spaces opened by hand would
     # not, and nothing would say why.
-    herdr pane run "$pane" env HERDR_AGENT=claude distrobox enter --no-workdir "$ctx" >/dev/null \
+    #
+    # The three .NET variables ride along for exactly that reason. They keep a
+    # container's dotnet off Server GC, which opens one heap per core and does
+    # not fit six Aspire services under `--memory=8g`
+    # (docs/issues/2026-08-24-container-livelock-at-memory-cap.md). This entry
+    # does land in an interactive shell, so the container's own .bashrc would
+    # set them anyway -- but only while that stays true, and a space opened by
+    # `work` must not differ from one opened by the `<ctx>` alias. Inert on a
+    # machine without the SDK.
+    herdr pane run "$pane" env HERDR_AGENT=claude DOTNET_gcServer=0 DOTNET_GCConserveMemory=5 MSBUILDDISABLENODEREUSE=1 distrobox enter --no-workdir "$ctx" >/dev/null \
         || echo "work: could not enter '$ctx', pane $pane may already be gone." >&2
 }
 
