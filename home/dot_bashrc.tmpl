@@ -97,6 +97,29 @@ codex() { slice-run user-agents.slice codex "$@"; }
 export DOCKER_HOST="unix://${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock"
 export DOCKER_BUILDKIT=0
 {{ end }}
+{{ if and (eq .env "container") (has "dotnet" .enabled) }}
+# Every .NET process reads the cgroup limit and sizes itself as if it owned the
+# box. Server GC opens one heap per core -- 12 here -- so six long-running
+# services under Aspire each reserve twelve heaps inside one --memory=8g lid.
+# That is what filled the cap on 2026-08-24 and livelocked the container in
+# reclaim for fifteen minutes without a single OOM kill; the investigation is
+# docs/issues/2026-08-24-container-livelock-at-memory-cap.md. Workstation GC is
+# one heap per process and costs throughput no local dev run will notice.
+# Verified present in SDK 10.0.110: `strings -el libcoreclr.so | grep -x gcServer`.
+export DOTNET_gcServer=0
+
+# 0-9, trades CPU for a smaller heap and returns pages to the OS sooner. Set
+# because memory, not CPU, is the binding constraint in a container. Drop it
+# first if a build ever feels slow -- it is a tuning knob, not a correctness one.
+export DOTNET_GCConserveMemory=5
+
+# `dotnet build` passes -maxCpuCount implicitly, so a build forks one MSBuild
+# node per core; with reuse they then idle for another 15 minutes holding their
+# heaps, which is how two builds left 22 nodes resident. Nodes now exit with the
+# build. Verified present in SDK 10.0.110 Microsoft.Build.dll (UTF-16 strings).
+# This caps lifetime, not count: to cap count too, pass `-m:4` per build.
+export MSBUILDDISABLENODEREUSE=1
+{{ end }}
 {{ if has "dotnet" .enabled }}
 # `dotnet dev-certs https --trust` exports the ASP.NET dev certificate into
 # this directory, but OpenSSL-based clients -- .NET itself included on Linux --

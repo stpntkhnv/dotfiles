@@ -65,7 +65,10 @@ uname -r; pacman -Q linux; grep -c overlay /proc/filesystems
 | `'overlay' is not supported over extfs` | `linux` upgraded, no reboot: `CONFIG_OVERLAY_FS=m`, module went with the old modules dir | reboot. Arch wontfix: FS#16702, FS#23809, FS#73043 |
 | volume "mounted but not there" | `distrobox-init` remounts host `/mnt`, `/media`, `/run/media`, `/var/mnt` every start, no opt-out (1.8.2.5 source, 2026-07-30) | keep `/var/lib/wsproxy` |
 | clipboard reads empty inside | no `wl-paste`/`xclip` in the container; the Wayland socket is fine (`/run/user/1000/wayland-1 -> /run/host/...`) | `wl-clipboard` in `container-base` since 2026-08-05 ([agents.md](agents.md)) |
+| container alive but every terminal in it frozen; nothing killed, `oom_kill 0` | reclaim livelock at `--memory=8g`: swap-out fails, so reclaim recycles code pages forever and the kernel never declares OOM. `earlyoom` is cgroup-blind and stays quiet ([log](issues/2026-08-24-container-livelock-at-memory-cap.md)) | kill the build and its MSBuild nodes (`SIGTERM` is enough); waiting can mean hours, since a build in the livelock is both victim and fuel. `memory.events` `max` climbing with `oom_kill 0` is the tell |
 
 ## See also
 
 [workarounds.md](workarounds.md) rows: `/mnt`, mirrorlist, overlay.
+[issues/2026-08-24-container-livelock-at-memory-cap.md](issues/2026-08-24-container-livelock-at-memory-cap.md)
+is what the 8g cap does when a context actually reaches it.

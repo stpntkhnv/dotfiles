@@ -68,6 +68,14 @@ npm package itself (20's npm block serves `claude`/`codex`).
   `dotnet dev-certs https --trust` exports into `~/.aspnet/dev-certs/trust`, and
   needs a **new** shell after - otherwise the Aspire dashboard rejects its own
   resource service with `UntrustedRoot`.
+- In a container only, `home/dot_bashrc.tmpl` also sets `DOTNET_gcServer=0`,
+  `DOTNET_GCConserveMemory=5` and `MSBUILDDISABLENODEREUSE=1`. A .NET process
+  sizes its heap against the cgroup limit as if nothing else were in there, and
+  Server GC opens one heap per core, so six Aspire services plus a build did not
+  fit under `--memory=8g`
+  ([issues/2026-08-24-container-livelock-at-memory-cap.md](issues/2026-08-24-container-livelock-at-memory-cap.md)).
+  These cap cost per process, not process count: a build still forks one MSBuild
+  node per core unless it is given `-m:4`.
 
 ## Decisions
 
@@ -77,10 +85,16 @@ npm package itself (20's npm block serves `claude`/`codex`).
 | `azd` from the `aka.ms` script | Not in Arch repos or AUR; the only Linux path Microsoft documents | pacman/AUR |
 | `docker` scope `both`, 2026-08-02 | Container needs the client, not a daemon | Host-only |
 | `devtunnel-cli-bin` dropped, 2026-08-01 | AUR build kept failing; Tailscale covers tunnels | Keep it |
+| Workstation GC in containers, 2026-08-24 | One heap per process instead of one per core; a dev run never notices the throughput, the 8g lid does | Raising `--memory` (moves the cliff, revives the 2026-07-30 desktop risk); `DOTNET_GCHeapHardLimitPercent` (a hard limit turns overshoot into `OutOfMemoryException` mid-build) |
 
 ## Verify
 
 ```sh
 git ls-files -- 'home/dot_config/nvim/**' | wc -l  # 29
 npm config get prefix                              # else 20 rewrites ~/.npmrc
+
+# In a container, in a NEW shell: 0, and a running .NET service must show no
+# ".NET Server GC" threads at all (it showed 12, one per core, before 2026-08-24)
+echo "$DOTNET_gcServer"
+cat /proc/<pid>/task/*/comm | sort | uniq -c
 ```

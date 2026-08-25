@@ -82,9 +82,11 @@ systemctl --user show user.slice -p MemoryHigh -p MemoryMax
 | New `claudefiles` commits, no nag | 168h window open | `chezmoi apply --refresh-externals` |
 | Agent child killed | hit `MemoryMax=16G` | expected; `dmesg \| grep -i oom` |
 | Ctrl+V of an image does nothing in a container, text pastes fine | `wl-paste`/`xclip` missing inside; errors swallowed | `chezmoi update` in the container (`wl-clipboard`, `container-base`) |
+| Agent in a container frozen, but alive and `dmesg` silent | opposite case: the container cgroup hit `--memory=8g` and livelocked in reclaim, so nothing is ever OOM-killed ([log](issues/2026-08-24-container-livelock-at-memory-cap.md)) | check `memory.events` `max` against `oom_kill`, not `dmesg`; shed load |
 
 ## See also
 
 [dev-tools.md](dev-tools.md), [browsers.md](browsers.md),
 [hardware.md](hardware.md), [nested-podman.md](nested-podman.md),
-[issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md)
+[issues/2026-07-30-desktop-hang-out-of-memory.md](issues/2026-07-30-desktop-hang-out-of-memory.md),
+[issues/2026-08-24-container-livelock-at-memory-cap.md](issues/2026-08-24-container-livelock-at-memory-cap.md)
