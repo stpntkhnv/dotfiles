@@ -26,7 +26,7 @@ Under `home/`; gating in `.chezmoiignore`.
 
 | Path | Role |
 |---|---|
-| `dot_config/systemd/user/browser{,-firefox,-chromium,-zen}.slice` | 6G/8G umbrella; firefox/chromium 3G/4G; zen 5G/6G |
+| `dot_config/systemd/user/browser{,-firefox,-chromium,-zen}.slice` | 10G/12G umbrella; firefox/chromium 3G/4G; zen 7G/10G |
 | `dot_local/bin/executable_slice-run` | `slice-run <slice> <cmd>...` |
 | `dot_local/share/applications/{firefox,chromium}.desktop.tmpl` | shadow system entries; `Exec` = `slice-run <slice> <bin>` |
 | `.chezmoiscripts/run_onchange_after_33-browser-slices.sh.tmpl` | `daemon-reload` |
@@ -37,7 +37,13 @@ Under `home/`; gating in `.chezmoiignore`.
 - Umbrella 8G < children sum 14G on purpose: with all three open the shared
   cap binds first. Zen's is largest - all work contexts in one tree.
 - Sizing is measured, not guessed: live Zen sat at 4.51 GiB
-  (`memory.current` 4841762816) against its 5G `MemoryHigh` (2026-07-31).
+  (`memory.current` 4841762816) against its then-5G `MemoryHigh` (2026-07-31).
+  Resized 2026-08-26: Zen had outgrown 5G/6G into local `99-local.conf`
+  drop-ins (9G/10G zen, 10G/12G umbrella) - measured 8.58 GiB, 30 tabs, 28
+  pinned. The repo now carries zen 7G/10G and umbrella 10G/12G; `High=7G` is
+  deliberately below the measured footprint so the kernel keeps squeezing cold
+  pages into zram, and the drop-ins are retired (removing them is a manual
+  step, they were never chezmoi's).
 - DMS wraps `.desktop` `Exec` in `systemd-run --user --scope`
   (`DMS_DEFAULT_LAUNCH_PREFIX`, literal in `/usr/bin/dms`, package `dms-shell
   1.5.3-1`, read by `launchDesktopEntry` in `SessionService.qml`, 2026-07-31;

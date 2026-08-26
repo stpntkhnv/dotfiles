@@ -147,7 +147,12 @@ re-read at every start. Nine prefs:
 - `browser.shell.checkDefaultBrowser=false` - Zen grabs
   `x-scheme-handler/http(s)` on first launch via `mimeapps.list`; the handler
   must stay Junction.
-- `browser.tabs.unloadOnLowMemory=true`, `dom.ipc.processCount=4` - memory.
+- `browser.tabs.unloadOnLowMemory=true`, `dom.ipc.processCount=4`,
+  `browser.sessionstore.restore_pinned_tabs_on_demand=true` - memory. The
+  last one (2026-08-26): 28 pinned tabs restored eagerly held ~8.5 GiB; on
+  demand a pinned tab costs nothing until clicked. `processCount` is inert
+  while Fission is on - the process count follows the number of distinct
+  sites, ~20 here.
 
 `fission.autostart` untouched on purpose: site isolation costs RAM, breaking it
 for a few hundred MB is a bad trade. `media.peerconnection.ice.proxy_only`

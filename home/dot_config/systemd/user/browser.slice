@@ -6,6 +6,11 @@
 [Unit]
 Description=Total budget for all browsers
 
+# 2026-08-26: raised with the Zen resize (see browser-zen.slice) -- the
+# umbrella must sit above the largest child or the parent cap binds first,
+# which is exactly what the retired 99-local.conf drop-ins existed to fix.
+# Still below the children's sum on purpose: the shared cap binds when
+# several browsers are open at once.
 [Slice]
-MemoryHigh=6G
-MemoryMax=8G
+MemoryHigh=10G
+MemoryMax=12G

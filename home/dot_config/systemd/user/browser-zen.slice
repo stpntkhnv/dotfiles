@@ -2,9 +2,17 @@
 # larger than a single-purpose browser's -- but it replaces three Firefox
 # instances, so the total is still lower. Same idea as browser-firefox.slice;
 # see the comments there.
+#
+# Resized 2026-08-26 from 5G/6G, which had drifted into a local 99-local.conf
+# drop-in at 9G/10G because Zen outgrew the repo numbers (measured 8.58 GiB
+# with 30 tabs, 28 pinned, ~20 sites under Fission). High=7G is a deliberate
+# squeeze below that: the kernel keeps reclaiming Zen's cold pages into zram
+# above 7G, which trades sluggish switches to stale tabs for ~1.5G given back
+# to the rest of the machine. Max stays 10G so nothing gets OOM-killed at
+# today's footprint. The drop-in is retired; these numbers are the only ones.
 [Unit]
 Description=Zen resource slice
 
 [Slice]
-MemoryHigh=5G
-MemoryMax=6G
+MemoryHigh=7G
+MemoryMax=10G

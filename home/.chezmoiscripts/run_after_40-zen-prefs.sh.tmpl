@@ -49,6 +49,10 @@ user_pref("signon.autofillForms", false);
 // RAM but breaking it for a few hundred megabytes is a bad trade.
 user_pref("browser.tabs.unloadOnLowMemory", true);
 user_pref("dom.ipc.processCount", 4);
+// 28 pinned tabs load eagerly at startup and stay resident -- measured 8.58
+// GiB total, with single tabs (Teams, ADO) above 2 GB. On demand, a pinned
+// tab costs nothing until clicked. The price is that the first click waits.
+user_pref("browser.sessionstore.restore_pinned_tabs_on_demand", true);
 
 // Zen claims x-scheme-handler/http(s) on first launch and writes itself into
 // mimeapps.list as userapp-Zen-*.desktop. That silently replaces the link
