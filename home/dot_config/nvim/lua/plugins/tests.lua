@@ -6,7 +6,6 @@ return {
     'nvim-neotest/neotest',
     dependencies = {
       'nvim-lua/plenary.nvim',
-      'antoinemadec/FixCursorHold.nvim',
       'nvim-treesitter/nvim-treesitter',
       'nsidorenco/neotest-vstest',
     },
@@ -29,7 +28,7 @@ return {
         neotest.run.run(vim.fn.expand '%')
       end, { desc = '[T]est: run [F]ile' })
       vim.keymap.set('n', '<leader>Ta', function()
-        neotest.run.run(vim.loop.cwd())
+        neotest.run.run(vim.uv.cwd())
       end, { desc = '[T]est: run [A]ll in project' })
       vim.keymap.set('n', '<leader>Tl', function()
         neotest.run.run_last()

@@ -30,7 +30,10 @@ return {
               return
             end
             vim.treesitter.start(args.buf, lang)
-            vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+            local ok, indents = pcall(vim.treesitter.query.get, lang, 'indents')
+            if ok and indents then
+              vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+            end
           end
           if vim.treesitter.language.add(lang) then
             start()

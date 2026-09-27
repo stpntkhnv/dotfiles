@@ -6,12 +6,9 @@ return {
       filewatching = 'auto',
       broad_search = false,
       lock_target = false,
-      silent = false,
     },
-    config = function(_, opts)
-      require('roslyn').setup(opts)
-
-      -- LSP configuration for C# specific settings
+    init = function()
+      vim.env.ROSLYN_LANGUAGE_SERVER_DAEMON_KEEPALIVE = '0'
       vim.lsp.config('roslyn', {
         settings = {
           ['csharp|inlay_hints'] = {
@@ -30,6 +27,9 @@ return {
           },
         },
       })
+    end,
+    config = function(_, opts)
+      require('roslyn').setup(opts)
     end,
   },
 }

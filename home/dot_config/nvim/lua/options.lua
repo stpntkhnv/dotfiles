@@ -1,6 +1,6 @@
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
-vim.g.have_nerd_font = true -- WezTerm runs JetBrainsMono Nerd Font
+vim.g.have_nerd_font = true -- Ghostty runs JetBrainsMono Nerd Font
 
 vim.o.number = true
 vim.o.relativenumber = true

@@ -57,9 +57,6 @@ local function get_csharp_namespace()
   return namespace
 end
 
--- Make function globally available for snippets
-_G.get_csharp_namespace = get_csharp_namespace
-
 -- C# file template with namespace detection
 vim.api.nvim_create_autocmd('BufNewFile', {
   desc = 'C# file template with namespace',

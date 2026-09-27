@@ -10,7 +10,6 @@ return {
         settings = {
           yaml = {
             schemas = {
-              kubernetes = '*.yaml',
               ['http://json.schemastore.org/github-workflow'] = '.github/workflows/*',
               ['http://json.schemastore.org/github-action'] = '.github/action.{yml,yaml}',
               ['http://json.schemastore.org/ansible-stable-2.9'] = 'roles/tasks/*.{yml,yaml}',
@@ -65,9 +64,9 @@ return {
           local builtin = require 'telescope.builtin'
           map('gd', builtin.lsp_definitions, '[G]oto [D]efinition')
           map('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
-          map('gr', builtin.lsp_references, '[G]oto [R]eferences')
-          map('gi', builtin.lsp_implementations, '[G]oto [I]mplementation')
-          map('gt', builtin.lsp_type_definitions, '[G]oto [T]ype Definition')
+          map('grr', builtin.lsp_references, '[G]oto [R]eferences')
+          map('gri', builtin.lsp_implementations, '[G]oto [I]mplementation')
+          map('grt', builtin.lsp_type_definitions, '[G]oto [T]ype Definition')
           map('<leader>rn', vim.lsp.buf.rename, '[R]e[n]ame')
           map('<leader>ca', vim.lsp.buf.code_action, '[C]ode [A]ction')
           map('K', vim.lsp.buf.hover, 'Hover Documentation')

@@ -11,16 +11,6 @@ return {
     end,
   },
   {
-    'williamboman/mason-lspconfig.nvim',
-    dependencies = { 'mason-org/mason.nvim' },
-    config = function()
-      require('mason-lspconfig').setup {
-        ensure_installed = {},
-        automatic_installation = false,
-      }
-    end,
-  },
-  {
     'WhoIsSethDaniel/mason-tool-installer.nvim',
     dependencies = { 'mason-org/mason.nvim' },
     config = function()

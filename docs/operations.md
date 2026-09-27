@@ -74,6 +74,7 @@ Syncthing config and folders, go-yq. The GitHub check is the only network call
 | [network](network.md) | `tailscale status; sudo ufw status` |
 | [secrets](secrets.md) | `ssh -T git@github.com` |
 | [dev-tools](dev-tools.md) | `code --list-extensions; id -nG` |
+| [neovim](neovim.md) | in box: `nvim --headless '+checkhealth vim.lsp' '+w! /dev/stdout' +qa` |
 | [agents](agents.md) | `git -C ~/.local/share/claudefiles rev-parse HEAD` |
 | [hardware](hardware.md) | `zramctl; bluetoothctl list` |
 

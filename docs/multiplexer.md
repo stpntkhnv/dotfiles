@@ -21,7 +21,7 @@ its distrobox container. No herdr config is deployed; its defaults stand.
 | Path | Role |
 |---|---|
 | `home/dot_local/bin/executable_work.tmpl` | `~/.local/bin/work`; contexts baked in from `contexts:`. Entry carries `HERDR_AGENT` and the .NET memory vars ([dev-tools.md](dev-tools.md)) |
-| `home/dot_tmux.conf` | `~/.tmux.conf`, both envs. Prefix `C-a`, herdr keeps `ctrl+b`. `focus-events on` so nvim's `FocusGained` reload fires ([dev-tools.md](dev-tools.md)) |
+| `home/dot_tmux.conf` | `~/.tmux.conf`, both envs. Prefix `C-a`, herdr keeps `ctrl+b`. `focus-events on` so nvim's `FocusGained` reload fires ([neovim.md](neovim.md)) |
 | `home/dot_bashrc.tmpl` | Aliases `<ctx>`, `-claude` (if `herdr`), `-tmux` (if `tmux`); each carries `HERDR_AGENT` and the .NET memory vars, since `distrobox enter -- <cmd>` reads no rc |
 
 ## How it works

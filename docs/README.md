@@ -68,8 +68,10 @@ Three ways in:
 
 ## Tools
 
-- [`dev-tools.md`](dev-tools.md) - neovim, VS Code, node, go, dotnet, rider, DB
-  and API clients, docker, azure, teams, gh.
+- [`neovim.md`](neovim.md) - Neovim: C# through Roslyn, tests, reloading files
+  agents edit.
+- [`dev-tools.md`](dev-tools.md) - VS Code, node, go, dotnet, rider, DB and API
+  clients, docker, azure, teams, gh.
 - [`agents.md`](agents.md) - what this repo lays down for Claude Code and Codex.
 
 ## Hardware

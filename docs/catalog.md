@@ -19,7 +19,7 @@ All 39 features. The Doc column leads to the detailed description.
 | `canvas` | Desktop: driftwm + Noctalia (infinite canvas, laptop) | host | opt-in | 6 | [desktop-canvas.md](desktop-canvas.md) |
 | `herdr` | herdr: agent-aware multiplexer (primary) | both | pre-checked | 1 | [multiplexer.md](multiplexer.md) |
 | `tmux` | tmux (fallback multiplexer) | both | pre-checked | 1 | [multiplexer.md](multiplexer.md) |
-| `neovim` | Neovim + LSP, treesitter | both | pre-checked | 2 | [dev-tools.md](dev-tools.md) |
+| `neovim` | Neovim + LSP, treesitter | both | pre-checked | 2 | [neovim.md](neovim.md) |
 | `node` | Node.js + npm | both | pre-checked | 2 | [dev-tools.md](dev-tools.md) |
 | `vscode` | VS Code + extensions from extensions.txt | both | opt-in | 1 | [dev-tools.md](dev-tools.md) |
 | `firefox` | Firefox (everything-else browser) | host | opt-in | 1 | [browsers.md](browsers.md) |
