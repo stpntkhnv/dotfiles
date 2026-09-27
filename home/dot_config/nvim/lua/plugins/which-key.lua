@@ -46,6 +46,7 @@ return {
         { '<leader>b', group = '[B]uffer' },
         { '<leader>d', group = '[D]ebug/[D]iagnostics' },
         { '<leader>q', group = 'Session' },
+        { '<leader>a', group = '[A]gent', mode = { 'n', 'v' } },
       },
     },
   },

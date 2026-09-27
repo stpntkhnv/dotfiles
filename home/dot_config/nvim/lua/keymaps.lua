@@ -56,3 +56,7 @@ vim.keymap.set('n', '<leader>bb', '<cmd>BufferLinePick<CR>', { desc = '[B]uffer 
 for i = 1, 9 do
   vim.keymap.set('n', '<leader>' .. i, '<cmd>BufferLineGoToBuffer ' .. i .. '<CR>', { desc = 'Go to buffer ' .. i })
 end
+
+vim.keymap.set('n', '<leader>ap', function() require('agent_send').send_line() end, { desc = 'Agent pane: send path:line' })
+vim.keymap.set('v', '<leader>ap', function() require('agent_send').send_selection() end, { desc = 'Agent pane: send path:range' })
+vim.keymap.set('n', '<leader>aP', function() require('agent_send').pick() end, { desc = 'Agent pane: choose target' })

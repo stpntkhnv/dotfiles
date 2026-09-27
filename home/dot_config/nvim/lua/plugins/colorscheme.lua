@@ -9,7 +9,7 @@ return {
           comments = { italic = false },
         },
         -- tokyonight's stock diff colors are nearly invisible (DiffChange sits
-        -- almost on the editor background), so changed lines in diffview render
+        -- almost on the editor background), so changed lines in diffs render
         -- as flat gray. Repaint the diff groups: green for added/changed, red
         -- for deleted, brighter green for the changed text itself.
         on_highlights = function(hl, c)

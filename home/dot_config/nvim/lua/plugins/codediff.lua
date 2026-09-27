@@ -1,10 +1,10 @@
--- Whole-branch review before commit/push: a file tree of every change with
--- side-by-side diffs, which lazygit/gitsigns don't give in one view.
+-- Review of what changed, including edits an agent is still making: a file
+-- tree of every change with side-by-side diffs that follow the working tree.
 --
 -- Every mapping targets the repo of the CURRENT FILE, not cwd: with an
 -- umbrella folder holding many repos, cwd is rarely the repo you're editing
 -- (same reason git.lua uses LazyGitCurrentFile). We resolve that repo's
--- toplevel and pass it to Diffview with -C.
+-- toplevel and pass it to CodeDiff with -C.
 local function file_git_root()
   local file = vim.api.nvim_buf_get_name(0)
   local dir = file ~= '' and vim.fn.fnamemodify(file, ':h') or vim.fn.getcwd()
@@ -21,7 +21,7 @@ local function open(rev)
   if not root then
     return
   end
-  vim.cmd('DiffviewOpen -C' .. root .. (rev and (' ' .. rev) or ''))
+  vim.cmd('CodeDiff -C ' .. vim.fn.fnameescape(root) .. (rev and (' ' .. rev) or ''))
 end
 
 -- Base for branch review: prefer the upstream tracking branch, so base...HEAD
@@ -66,23 +66,35 @@ local function review_branch()
     vim.notify('Could not resolve a base branch to review against', vim.log.levels.WARN)
     return
   end
-  vim.cmd('DiffviewOpen -C' .. root .. ' ' .. base .. '...HEAD')
+  vim.cmd('CodeDiff -C ' .. vim.fn.fnameescape(root) .. ' ' .. base .. '...HEAD')
+end
+
+local function file_history()
+  local root = file_git_root()
+  if not root then
+    return
+  end
+  local file = vim.bo.buftype == '' and vim.api.nvim_buf_get_name(0) or ''
+  vim.cmd('CodeDiff -C ' .. vim.fn.fnameescape(root) .. ' history' .. (file ~= '' and (' ' .. vim.fn.fnameescape(file)) or ''))
 end
 
 return {
   {
-    'dlyongemallo/diffview-plus.nvim',
-    dependencies = { 'nvim-lua/plenary.nvim' },
-    cmd = { 'DiffviewOpen', 'DiffviewClose', 'DiffviewFileHistory', 'DiffviewToggleFiles' },
+    'esmuellert/codediff.nvim',
+    cmd = 'CodeDiff',
     keys = {
       { '<leader>gd', function() open() end, desc = '[G]it [D]iff (working tree)' },
       { '<leader>gr', review_branch, desc = '[G]it [R]eview branch vs base' },
-      { '<leader>gf', '<cmd>DiffviewFileHistory %<cr>', desc = '[G]it [F]ile history' },
-      { '<leader>gF', '<cmd>DiffviewFileHistory<cr>', desc = '[G]it repo [F]ile history' },
-      { '<leader>gc', '<cmd>DiffviewClose<cr>', desc = '[G]it diff [C]lose' },
+      { '<leader>gf', file_history, desc = '[G]it [F]ile history' },
+      { '<leader>gF', function() open 'history' end, desc = '[G]it repo [F]ile history' },
     },
     opts = {
-      enhanced_diff_hl = true,
+      keymaps = {
+        view = {
+          toggle_explorer = '<leader>E',
+          toggle_compact = 'gC',
+        },
+      },
     },
   },
 }

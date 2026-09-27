@@ -35,7 +35,11 @@ require('lazy').setup({
 
   -- Git
   { import = 'plugins.git' },
-  { import = 'plugins.diffview' },
+  { import = 'plugins.codediff' },
+
+  -- Agents
+  { import = 'plugins.agents' },
+  { import = 'plugins.markdown' },
 
   -- LSP & Language Tools
   { import = 'plugins.mason' },
