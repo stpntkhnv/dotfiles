@@ -29,7 +29,7 @@ npm package itself (20's npm block serves `claude`/`codex`).
 
 | Path | Role |
 |---|---|
-| `home/dot_config/nvim/**` | 29 files; plugin specs one per file in `lua/plugins/`. `mason.lua` adds `Crashdummyy/mason-registry` for Roslyn (C# LSP), not in the official one. `lazy-lock.json` moves only on `:Lazy update` |
+| `home/dot_config/nvim/**` | 28 files; plugin specs one per file in `lua/plugins/`. `mason.lua` adds `Crashdummyy/mason-registry` for Roslyn (C# LSP), not in the official one. `lazy-lock.json` moves only on `:Lazy update` |
 | `.../Code/User/extensions.txt` | 47 ids, read by 81 |
 | `.../Code/User/settings.json` | `dotnet.defaultSolution`, `@azure.argTenant` empty on purpose |
 | `.../Code/User/keybindings.json` | `shift+enter` = `\` + CRLF in terminal |
@@ -58,6 +58,21 @@ npm package itself (20's npm block serves `claude`/`codex`).
 - 20 runs `npm config set prefix` only when it already differs: it rewrites
   all of `~/.npmrc`, losing comments and the tilde
   ([workarounds.md](workarounds.md), npm/npm#7771).
+- `lua/plugins.lua` creates `~/.local/share/nvim/site` before lazy.nvim
+  starts: on a first run lazy drops the missing dir from `rtp`, and the
+  parsers nvim-treesitter installs there fail to load until restart
+  ([workarounds.md](workarounds.md), lazy.nvim#2153).
+- Files edited by agents: `lua/autocmds.lua` runs `checktime` on focus,
+  buffer enter, cursor hold and a 1 s timer in normal mode, so a clean buffer
+  reloads without a keypress; a buffer with unsaved edits gets nvim's W12
+  prompt instead. Roslyn picks up unopened files on its own: nvim 0.12 does not
+  offer `didChangeWatchedFiles` on Linux, and roslyn watches the disk itself
+  (verified 2026-09-27, a new class seen without restart).
+- Tests run through `neotest-vstest` (`lua/plugins/tests.lua`), which speaks
+  Microsoft Testing Platform. `neotest-dotnet` was dropped 2026-09-27:
+  discovery crashes on nvim 0.12 (`get_node_text`, `attempt to call method
+  'start'`), upstream unmaintained since 2025-09. `broad_recursive_discovery`
+  is off: the umbrella folder of many repos would freeze nvim.
 - `docker` gives the host `docker.socket` + group
   (`run_onchange_before_30-system.sh.tmpl`, host-only; group needs a re-login,
   `zz-next-steps` nags). A container gets neither by design - its CLI
@@ -99,7 +114,7 @@ npm package itself (20's npm block serves `claude`/`codex`).
 ## Verify
 
 ```sh
-git ls-files -- 'home/dot_config/nvim/**' | wc -l  # 29
+git ls-files -- 'home/dot_config/nvim/**' | wc -l  # 28
 npm config get prefix                              # else 20 rewrites ~/.npmrc
 
 # In a container, in a NEW shell: 0, and a running .NET service must show no

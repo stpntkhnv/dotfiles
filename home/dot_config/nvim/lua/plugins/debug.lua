@@ -91,7 +91,7 @@ return {
       }
 
       -- Configure netcoredbg for C# debugging
-      -- Define the netcoredbg adapter (needed by neotest-dotnet)
+      -- Define the netcoredbg adapter (needed by neotest-vstest)
       dap.adapters.netcoredbg = {
         type = 'executable',
         command = vim.fn.stdpath 'data' .. '/mason/bin/netcoredbg',

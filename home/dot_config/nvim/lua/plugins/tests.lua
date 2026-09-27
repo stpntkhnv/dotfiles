@@ -8,15 +8,17 @@ return {
       'nvim-lua/plenary.nvim',
       'antoinemadec/FixCursorHold.nvim',
       'nvim-treesitter/nvim-treesitter',
-      'Issafalcon/neotest-dotnet',
+      'nsidorenco/neotest-vstest',
     },
     config = function()
+      vim.g.neotest_vstest = {
+        dap_settings = { type = 'netcoredbg', justMyCode = false },
+        broad_recursive_discovery = false,
+      }
       local neotest = require 'neotest'
       neotest.setup {
         adapters = {
-          require 'neotest-dotnet' {
-            dap = { justMyCode = false },
-          },
+          require 'neotest-vstest',
         },
       }
 

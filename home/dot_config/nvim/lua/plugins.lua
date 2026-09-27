@@ -11,6 +11,8 @@ end
 local rtp = vim.opt.rtp
 rtp:prepend(lazypath)
 
+vim.fn.mkdir(vim.fn.stdpath 'data' .. '/site', 'p')
+
 require('lazy').setup({
   -- Test explorer
   { import = 'plugins.tests' },
@@ -43,8 +45,6 @@ require('lazy').setup({
   { import = 'plugins.debug' },
   { import = 'plugins.csharp' },
 
-  -- HTTP Client
-  { import = 'plugins.http' },
 }, {
   ui = {
     icons = vim.g.have_nerd_font and {} or {

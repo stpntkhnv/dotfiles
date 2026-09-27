@@ -16,6 +16,13 @@ vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter', 'CursorHold', 'CursorHo
   end,
 })
 
+vim.uv.new_timer():start(1000, 1000, vim.schedule_wrap(function()
+  local m = vim.api.nvim_get_mode()
+  if m.mode == 'n' and not m.blocking and vim.fn.getcmdwintype() == '' then
+    pcall(vim.cmd, 'checktime')
+  end
+end))
+
 -- C# namespace detection helper
 local function get_csharp_namespace()
   local filepath = vim.fn.expand '%:p'

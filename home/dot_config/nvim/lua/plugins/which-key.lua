@@ -41,7 +41,6 @@ return {
         { '<leader>s', group = '[S]earch' },
         { '<leader>t', group = '[T]oggle' },
         { '<leader>T', group = '[T]est' },
-        { '<leader>R', group = '[R]EST/HTTP' },
         { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
         { '<leader>g', group = '[G]it' },
         { '<leader>b', group = '[B]uffer' },
