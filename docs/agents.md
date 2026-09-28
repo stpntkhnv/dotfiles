@@ -58,7 +58,7 @@ configures Claude, caps agent and container memory. Features `claude`
 - No channel to secrets exists ([secrets.md](secrets.md)).
 - nvim's `share_claude_ide_dir` (`nvim/lua/plugins/agents.lua`) links every
   `~/.claude-*/ide` to `~/.claude/ide`, so a Claude under any
-  `CLAUDE_CONFIG_DIR` finds nvim with `/ide` ([neovim.md](neovim.md)).
+  `CLAUDE_CONFIG_DIR` finds nvim with `/ide` ([neovim-agents.md](neovim-agents.md)).
 
 ## Decisions
 

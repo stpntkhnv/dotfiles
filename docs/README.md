@@ -68,8 +68,10 @@ Three ways in:
 
 ## Tools
 
-- [`neovim.md`](neovim.md) - Neovim: C# through Roslyn, tests, reloading files
-  agents edit.
+- [`neovim.md`](neovim.md) - Neovim: C# through Roslyn, tests, solution
+  explorer.
+- [`neovim-agents.md`](neovim-agents.md) - Neovim beside agents: reload,
+  codediff review, claudecode, sending `path:line` to a pane.
 - [`dev-tools.md`](dev-tools.md) - VS Code, node, go, dotnet, rider, DB and API
   clients, docker, azure, teams, gh.
 - [`agents.md`](agents.md) - what this repo lays down for Claude Code and Codex.

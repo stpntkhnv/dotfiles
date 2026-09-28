@@ -10,6 +10,16 @@ local function share_claude_ide_dir()
   end
 end
 
+local function tree_add()
+  if vim.b.neo_tree_source ~= 'dotnet-tree' then
+    return vim.cmd 'ClaudeCodeTreeAdd'
+  end
+  local node = require('neo-tree.sources.manager').get_state('dotnet-tree').tree:get_node()
+  if node and node.path then
+    require('claudecode').send_at_mention(node.path)
+  end
+end
+
 return {
   {
     'coder/claudecode.nvim',
@@ -32,7 +42,7 @@ return {
     keys = {
       { '<leader>ab', '<cmd>ClaudeCodeAdd %<cr>', desc = 'Claude: add current file' },
       { '<leader>as', '<cmd>ClaudeCodeSend<cr>', mode = 'v', desc = 'Claude: send selection' },
-      { '<leader>as', '<cmd>ClaudeCodeTreeAdd<cr>', ft = 'neo-tree', desc = 'Claude: add file' },
+      { '<leader>as', tree_add, ft = 'neo-tree', desc = 'Claude: add node' },
       { '<leader>aa', '<cmd>ClaudeCodeDiffAccept<cr>', desc = 'Claude: accept diff' },
       { '<leader>ad', '<cmd>ClaudeCodeDiffDeny<cr>', desc = 'Claude: deny diff' },
     },
