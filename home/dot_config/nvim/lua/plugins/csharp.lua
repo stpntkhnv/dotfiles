@@ -25,11 +25,28 @@ return {
             dotnet_suppress_inlay_hints_for_parameters_that_match_argument_name = true,
             dotnet_suppress_inlay_hints_for_parameters_that_match_method_intent = true,
           },
+          ['csharp|completion'] = {
+            dotnet_show_completion_items_from_unimported_namespaces = true,
+          },
+          ['csharp|formatting'] = {
+            dotnet_organize_imports_on_format = true,
+          },
+          ['csharp|code_lens'] = {
+            dotnet_enable_references_code_lens = true,
+          },
+          ['navigation'] = {
+            dotnet_navigate_to_decompiled_sources = true,
+          },
         },
       })
     end,
     config = function(_, opts)
       require('roslyn').setup(opts)
+      vim.lsp.commands['roslyn.client.peekReferences'] = function(command)
+        local uri, pos = unpack(command.arguments)
+        vim.lsp.util.show_document({ uri = uri, range = { start = pos, ['end'] = pos } }, 'utf-16', { focus = true })
+        require('telescope.builtin').lsp_references()
+      end
     end,
   },
 }

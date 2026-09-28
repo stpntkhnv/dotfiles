@@ -1,6 +1,22 @@
+local function csharpier_root(file)
+  local root = vim.fs.root(file, '.git') or vim.fs.dirname(file)
+  for _, manifest in ipairs { root .. '/.config/dotnet-tools.json', root .. '/dotnet-tools.json' } do
+    if vim.uv.fs_stat(manifest) and table.concat(vim.fn.readfile(manifest), '\n'):find('"csharpier"', 1, true) then
+      return root, true
+    end
+  end
+  local rc = vim.fs.find(function(name)
+    return name:match '^%.csharpierrc' ~= nil
+  end, { path = vim.fs.dirname(file), upward = true, stop = vim.fs.dirname(root) })[1]
+  if rc then
+    return root, false
+  end
+end
+
 return {
   {
     'neovim/nvim-lspconfig',
+    dependencies = { 'b0o/SchemaStore.nvim' },
     config = function()
       -- Configure YAML language server using new vim.lsp.config API
       vim.lsp.config('yamlls', {
@@ -40,6 +56,28 @@ return {
         },
       })
       vim.lsp.enable('lua_ls')
+
+      local schemastore = require 'schemastore'
+      local ok, schemas = pcall(schemastore.json.schemas, {
+        replace = {
+          ['launchsettings.json'] = {
+            description = 'ASP.NET launchSettings.json',
+            fileMatch = { 'launchSettings.json', 'launchsettings.json' },
+            name = 'launchsettings.json',
+            url = 'https://www.schemastore.org/launchsettings.json',
+          },
+        },
+      })
+      vim.lsp.config('jsonls', {
+        init_options = { provideFormatter = false },
+        settings = {
+          json = {
+            schemas = ok and schemas or schemastore.json.schemas(),
+            validate = { enable = true },
+          },
+        },
+      })
+      vim.lsp.enable('jsonls')
 
       -- Configure diagnostics display
       vim.diagnostic.config({
@@ -84,6 +122,9 @@ return {
               vim.lsp.inlay_hint.enable(not enabled, { bufnr = event.buf })
             end, '[T]oggle inlay [H]ints')
           end
+          if client and client.name == 'roslyn' and client:supports_method('textDocument/codeLens') then
+            vim.lsp.codelens.enable(true, { bufnr = event.buf })
+          end
         end,
       })
 
@@ -125,7 +166,7 @@ return {
           return nil
         else
           return {
-            timeout_ms = 500,
+            timeout_ms = vim.bo[bufnr].filetype == 'cs' and 3000 or 500,
             lsp_format = 'fallback',
           }
         end
@@ -133,6 +174,25 @@ return {
       formatters_by_ft = {
         lua = { 'stylua' },
         yaml = { 'prettier' },
+        cs = { 'csharpier' },
+      },
+      formatters = {
+        csharpier = {
+          condition = function(_, ctx)
+            return csharpier_root(ctx.filename) ~= nil
+          end,
+          command = function(_, ctx)
+            local _, tool = csharpier_root(ctx.filename)
+            return tool and 'dotnet' or 'csharpier'
+          end,
+          args = function(_, ctx)
+            local _, tool = csharpier_root(ctx.filename)
+            return tool and { 'csharpier', 'format', '--stdin-path', '$FILENAME' } or { 'format', '--stdin-path', '$FILENAME' }
+          end,
+          cwd = function(_, ctx)
+            return (csharpier_root(ctx.filename))
+          end,
+        },
       },
     },
   },

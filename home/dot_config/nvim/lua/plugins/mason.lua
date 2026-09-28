@@ -21,6 +21,8 @@ return {
           'roslyn', -- C# LSP, from the Crashdummyy registry
           'stylua',
           'prettier',
+          'json-lsp',
+          'csharpier',
           'markdownlint',
           'netcoredbg',
           'delve',

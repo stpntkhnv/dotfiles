@@ -28,6 +28,20 @@ code agents write is [neovim-agents.md](neovim-agents.md).
 - C#: roslyn.nvim (`lua/plugins/csharp.lua`), blink.cmp + LuaSnip, conform
   (format on save falls back to Roslyn), nvim-dap + netcoredbg
   (`debug.lua`), neotest-vstest (`tests.lua`).
+- Roslyn settings (`csharp.lua` `init`): inlay hints, completion from
+  unimported namespaces (they arrive on the second request, once the index is
+  built; accepting one adds the `using`), organize imports on format,
+  references code lens (`grx` opens them in Telescope; enabled for roslyn
+  only, yamlls would title every YAML), `gd` into decompiled sources.
+  Diagnostics stay on open files: Roslyn's default `openFiles`, not set here.
+- JSON (`lsp.lua`): jsonls with SchemaStore.nvim, so `appsettings*.json`,
+  `launchSettings.json` and `global.json` validate and complete. Its
+  formatter is off (`provideFormatter = false`): format on save would rewrite
+  every JSON the repos hold.
+- csharpier (`lsp.lua` `csharpier_root`): runs on save only in a git repo
+  whose root `dotnet-tools.json` lists it (`dotnet csharpier`, cwd = root) or
+  that holds a `.csharpierrc*` (mason's `csharpier`); elsewhere Roslyn formats. No
+  work repo has it (2026-09-28).
 - LSP maps (`lsp.lua`, `LspAttach`): Telescope pickers sit on nvim's own
   `grr` `gri` `grt`; `gd` and `gD` stay.
 - Treesitter runs the `main` branch (`treesitter.lua`): the listed parsers
@@ -65,13 +79,24 @@ code agents write is [neovim-agents.md](neovim-agents.md).
   pulls SchemaStore by itself.
 - No mason-lspconfig: v2 auto-enabled every mason server and started
   `stylua --lsp` as a second Lua client beside conform. `lsp.lua` enables
-  `lua_ls` and `yamlls`, roslyn.nvim enables `roslyn`.
+  `lua_ls`, `yamlls` and `jsonls`, roslyn.nvim enables `roslyn`.
 - `open_explorer` disposes the tab's dotnet-tree state when the repo changes
   and seeds the new one's `path` with the repo root: the source's `navigate`
   ignores neo-tree's `dir=` and caches the first solution, so nvim in the
   umbrella folder showed "no .sln/.slnx found". Changing `path` on a state
   that had already rendered made neo-tree close its new window (`Invalid
   window`). `<` / `>` show the repo of the last `\`
+  ([workarounds.md](workarounds.md)).
+- `csharp.lua` registers `roslyn.client.peekReferences` in `vim.lsp.commands`:
+  roslyn.nvim handles only three client commands, so `grx` on a references
+  lens failed ([workarounds.md](workarounds.md)).
+- csharpier's repo is found per file, not taken from conform: its built-in
+  `is_local()` asks `dotnet csharpier --version` once per session from nvim's
+  cwd, which is the umbrella folder. `.cs` saves get 3 s instead of 0.5 s:
+  `dotnet csharpier` starts in ~0.4 s.
+- `launchSettings.json` needs `replace` in the SchemaStore call, under
+  `pcall` so a catalog without that entry cannot abort the LSP config: the catalog's
+  `fileMatch` is lowercase and jsonls matches case-sensitively on Linux
   ([workarounds.md](workarounds.md)).
 - Tests: neotest-vstest speaks Microsoft Testing Platform (xUnit v3, 10/10 on
   2026-09-27). `broad_recursive_discovery` is off: a folder of many repos would
@@ -83,6 +108,7 @@ code agents write is [neovim-agents.md](neovim-agents.md).
 |---|---|---|
 | neotest-vstest, 2026-09-27 | neotest-dotnet discovery crashes on nvim 0.12 (`get_node_text`, `attempt to call method 'start'`), unmaintained since 2025-09 | easy-dotnet test runner (starts its own Roslyn) |
 | dotnet-tree.nvim, 2026-09-27 | a neo-tree source, so Files stays one key away; solution parsed in Lua, no MSBuild, nothing extra under the 8g cap. Early, one author | easy-dotnet (starts its own Roslyn); explorer.dotnet.nvim, dotnet-workspace-explorer.nvim (standalone trees) |
+| Roslyn diagnostics on open files only, 2026-09-28 | solution-wide analysis costs RAM and CPU under the 8g cap, beside Aspire and builds | `fullSolution` (Rider-style, feeds dotnet-tree's error counts) |
 | kulala.nvim dropped, 2026-09-27 | upstream repo went private (404) | 1-star recovery fork |
 
 ## Verify
@@ -100,4 +126,5 @@ git ls-files -- 'home/dot_config/nvim/**' | wc -l   # 32
 - [dev-tools.md](dev-tools.md) - the other editors and SDKs.
 - [neovim-agents.md](neovim-agents.md) - reload, review and sending context
   to agents.
-- [workarounds.md](workarounds.md) - the lazy.nvim and dotnet-tree rows.
+- [workarounds.md](workarounds.md) - the lazy.nvim, dotnet-tree, roslyn.nvim
+  and SchemaStore rows.
