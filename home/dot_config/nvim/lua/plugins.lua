@@ -24,10 +24,11 @@ require('lazy').setup({
   { import = 'plugins.indent' },
 
   -- Navigation & Search
-  { import = 'plugins.telescope' },
+  { import = 'plugins.fzf' },
   { import = 'plugins.sessions' },
   { import = 'plugins.file-explorer' },
   { import = 'plugins.which-key' },
+  { import = 'plugins.splits' },
 
   -- Editing
   { import = 'plugins.editing' },

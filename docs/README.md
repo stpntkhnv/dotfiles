@@ -68,8 +68,9 @@ Three ways in:
 
 ## Tools
 
-- [`neovim.md`](neovim.md) - Neovim: C# through Roslyn, tests, solution
-  explorer.
+- [`neovim.md`](neovim.md) - Neovim: search, motion, LSP, 0.12 built-ins.
+- [`neovim-csharp.md`](neovim-csharp.md) - Neovim for C#: Roslyn, solution
+  explorer, tests, JSON configs, csharpier.
 - [`neovim-agents.md`](neovim-agents.md) - Neovim beside agents: reload,
   codediff review, claudecode, sending `path:line` to a pane.
 - [`dev-tools.md`](dev-tools.md) - VS Code, node, go, dotnet, rider, DB and API

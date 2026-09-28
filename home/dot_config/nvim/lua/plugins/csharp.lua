@@ -45,7 +45,7 @@ return {
       vim.lsp.commands['roslyn.client.peekReferences'] = function(command)
         local uri, pos = unpack(command.arguments)
         vim.lsp.util.show_document({ uri = uri, range = { start = pos, ['end'] = pos } }, 'utf-16', { focus = true })
-        require('telescope.builtin').lsp_references()
+        require('fzf-lua').lsp_references()
       end
     end,
   },

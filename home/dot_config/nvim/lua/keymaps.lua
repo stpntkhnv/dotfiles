@@ -1,10 +1,10 @@
 vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
 vim.keymap.set('n', '<leader>dq', vim.diagnostic.setloclist, { desc = '[D]iagnostic [Q]uickfix list' })
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
-vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left window' })
-vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
-vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
-vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
+vim.keymap.set('n', '<leader>tu', function()
+  vim.cmd.packadd 'nvim.undotree'
+  vim.cmd.Undotree()
+end, { desc = '[T]oggle [U]ndotree' })
 
 -- Buffer navigation. Deliberately NOT <Tab>: the terminal sends the same code
 -- for <Tab> and <C-i>, so mapping <Tab> would break the forward jump (<C-i>).

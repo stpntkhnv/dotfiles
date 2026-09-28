@@ -47,4 +47,25 @@ return {
   {
     'NMAC427/guess-indent.nvim',
   },
+  {
+    'nvim-treesitter/nvim-treesitter-context',
+    event = { 'BufReadPost', 'BufNewFile' },
+    opts = { max_lines = 3 },
+    keys = {
+      { '<leader>tc', '<cmd>TSContext toggle<cr>', desc = '[T]oggle sticky [C]ontext' },
+    },
+  },
+  {
+    'nvim-treesitter/nvim-treesitter-textobjects',
+    branch = 'main',
+    config = function()
+      require('nvim-treesitter-textobjects').setup { move = { set_jumps = true } }
+      local move = require 'nvim-treesitter-textobjects.move'
+      local modes = { 'n', 'x', 'o' }
+      vim.keymap.set(modes, ']m', function() move.goto_next_start('@function.outer', 'textobjects') end, { desc = 'Next method start' })
+      vim.keymap.set(modes, '[m', function() move.goto_previous_start('@function.outer', 'textobjects') end, { desc = 'Previous method start' })
+      vim.keymap.set(modes, ']M', function() move.goto_next_end('@function.outer', 'textobjects') end, { desc = 'Next method end' })
+      vim.keymap.set(modes, '[M', function() move.goto_previous_end('@function.outer', 'textobjects') end, { desc = 'Previous method end' })
+    end,
+  },
 }

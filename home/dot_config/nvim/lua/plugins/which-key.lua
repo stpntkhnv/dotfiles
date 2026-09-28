@@ -47,6 +47,7 @@ return {
         { '<leader>d', group = '[D]ebug/[D]iagnostics' },
         { '<leader>q', group = 'Session' },
         { '<leader>a', group = '[A]gent', mode = { 'n', 'v' } },
+        { 'gs', group = 'Surround', mode = { 'n', 'x' } },
       },
     },
   },

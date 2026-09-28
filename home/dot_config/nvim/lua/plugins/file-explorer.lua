@@ -1,11 +1,5 @@
-local function repo_root()
-  local file = vim.api.nvim_buf_get_name(0)
-  local dir = (vim.bo.buftype == '' and file ~= '') and vim.fs.dirname(file) or vim.fn.getcwd()
-  return vim.fs.root(dir, '.git') or dir
-end
-
 local function open_explorer()
-  local root = repo_root()
+  local root = require('repo').root()
   if vim.t.dotnet_tree_root ~= root then
     local manager = require 'neo-tree.sources.manager'
     manager.close 'dotnet-tree'

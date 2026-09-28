@@ -30,6 +30,15 @@ vim.o.confirm = true
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
+pcall(function()
+  require('vim._core.ui2').enable {}
+end)
+
+vim.o.foldmethod = 'expr'
+vim.o.foldexpr = 'v:lua.vim.treesitter.foldexpr()'
+vim.o.foldtext = ''
+vim.o.foldlevelstart = 99
+
 -- C# indentation settings
 vim.api.nvim_create_autocmd('FileType', {
   pattern = 'cs',
