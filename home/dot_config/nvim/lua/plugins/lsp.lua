@@ -13,6 +13,29 @@ local function csharpier_root(file)
   end
 end
 
+local function align_codelens_to_indent()
+  require 'vim.lsp.codelens'
+  local provider = require('vim.lsp._capability').all.codelens
+  if not (provider and provider.on_win) then
+    vim.notify('codelens: nvim internals changed, lenses stay at the symbol column', vim.log.levels.WARN)
+    return
+  end
+  local on_win = provider.on_win
+  provider.on_win = function(self, toprow, botrow)
+    local lsp_range = vim.range.lsp
+    vim.range.lsp = function(buf, range, encoding)
+      local r = lsp_range(buf, range, encoding)
+      local line = vim.api.nvim_buf_get_lines(buf, r.start_row, r.start_row + 1, false)[1] or ''
+      return vim.range(buf, r.start_row, vim.fn.strdisplaywidth(line:match '^%s*'), r.end_row, r.end_col)
+    end
+    local ok, err = pcall(on_win, self, toprow, botrow)
+    vim.range.lsp = lsp_range
+    if not ok then
+      error(err, 0)
+    end
+  end
+end
+
 return {
   {
     'neovim/nvim-lspconfig',
@@ -131,16 +154,7 @@ return {
           map('<leader>ds', fzf.lsp_document_symbols, '[D]ocument [S]ymbols')
           map('<leader>ws', fzf.lsp_live_workspace_symbols, '[W]orkspace [S]ymbols')
 
-          -- Inlay hints: roslyn is configured to serve them (see csharp.lua),
-          -- but nothing ever enabled the client side until now.
           local client = vim.lsp.get_client_by_id(event.data.client_id)
-          if client and client:supports_method('textDocument/inlayHint') then
-            vim.lsp.inlay_hint.enable(true, { bufnr = event.buf })
-            map('<leader>th', function()
-              local enabled = vim.lsp.inlay_hint.is_enabled { bufnr = event.buf }
-              vim.lsp.inlay_hint.enable(not enabled, { bufnr = event.buf })
-            end, '[T]oggle inlay [H]ints')
-          end
           if client and client:supports_method('textDocument/foldingRange') then
             local win = vim.fn.bufwinid(event.buf)
             if win ~= -1 and vim.wo[win].foldexpr == vim.go.foldexpr then
@@ -161,6 +175,15 @@ return {
           vim.diagnostic.config(inline)
         end
       end, { desc = '[D]iagnostics toggle [I]nline' })
+
+      -- Inlay hints: roslyn is configured to serve them (see csharp.lua),
+      -- the client side is one switch for every buffer.
+      vim.lsp.inlay_hint.enable(true)
+      vim.keymap.set('n', '<leader>th', function()
+        vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled())
+      end, { desc = '[T]oggle inlay [H]ints' })
+
+      align_codelens_to_indent()
     end,
   },
   {

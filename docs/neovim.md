@@ -31,7 +31,10 @@ feature is off. This doc holds the general config; C# is
   `<leader>sR` replaces across the repo (grug-far).
 - LSP maps (`lsp.lua`, `LspAttach`): fzf-lua pickers on nvim's own `grr` `gri`
   `grt`; `gd`, `gD` stay. Folds come from LSP `foldingRange` where offered,
-  else treesitter (`options.lua`); all open (`foldlevelstart = 99`).
+  else treesitter (`options.lua`); all open (`foldlevelstart = 99`). Inlay
+  hints are one global switch: on at startup, `<leader>th` flips every
+  buffer, later ones included (a per-buffer switch came back on the next
+  file).
 - Diagnostics: the cursor line shows the full message below it
   (`virtual_lines`), other lines the short tail; `<leader>di` toggles both.
   `LspProgress` becomes nvim progress messages (Roslyn: 29 on one load);
@@ -80,6 +83,13 @@ feature is off. This doc holds the general config; C# is
   path, absent in a context). herdr moves UI focus, so it acts only from the
   pane you are looking at. `at_edge = 'stop'`: with no pane there the key
   stops, as the old `wincmd` maps did.
+- Code lenses sit at the line's indentation (`lsp.lua`
+  `align_codelens_to_indent`): nvim 0.12 pads a lens to the start column of
+  the range the server sends, Roslyn sends the identifier's, and nvim has no
+  option for it. The function wraps the private `Provider.on_win` and swaps
+  `vim.range.lsp` for that call only. Rewriting the lens ranges instead
+  breaks `grx`: Roslyn's resolve builds the `peekReferences` position from
+  `request.Range.Start` ([workarounds.md](workarounds.md)).
 - ui2 is `vim._core` (experimental), enabled under `pcall`.
 - flash's char mode is off: `f`/`t` stay builtin.
 
